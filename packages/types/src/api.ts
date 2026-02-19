@@ -1,9 +1,18 @@
 import type {
+  AccessEventType,
+  AccessResult,
+  BillingInterval,
+  BookingStatus,
+  ClassStatus,
   ConsentType,
+  DunningStage,
   IntegrationProvider,
+  PaymentStatus,
   ReactionType,
   ReportTargetType,
+  SubscriptionStatus,
   SocialConnectionStatus,
+  WaitlistStatus,
   WorkoutBlockType,
   WorkoutType,
   WorkoutVisibility,
@@ -143,6 +152,135 @@ export interface RegisterPushTokenInput {
   deviceId: string;
   platform: "ios" | "android" | "web";
   pushToken: string;
+}
+
+export interface CreateMembershipPlanInput {
+  name: string;
+  billingCycle: BillingInterval;
+  priceCents: number;
+  currency?: string;
+  classCreditsPerCycle?: number | null;
+  trialDays?: number | null;
+  cancelPolicy?: string;
+  providerProductId?: string;
+  providerPriceId?: string;
+  isActive?: boolean;
+}
+
+export interface UpdateMembershipPlanInput extends Partial<CreateMembershipPlanInput> {}
+
+export interface CreateGymClassInput {
+  coachUserId?: string | null;
+  title: string;
+  description?: string;
+  capacity: number;
+  status?: ClassStatus;
+  startsAt: string;
+  endsAt: string;
+  bookingOpensAt?: string;
+  bookingClosesAt?: string;
+}
+
+export interface UpdateGymClassInput extends Partial<CreateGymClassInput> {}
+
+export interface UpsertClassBookingInput {
+  classId: string;
+  userId: string;
+  status?: BookingStatus;
+  sourceChannel?: string;
+  checkedInAt?: string | null;
+}
+
+export interface UpdateClassWaitlistInput {
+  status?: WaitlistStatus;
+  notifiedAt?: string | null;
+  expiresAt?: string | null;
+}
+
+export interface RecordGymCheckinInput {
+  userId: string;
+  membershipId?: string;
+  classId?: string;
+  eventType: AccessEventType;
+  result: AccessResult;
+  sourceChannel?: string;
+  note?: string;
+  checkedInAt?: string;
+}
+
+export interface RecordAccessLogInput {
+  userId?: string | null;
+  checkinId?: string | null;
+  eventType: AccessEventType;
+  result: AccessResult;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreateWaiverInput {
+  title: string;
+  policyVersion: string;
+  languageCode?: string;
+  documentUrl: string;
+  isActive?: boolean;
+  effectiveAt?: string;
+}
+
+export interface UpdateWaiverInput extends Partial<CreateWaiverInput> {}
+
+export interface CreateContractInput {
+  title: string;
+  contractType?: string;
+  policyVersion: string;
+  languageCode?: string;
+  documentUrl: string;
+  isActive?: boolean;
+  effectiveAt?: string;
+}
+
+export interface UpdateContractInput extends Partial<CreateContractInput> {}
+
+export interface AdminRecordAcceptanceInput {
+  userId: string;
+  membershipId?: string;
+  signatureData?: Record<string, unknown>;
+}
+
+export interface UpsertMemberSubscriptionInput {
+  userId: string;
+  membershipPlanId?: string;
+  status?: SubscriptionStatus;
+  provider?: string;
+  providerCustomerId?: string;
+  providerSubscriptionId?: string;
+  currentPeriodStart?: string;
+  currentPeriodEnd?: string;
+  trialEndsAt?: string;
+  cancelAt?: string;
+  canceledAt?: string;
+  paymentMethodLast4?: string;
+  paymentMethodBrand?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateInvoiceInput {
+  status?: PaymentStatus;
+  amountPaidCents?: number;
+  amountDueCents?: number;
+  dueAt?: string | null;
+  paidAt?: string | null;
+  invoicePdfUrl?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateDunningEventInput {
+  stage?: DunningStage;
+  attemptNumber?: number;
+  scheduledFor?: string | null;
+  sentAt?: string | null;
+  result?: string | null;
+  note?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PrivacyRequestInput {

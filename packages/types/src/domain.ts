@@ -35,6 +35,51 @@ export type ReactionType = "fist" | "fire" | "shield" | "clap" | "crown";
 
 export type ReportTargetType = "workout" | "comment" | "profile" | "gym";
 
+export type ClassStatus = "scheduled" | "cancelled" | "completed";
+
+export type BookingStatus = "booked" | "waitlisted" | "cancelled" | "attended" | "no_show";
+
+export type BillingInterval = "monthly" | "quarterly" | "yearly" | "dropin";
+
+export type WaitlistStatus = "pending" | "promoted" | "expired" | "cancelled";
+
+export type SubscriptionStatus =
+  | "incomplete"
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "paused"
+  | "canceled"
+  | "unpaid";
+
+export type PaymentStatus =
+  | "draft"
+  | "open"
+  | "paid"
+  | "void"
+  | "uncollectible"
+  | "refunded"
+  | "partially_refunded"
+  | "failed";
+
+export type RefundStatus = "pending" | "succeeded" | "failed" | "canceled";
+
+export type DunningStage =
+  | "payment_failed"
+  | "retry_1"
+  | "retry_2"
+  | "retry_3"
+  | "final_notice"
+  | "cancelled";
+
+export type AccessEventType =
+  | "door_checkin"
+  | "door_denied"
+  | "frontdesk_checkin"
+  | "manual_override";
+
+export type AccessResult = "allowed" | "denied" | "override_allowed";
+
 export type MembershipStatus =
   | "pending"
   | "trial"
@@ -225,6 +270,239 @@ export interface PushNotificationToken {
   pushToken: string;
   isActive: boolean;
   lastSeenAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GymMembershipPlan {
+  id: string;
+  gymId: string;
+  name: string;
+  billingCycle: BillingInterval;
+  priceCents: number;
+  currency: string;
+  classCreditsPerCycle?: number | null;
+  trialDays?: number | null;
+  cancelPolicy?: string | null;
+  providerProductId?: string | null;
+  providerPriceId?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GymClass {
+  id: string;
+  gymId: string;
+  coachUserId?: string | null;
+  title: string;
+  description?: string | null;
+  capacity: number;
+  status: ClassStatus;
+  startsAt: string;
+  endsAt: string;
+  bookingOpensAt?: string | null;
+  bookingClosesAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClassBooking {
+  id: string;
+  classId: string;
+  userId: string;
+  status: BookingStatus;
+  bookedAt: string;
+  checkedInAt?: string | null;
+  sourceChannel: string;
+  updatedAt: string;
+}
+
+export interface ClassWaitlistEntry {
+  id: string;
+  classId: string;
+  userId: string;
+  position: number;
+  status: WaitlistStatus;
+  notifiedAt?: string | null;
+  expiresAt?: string | null;
+  promotedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Waiver {
+  id: string;
+  gymId: string;
+  title: string;
+  policyVersion: string;
+  languageCode: string;
+  documentUrl: string;
+  isActive: boolean;
+  effectiveAt: string;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WaiverAcceptance {
+  id: string;
+  waiverId: string;
+  userId: string;
+  gymMembershipId?: string | null;
+  acceptedAt: string;
+  source: string;
+  locale?: string | null;
+  signatureData: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface Contract {
+  id: string;
+  gymId: string;
+  title: string;
+  contractType: string;
+  policyVersion: string;
+  languageCode: string;
+  documentUrl: string;
+  isActive: boolean;
+  effectiveAt: string;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContractAcceptance {
+  id: string;
+  contractId: string;
+  userId: string;
+  gymMembershipId?: string | null;
+  acceptedAt: string;
+  source: string;
+  locale?: string | null;
+  signatureData: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface GymCheckin {
+  id: string;
+  gymId: string;
+  userId: string;
+  membershipId?: string | null;
+  classId?: string | null;
+  eventType: AccessEventType;
+  result: AccessResult;
+  sourceChannel: string;
+  note?: string | null;
+  checkedInAt: string;
+  createdBy?: string | null;
+  createdAt: string;
+}
+
+export interface AccessLog {
+  id: string;
+  gymId: string;
+  userId?: string | null;
+  checkinId?: string | null;
+  eventType: AccessEventType;
+  result: AccessResult;
+  reason?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  createdBy?: string | null;
+}
+
+export interface MemberSubscription {
+  id: string;
+  gymId: string;
+  userId: string;
+  membershipPlanId?: string | null;
+  status: SubscriptionStatus;
+  provider: string;
+  providerCustomerId?: string | null;
+  providerSubscriptionId?: string | null;
+  currentPeriodStart?: string | null;
+  currentPeriodEnd?: string | null;
+  trialEndsAt?: string | null;
+  cancelAt?: string | null;
+  canceledAt?: string | null;
+  paymentMethodLast4?: string | null;
+  paymentMethodBrand?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Invoice {
+  id: string;
+  subscriptionId?: string | null;
+  gymId: string;
+  userId: string;
+  providerInvoiceId?: string | null;
+  status: PaymentStatus;
+  currency: string;
+  subtotalCents: number;
+  taxCents: number;
+  totalCents: number;
+  amountPaidCents: number;
+  amountDueCents: number;
+  dueAt?: string | null;
+  paidAt?: string | null;
+  invoicePdfUrl?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentTransaction {
+  id: string;
+  invoiceId?: string | null;
+  subscriptionId?: string | null;
+  gymId: string;
+  userId?: string | null;
+  provider: string;
+  providerPaymentIntentId?: string | null;
+  providerChargeId?: string | null;
+  status: PaymentStatus;
+  paymentMethodType?: string | null;
+  amountCents: number;
+  feeCents: number;
+  taxCents: number;
+  netCents: number;
+  currency: string;
+  failureCode?: string | null;
+  failureMessage?: string | null;
+  capturedAt?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Refund {
+  id: string;
+  paymentTransactionId: string;
+  providerRefundId?: string | null;
+  status: RefundStatus;
+  amountCents: number;
+  currency: string;
+  reason?: string | null;
+  processedAt?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DunningEvent {
+  id: string;
+  subscriptionId: string;
+  invoiceId?: string | null;
+  stage: DunningStage;
+  attemptNumber: number;
+  scheduledFor?: string | null;
+  sentAt?: string | null;
+  result?: string | null;
+  note?: string | null;
+  metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }

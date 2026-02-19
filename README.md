@@ -55,3 +55,10 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Social feed flow: `apps/mobile/src/flows/phase4-social-feed.ts`
 - Push token schema + RLS migration set starts at: `packages/db/supabase/migrations/202602190355_krux_beta_part3_s014.sql`
 - Usage notes: `docs/phase4-runtime.md`
+
+## Phase 5 Runtime
+
+- B2B admin ops service: `apps/admin/src/services/b2b-ops-service.ts`
+- B2B ops flow snapshot: `apps/admin/src/flows/phase5-b2b-ops.ts`
+- Staff acceptance RPC migration set starts at: `packages/db/supabase/migrations/202602190364_krux_beta_part3_s023.sql`
+- Usage notes: `docs/phase5-runtime.md`

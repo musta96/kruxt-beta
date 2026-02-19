@@ -1,4 +1,5 @@
 import { phase2StaffOpsChecklist } from "../flows/phase2-staff-ops";
+import { phase5B2BOpsChecklist } from "../flows/phase5-b2b-ops";
 
 export function adminHomePageScaffold() {
   return {
@@ -17,6 +18,24 @@ export function adminHomePageScaffold() {
         "GymAdminService.assignMembershipRole",
         "GymAdminService.listUserConsentRecords",
         "GymAdminService.listOpenPrivacyRequests"
+      ]
+    },
+    phase5: {
+      modules: [...phase5B2BOpsChecklist],
+      serviceSurface: [
+        "B2BOpsService.listMembershipPlans",
+        "B2BOpsService.createGymClass",
+        "B2BOpsService.listClassBookings",
+        "B2BOpsService.listClassWaitlist",
+        "B2BOpsService.promoteWaitlistMember",
+        "B2BOpsService.listWaivers",
+        "B2BOpsService.recordWaiverAcceptanceByStaff",
+        "B2BOpsService.listContracts",
+        "B2BOpsService.recordContractAcceptanceByStaff",
+        "B2BOpsService.recordCheckin",
+        "B2BOpsService.recordAccessLog",
+        "B2BOpsService.listMemberSubscriptions",
+        "B2BOpsService.listInvoices"
       ]
     }
   };

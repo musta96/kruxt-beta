@@ -5,6 +5,7 @@
 - Phase 0 scaffolded: monorepo structure, CI skeleton, shared packages
 - Phase 1 scaffolded: Supabase schema v2 migration + seed + smoke tests
 - Edge function entrypoints scaffolded for integrations, rankings, compliance, and audit
+- Phase 5 runtime scaffolded: B2B ops service + flow for gym admin operations
 
 ## Ordered build sequence
 
@@ -12,7 +13,7 @@
 2. Connect auth flow in mobile/admin to `profiles` creation, consent capture, guild hall load, and staff ops snapshot.
 3. Implement workout logger UI and call `log_workout_atomic` RPC (see `createPhase3WorkoutLoggingFlow`).
 4. Build feed UI from `createPhase4SocialFeedFlow` (`feed_events` + joined `workouts` + `social_interactions`).
-5. Build B2B admin screens for memberships, classes, waitlist, check-ins, waivers.
+5. Connect admin UI screens to `createPhase5B2BOpsFlow` and `B2BOpsService`.
 6. Activate Apple + Garmin integration paths with `device_connections` + `device_sync_jobs`.
 7. Enable weekly rank recompute scheduler calling `rank_recompute_weekly`.
 8. Run privacy workflows (`submit_privacy_request`) and staff handling pipeline.

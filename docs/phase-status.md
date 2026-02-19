@@ -7,9 +7,9 @@
 - Phase 2 runtime: mobile onboarding + guild hall flows + admin staff ops/triage services
 - Phase 3 runtime: workout logging flow with proof-feed and progress verification
 - Phase 4 runtime: social graph/feed ranking/notification service layer for mobile
+- Phase 5 runtime: admin B2B ops service layer for classes, waitlist, waivers, contracts, check-ins, and billing telemetry
 - Phase 3 prep: workout atomic logging RPC + XP/chain trigger + feed event trigger
 - Phase 4 prep: social graph, blocks/reports, interaction schema + moderation storage
-- Phase 5 prep: memberships/classes/waitlist/check-ins/waivers/contracts admin data model
 - Phase 6 prep: provider connection model, sync jobs, webhook idempotency tables
 - Phase 7 prep: leaderboard rebuild RPC + event outbox hooks
 - Phase 8 prep: privacy requests + audit logs + immutable evidence controls
