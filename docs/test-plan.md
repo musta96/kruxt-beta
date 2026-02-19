@@ -36,6 +36,14 @@
 20. Audit log rows are append-only.
 21. Admin consent/privacy RPCs only return members linked to the requested gym.
 
+## Rank + Trials
+
+22. `join_challenge` allows visible, non-ended challenges only.
+23. `leave_challenge` rejects completed participants and only removes caller-owned rows.
+24. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
+25. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
+26. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+
 ## Performance targets for pilot
 
 - Feed p95 load < 500ms for 50-card page.

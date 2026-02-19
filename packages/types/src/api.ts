@@ -3,6 +3,8 @@ import type {
   AccessResult,
   BillingInterval,
   BookingStatus,
+  ChallengeType,
+  ChallengeVisibility,
   ClassStatus,
   ConsentType,
   DunningStage,
@@ -10,6 +12,9 @@ import type {
   IntegrationProvider,
   PaymentStatus,
   ReactionType,
+  LeaderboardScope,
+  LeaderboardMetric,
+  LeaderboardTimeframe,
   ReportTargetType,
   SubscriptionStatus,
   SocialConnectionStatus,
@@ -182,6 +187,40 @@ export interface ProviderWebhookIngestInput {
   userId?: string;
   connectionId?: string;
   providerUserId?: string;
+}
+
+export interface CreateChallengeInput {
+  gymId?: string | null;
+  title: string;
+  description?: string;
+  challengeType: ChallengeType;
+  visibility?: ChallengeVisibility;
+  startsAt: string;
+  endsAt: string;
+  pointsPerUnit?: number;
+}
+
+export interface UpdateChallengeInput extends Partial<CreateChallengeInput> {}
+
+export interface JoinChallengeInput {
+  challengeId: string;
+}
+
+export interface SubmitChallengeProgressInput {
+  challengeId: string;
+  scoreDelta: number;
+  markCompleted?: boolean;
+}
+
+export interface ListLeaderboardsInput {
+  scope?: LeaderboardScope;
+  metric?: LeaderboardMetric;
+  timeframe?: LeaderboardTimeframe;
+  gymId?: string;
+  exerciseId?: string;
+  challengeId?: string;
+  activeOnly?: boolean;
+  limit?: number;
 }
 
 export interface CreateMembershipPlanInput {

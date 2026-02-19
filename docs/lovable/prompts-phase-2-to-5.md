@@ -1,4 +1,4 @@
-# Lovable Prompt Pack (Phases 2-6)
+# Lovable Prompt Pack (Phases 2-7)
 
 Use these prompts in order. Keep each generation isolated and commit after each module.
 
@@ -76,18 +76,27 @@ Requirements:
 - Keep copy direct and rule-based (`Proof first`, `Roster updates weekly`)
 - Ensure desktop admin responsiveness with dense data tables
 
-## Prompt 5: Rank Ladder + Trials
+## Prompt 5: Admin Integration Monitor (Thin Ops Layer)
 
-Create `RankLadder` and `Trials` modules.
+Create `IntegrationMonitor` for the admin web app to surface provider sync reliability.
 
 Requirements:
-- Rank ladder tabs: `Global`, `Guild`, `Lift`, `Challenge`
-- Leaderboard row: rank, avatar, display name, score, recent trend
-- Trials list with join/leave and progress indicator
-- Weekly rank reset visual cues and `Legend is rare` microcopy
-- Keep design consistent with existing sigil/banner language
+- Header KPI cards:
+  - `Monitored Members`
+  - `Active Connections`
+  - `Unhealthy Connections`
+  - `Failing/Retrying Jobs`
+- Data tables:
+  - connection health (`provider`, `status`, `last_synced_at`, `last_error`, user identity)
+  - recent sync failures (`provider`, `retry_count`, `next_retry_at`, `error_message`)
+- Include filter chips for providers (`apple_health`, `garmin`, `fitbit`, `huawei_health`, `suunto`, `oura`, `whoop`)
+- Keep copy direct:
+  - `Sync reliability protects rank integrity.`
+  - `Failures must be resolved before expansion.`
+- Wire loading to:
+  - `createPhase6IntegrationMonitorFlow.load`
 
-## Prompt 6: Integrations (Apple + Garmin first)
+## Prompt 6: Integrations Hub (Apple + Garmin first)
 
 Create `IntegrationsHub` with two sections: `Connected Devices` and `Sync Activity`.
 
@@ -110,3 +119,19 @@ Requirements:
   - `IntegrationService.upsertConnection`
   - `IntegrationService.queueSyncJob`
   - `createPhase6IntegrationsFlow.load`
+
+## Prompt 7: Rank Ladder + Trials
+
+Create `RankLadder` and `Trials` modules.
+
+Requirements:
+- Rank ladder tabs: `Global`, `Guild`, `Lift`, `Challenge`
+- Leaderboard row: rank, avatar, display name, score, recent trend
+- Trials list with join/leave and progress indicator
+- Weekly rank reset visual cues and `Legend is rare` microcopy
+- Keep design consistent with existing sigil/banner language
+- Wire actions to runtime contracts:
+  - `createPhase7RankTrialsFlow.load`
+  - `CompetitionService.joinChallenge`
+  - `CompetitionService.leaveChallenge`
+  - `CompetitionService.submitChallengeProgress`

@@ -10,3 +10,4 @@ export * from "./feed-service";
 export * from "./social-service";
 export * from "./notification-service";
 export * from "./integration-service";
+export * from "./competition-service";

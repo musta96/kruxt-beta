@@ -41,6 +41,21 @@ export type ReactionType = "fist" | "fire" | "shield" | "clap" | "crown";
 
 export type ReportTargetType = "workout" | "comment" | "profile" | "gym";
 
+export type ChallengeVisibility = "public" | "gym" | "invite_only";
+
+export type ChallengeType = "volume" | "consistency" | "max_effort" | "time_based";
+
+export type LeaderboardScope = "global" | "gym" | "exercise" | "challenge";
+
+export type LeaderboardMetric =
+  | "xp"
+  | "volume_kg"
+  | "estimated_1rm"
+  | "consistency_days"
+  | "challenge_score";
+
+export type LeaderboardTimeframe = "daily" | "weekly" | "monthly" | "all_time";
+
 export type ClassStatus = "scheduled" | "cancelled" | "completed";
 
 export type BookingStatus = "booked" | "waitlisted" | "cancelled" | "attended" | "no_show";
@@ -361,6 +376,57 @@ export interface IntegrationWebhookEvent {
   errorMessage?: string | null;
   receivedAt: string;
   processedAt?: string | null;
+}
+
+export interface Challenge {
+  id: string;
+  creatorUserId: string;
+  gymId?: string | null;
+  title: string;
+  description?: string | null;
+  challengeType: ChallengeType;
+  visibility: ChallengeVisibility;
+  startsAt: string;
+  endsAt: string;
+  pointsPerUnit: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChallengeParticipant {
+  id: string;
+  challengeId: string;
+  userId: string;
+  score: number;
+  completed: boolean;
+  joinedAt: string;
+  updatedAt: string;
+}
+
+export interface Leaderboard {
+  id: string;
+  name: string;
+  scope: LeaderboardScope;
+  scopeGymId?: string | null;
+  scopeExerciseId?: string | null;
+  scopeChallengeId?: string | null;
+  metric: LeaderboardMetric;
+  timeframe: LeaderboardTimeframe;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeaderboardEntry {
+  id: string;
+  leaderboardId: string;
+  userId: string;
+  rank: number;
+  score: number;
+  details: Record<string, unknown>;
+  calculatedAt: string;
 }
 
 export interface GymMembershipPlan {

@@ -69,3 +69,10 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Edge activation: `supabase/functions/provider_webhook_ingest`, `supabase/functions/sync_dispatcher`
 - Cursor + webhook sync migration set starts at: `packages/db/supabase/migrations/202602190370_krux_beta_part3_s029.sql`
 - Usage notes: `docs/phase6-runtime.md`
+
+## Phase 7 Runtime
+
+- Mobile competition runtime: `apps/mobile/src/services/competition-service.ts`, `apps/mobile/src/flows/phase7-rank-trials.ts`
+- Rank recompute hardening: `supabase/functions/rank_recompute_weekly`
+- Challenge/trials RPC migration set starts at: `packages/db/supabase/migrations/202602190385_krux_beta_part3_s044.sql`
+- Usage notes: `docs/phase7-runtime.md`

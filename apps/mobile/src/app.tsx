@@ -5,6 +5,7 @@ import { phase2OnboardingChecklist } from "./flows/phase2-onboarding";
 import { phase3WorkoutLoggingChecklist } from "./flows/phase3-workout-logging";
 import { phase4SocialFeedChecklist } from "./flows/phase4-social-feed";
 import { phase6IntegrationsChecklist } from "./flows/phase6-integrations";
+import { phase7RankTrialsChecklist } from "./flows/phase7-rank-trials";
 
 const defaultEnabledFlags: FeatureFlagKey[] = [
   "provider_apple_health_enabled",
@@ -66,6 +67,14 @@ export function mobileAppScaffold() {
         "integration_webhook_events"
       ],
       edgeFunctions: ["provider_webhook_ingest", "sync_dispatcher"]
+    },
+    phase7: {
+      flow: "load weekly rank ladders -> load trials -> submit challenge progress -> weekly recompute",
+      checklist: [...phase7RankTrialsChecklist],
+      modules: ["RankLadder", "Trials"],
+      tables: ["leaderboards", "leaderboard_entries", "challenges", "challenge_participants"],
+      rpcEndpoints: ["join_challenge", "leave_challenge", "submit_challenge_progress", "rebuild_leaderboard_scope"],
+      edgeFunctions: ["rank_recompute_weekly"]
     }
   };
 }

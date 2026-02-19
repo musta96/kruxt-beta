@@ -22,6 +22,17 @@ Core methods:
 - `IntegrationService.getSyncCursor(...)`
 - `IntegrationService.listImportedActivities(...)`
 
+## Admin monitoring entrypoints
+
+- `apps/admin/src/services/integration-monitor-service.ts`
+- `apps/admin/src/flows/phase6-integration-monitor.ts`
+
+Core methods:
+
+- `IntegrationMonitorService.getSummary(...)`
+- `IntegrationMonitorService.listConnectionHealth(...)`
+- `IntegrationMonitorService.listRecentSyncFailures(...)`
+
 ## Edge function entrypoints
 
 - `supabase/functions/provider_webhook_ingest/index.ts`

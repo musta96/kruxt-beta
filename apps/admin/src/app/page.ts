@@ -1,4 +1,5 @@
 import { phase2StaffOpsChecklist } from "../flows/phase2-staff-ops";
+import { phase6IntegrationMonitorChecklist } from "../flows/phase6-integration-monitor";
 import { phase5B2BOpsChecklist } from "../flows/phase5-b2b-ops";
 
 export function adminHomePageScaffold() {
@@ -36,6 +37,14 @@ export function adminHomePageScaffold() {
         "B2BOpsService.recordAccessLog",
         "B2BOpsService.listMemberSubscriptions",
         "B2BOpsService.listInvoices"
+      ]
+    },
+    phase6: {
+      modules: [...phase6IntegrationMonitorChecklist],
+      serviceSurface: [
+        "IntegrationMonitorService.getSummary",
+        "IntegrationMonitorService.listConnectionHealth",
+        "IntegrationMonitorService.listRecentSyncFailures"
       ]
     }
   };
