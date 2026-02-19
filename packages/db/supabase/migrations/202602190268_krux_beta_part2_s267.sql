@@ -1,0 +1,1 @@
+drop policy if exists payment_transactions_select_self_or_staff on public.payment_transactions;

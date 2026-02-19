@@ -1,0 +1,1 @@
+drop trigger if exists trg_webhook_events_no_delete on public.integration_webhook_events;

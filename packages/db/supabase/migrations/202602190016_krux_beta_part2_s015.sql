@@ -1,0 +1,1 @@
+drop trigger if exists trg_social_connections_set_updated_at on public.social_connections;

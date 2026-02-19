@@ -4,7 +4,7 @@ Contains Supabase/Postgres SQL migrations and smoke tests.
 
 ## Files
 
-- `supabase/migrations/202602190001_krux_beta_foundation.sql`: full foundation schema
+- `supabase/migrations/`: ordered migration set for full KRUXT foundation schema
 - `supabase/seeds/001_feature_flags.sql`: feature-flag defaults
 - `tests/rls_smoke.sql`: checks expected policy coverage by naming convention
 

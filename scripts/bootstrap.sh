@@ -28,6 +28,7 @@ if [ ! -f "$SOURCE_SEED_FILE" ]; then
   exit 1
 fi
 
+rm -rf "$TARGET_MIGRATIONS_DIR"
 mkdir -p "$TARGET_MIGRATIONS_DIR"
 
 CREATED_TARGET_MIGRATIONS=()
@@ -52,10 +53,8 @@ copied=0
 shopt -s nullglob
 for migration in "$SOURCE_MIGRATIONS_DIR"/*.sql; do
   target_path="$TARGET_MIGRATIONS_DIR/$(basename "$migration")"
-  if [ ! -f "$target_path" ]; then
-    cp "$migration" "$target_path"
-    CREATED_TARGET_MIGRATIONS+=("$target_path")
-  fi
+  cp "$migration" "$target_path"
+  CREATED_TARGET_MIGRATIONS+=("$target_path")
   copied=$((copied + 1))
 done
 shopt -u nullglob
@@ -65,10 +64,8 @@ if [ "$copied" -eq 0 ]; then
   exit 1
 fi
 
-if [ ! -f "$TARGET_SEED_FILE" ]; then
-  cp "$SOURCE_SEED_FILE" "$TARGET_SEED_FILE"
-  CREATED_TARGET_SEED=1
-fi
+cp "$SOURCE_SEED_FILE" "$TARGET_SEED_FILE"
+CREATED_TARGET_SEED=1
 echo "Seed synced to $TARGET_SEED_FILE"
 
 echo "Pushing migrations + seed to linked Supabase project"

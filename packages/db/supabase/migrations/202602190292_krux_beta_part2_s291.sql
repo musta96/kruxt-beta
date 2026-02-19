@@ -1,0 +1,1 @@
+drop policy if exists external_activity_imports_select_self on public.external_activity_imports;

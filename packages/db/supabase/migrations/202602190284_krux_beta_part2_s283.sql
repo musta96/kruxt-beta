@@ -1,0 +1,1 @@
+drop policy if exists device_connections_update_self_or_service on public.device_connections;

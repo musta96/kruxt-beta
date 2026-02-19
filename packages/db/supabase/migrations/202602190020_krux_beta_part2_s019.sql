@@ -1,0 +1,1 @@
+drop trigger if exists trg_workout_exercises_set_updated_at on public.workout_exercises;

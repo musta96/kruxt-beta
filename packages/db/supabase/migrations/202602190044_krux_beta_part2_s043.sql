@@ -1,0 +1,1 @@
+drop trigger if exists trg_member_subscriptions_set_updated_at on public.member_subscriptions;

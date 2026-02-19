@@ -1,0 +1,1 @@
+drop trigger if exists trg_payment_transactions_set_updated_at on public.payment_transactions;

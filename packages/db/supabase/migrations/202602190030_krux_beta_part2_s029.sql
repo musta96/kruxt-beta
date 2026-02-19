@@ -1,0 +1,1 @@
+drop trigger if exists trg_gym_membership_plans_set_updated_at on public.gym_membership_plans;

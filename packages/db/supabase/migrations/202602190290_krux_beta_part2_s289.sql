@@ -1,0 +1,1 @@
+drop policy if exists device_sync_jobs_update_service_or_self on public.device_sync_jobs;

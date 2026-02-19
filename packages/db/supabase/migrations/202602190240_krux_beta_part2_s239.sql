@@ -1,0 +1,1 @@
+drop policy if exists waiver_acceptances_select_self_or_staff on public.waiver_acceptances;

@@ -2,11 +2,22 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MIGRATION_FILE="$ROOT_DIR/supabase/migrations/202602190001_krux_beta_foundation.sql"
+MIGRATIONS_DIR="$ROOT_DIR/supabase/migrations"
+PRIMARY_MIGRATION="$MIGRATIONS_DIR/202602190001_krux_beta_foundation_part1.sql"
 RLS_FILE="$ROOT_DIR/tests/rls_smoke.sql"
 
-if [[ ! -f "$MIGRATION_FILE" ]]; then
-  echo "Missing migration file: $MIGRATION_FILE"
+if [[ ! -d "$MIGRATIONS_DIR" ]]; then
+  echo "Missing migrations directory: $MIGRATIONS_DIR"
+  exit 1
+fi
+
+if ! compgen -G "$MIGRATIONS_DIR/*.sql" > /dev/null; then
+  echo "No SQL migrations found in: $MIGRATIONS_DIR"
+  exit 1
+fi
+
+if [[ ! -f "$PRIMARY_MIGRATION" ]]; then
+  echo "Missing primary migration file: $PRIMARY_MIGRATION"
   exit 1
 fi
 

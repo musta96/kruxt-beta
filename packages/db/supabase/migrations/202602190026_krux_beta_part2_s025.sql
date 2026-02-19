@@ -1,0 +1,1 @@
+drop trigger if exists trg_challenge_participants_set_updated_at on public.challenge_participants;
