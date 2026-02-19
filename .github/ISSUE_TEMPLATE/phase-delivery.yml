@@ -1,0 +1,120 @@
+name: KRUXT Phase Delivery
+description: Plan and execute a scoped KRUXT phase task.
+title: "[Phase] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for planned delivery work tied to KRUXT Beta phases.
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Phase
+      description: Select the primary execution phase.
+      options:
+        - phase-0
+        - phase-1
+        - phase-2
+        - phase-3
+        - phase-4
+        - phase-5
+        - phase-6
+        - phase-7
+        - phase-8
+        - phase-9
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Pick the main product scope.
+      options:
+        - b2c
+        - b2b
+        - compliance
+        - integration
+        - b2c + b2b
+    validations:
+      required: true
+
+  - type: dropdown
+    id: delivery_stage
+    attributes:
+      label: Delivery Stage
+      description: Match the board stage.
+      options:
+        - Backlog
+        - Pavia Pilot
+        - In Progress
+        - Blocked
+        - Ready for Beta
+        - Done
+    validations:
+      required: true
+
+  - type: input
+    id: target_outcome
+    attributes:
+      label: Target Outcome
+      description: Single measurable outcome for this issue.
+      placeholder: "Example: User can complete workout log in under 60s"
+    validations:
+      required: true
+
+  - type: textarea
+    id: in_scope
+    attributes:
+      label: In Scope
+      description: Explicitly list what is included.
+      placeholder: |
+        - 
+        - 
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_scope
+    attributes:
+      label: Out of Scope
+      description: Explicitly list what is not included.
+      placeholder: |
+        - 
+        - 
+
+  - type: textarea
+    id: technical_plan
+    attributes:
+      label: Technical Plan
+      description: Ordered implementation plan.
+      placeholder: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Checklist of completion criteria.
+      placeholder: |
+        - [ ] 
+        - [ ] 
+        - [ ] 
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: quality_gates
+    attributes:
+      label: Quality Gates
+      options:
+        - label: I verified RLS/access-control impact for affected tables/endpoints.
+        - label: I included observability/logging impact where relevant.
+        - label: I linked this issue to KRUXT project board workflow.

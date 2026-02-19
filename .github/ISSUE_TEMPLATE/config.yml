@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: KRUXT Project Board
+    url: https://github.com/users/musta96/projects/1
+    about: Track phase status and delivery stage here.
+  - name: KRUXT Repository
+    url: https://github.com/musta96/kruxt-beta
+    about: Source code and implementation history.

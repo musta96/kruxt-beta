@@ -1,0 +1,62 @@
+name: KRUXT Compliance / Privacy Risk
+description: Report GDPR/CCPA/privacy/security gaps requiring action.
+title: "[Compliance] "
+labels:
+  - compliance
+  - high-priority
+body:
+  - type: dropdown
+    id: risk_type
+    attributes:
+      label: Risk Type
+      options:
+        - GDPR data subject rights
+        - Consent/policy evidence
+        - Access control / RLS
+        - Audit logging integrity
+        - Health data handling
+        - Incident / breach workflow
+    validations:
+      required: true
+
+  - type: textarea
+    id: finding
+    attributes:
+      label: Finding
+      description: What is the risk or non-compliance.
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: User impact, legal impact, operational impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: remediation
+    attributes:
+      label: Proposed Remediation
+      placeholder: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+
+  - type: input
+    id: due_date
+    attributes:
+      label: Target Fix Date
+      placeholder: YYYY-MM-DD
+
+  - type: checkboxes
+    id: legal_review
+    attributes:
+      label: Follow-up
+      options:
+        - label: Legal/privacy review is required.
+        - label: Security review is required.
+        - label: This must be completed before next beta cohort rollout.

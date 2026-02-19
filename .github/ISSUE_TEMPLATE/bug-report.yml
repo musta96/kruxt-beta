@@ -1,0 +1,70 @@
+name: KRUXT Bug Report
+description: Report a production or beta defect.
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Sev-1 (blocking / data risk)
+        - Sev-2 (major user impact)
+        - Sev-3 (minor impact)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - b2c
+        - b2b
+        - compliance
+        - integration
+        - infra
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      placeholder: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Screenshots / IDs
+      description: Add request IDs, workout IDs, class IDs, webhook IDs, etc.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-checks
+      options:
+        - label: I checked for duplicates in open issues.
+          required: true
+        - label: I included enough detail to reproduce.
+          required: true
