@@ -1,6 +1,7 @@
 import type {
   ConsentRecord,
   CreateGymInput,
+  GuildHallSnapshot,
   Gym,
   GymMembership,
   Profile,
@@ -9,6 +10,7 @@ import type {
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { MobileAuthService, type CredentialsInput } from "./auth-service";
+import { KruxtAppError } from "./errors";
 import { GymService } from "./gym-service";
 import { PolicyService, type BaselineConsentInput } from "./policy-service";
 import { ProfileService } from "./profile-service";
@@ -22,7 +24,7 @@ export interface OnboardingGymPreference {
 export interface Phase2OnboardingInput {
   mode: "signup" | "signin";
   credentials: CredentialsInput;
-  profile: Partial<UpsertProfileInput>;
+  profile?: Partial<UpsertProfileInput>;
   baselineConsents: BaselineConsentInput;
   gymPreference?: OnboardingGymPreference;
 }
@@ -33,6 +35,7 @@ export interface Phase2OnboardingResult {
   consents: ConsentRecord[];
   gym?: Gym;
   membership?: GymMembership;
+  guildHall?: GuildHallSnapshot;
 }
 
 export class Phase2OnboardingService {
@@ -48,25 +51,72 @@ export class Phase2OnboardingService {
     this.gyms = new GymService(supabase);
   }
 
-  async run(input: Phase2OnboardingInput): Promise<Phase2OnboardingResult> {
-    if (input.gymPreference?.createGym && input.gymPreference?.joinGymId) {
-      throw new Error("Onboarding cannot create and join a gym in the same request.");
+  private validateInput(input: Phase2OnboardingInput): void {
+    const normalizedEmail = input.credentials.email.trim();
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(normalizedEmail)) {
+      throw new KruxtAppError("ONBOARDING_EMAIL_INVALID", "A valid email address is required.");
     }
+
+    const minPasswordLength = input.mode === "signup" ? 8 : 1;
+    if ((input.credentials.password ?? "").length < minPasswordLength) {
+      throw new KruxtAppError(
+        "ONBOARDING_PASSWORD_INVALID",
+        input.mode === "signup"
+          ? "Password must be at least 8 characters."
+          : "Password is required."
+      );
+    }
+
+    if (input.gymPreference?.createGym && input.gymPreference?.joinGymId) {
+      throw new KruxtAppError(
+        "ONBOARDING_GYM_PREFERENCE_INVALID",
+        "Onboarding cannot create and join a gym in the same request."
+      );
+    }
+  }
+
+  private isUserAlreadyRegistered(error: unknown): boolean {
+    const details = JSON.stringify(error ?? "").toLowerCase();
+    return details.includes("already registered") || details.includes("user_already_exists");
+  }
+
+  async run(input: Phase2OnboardingInput): Promise<Phase2OnboardingResult> {
+    this.validateInput(input);
+    const credentials: CredentialsInput = {
+      email: input.credentials.email.trim().toLowerCase(),
+      password: input.credentials.password
+    };
 
     if (input.mode === "signup") {
-      await this.auth.signUpWithPassword(input.credentials);
-      await this.auth.signInWithPassword(input.credentials);
+      try {
+        await this.auth.signUpWithPassword(credentials);
+      } catch (error) {
+        if (!this.isUserAlreadyRegistered(error)) {
+          throw error;
+        }
+      }
+
+      await this.auth.signInWithPassword(credentials);
     } else {
-      await this.auth.signInWithPassword(input.credentials);
+      await this.auth.signInWithPassword(credentials);
     }
 
-    const userId = await this.auth.requireCurrentUserId();
+    const currentUser = await this.auth.getCurrentUser();
+    if (!currentUser) {
+      throw new KruxtAppError("AUTH_REQUIRED", "Authentication required.");
+    }
 
-    const profile = await this.profiles.ensureProfile(userId, input.credentials.email, input.profile);
+    const userId = currentUser.id;
+    const userEmail = currentUser.email ?? credentials.email;
+
+    const profile = await this.profiles.ensureProfile(userId, userEmail, input.profile ?? {});
 
     const consents = await this.policies.captureBaselineConsents(userId, {
       ...input.baselineConsents,
-      locale: input.profile.locale ?? input.baselineConsents.locale
+      locale: input.profile?.locale ?? input.baselineConsents.locale,
+      source: "mobile"
     });
 
     let gym: Gym | undefined;
@@ -82,7 +132,11 @@ export class Phase2OnboardingService {
       });
     }
 
-    if (input.gymPreference?.setAsHomeGym) {
+    const shouldSetHomeGym =
+      input.gymPreference?.setAsHomeGym ??
+      Boolean(input.gymPreference?.createGym);
+
+    if (shouldSetHomeGym) {
       const homeGymId = gym?.id ?? membership?.gymId;
       if (homeGymId) {
         await this.profiles.setHomeGym(userId, homeGymId);
@@ -90,13 +144,15 @@ export class Phase2OnboardingService {
     }
 
     const finalProfile = await this.profiles.getProfileById(userId);
+    const guildHall = await this.gyms.getGuildHallSnapshot(userId);
 
     return {
       userId,
       profile: finalProfile ?? profile,
       consents,
       gym,
-      membership
+      membership,
+      guildHall
     };
   }
 }

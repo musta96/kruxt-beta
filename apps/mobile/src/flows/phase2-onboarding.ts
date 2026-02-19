@@ -6,7 +6,8 @@ export const phase2OnboardingChecklist = [
   "Ensure profile exists",
   "Capture baseline consents",
   "Create or join gym",
-  "Set home gym"
+  "Set home gym",
+  "Load guild hall snapshot"
 ] as const;
 
 export function createPhase2OnboardingFlow() {

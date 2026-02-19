@@ -1,5 +1,6 @@
 import type { FeatureFlagKey } from "@kruxt/types";
 
+import { guildHallChecklist } from "./flows/guild-hall";
 import { phase2OnboardingChecklist } from "./flows/phase2-onboarding";
 
 const defaultEnabledFlags: FeatureFlagKey[] = [
@@ -18,8 +19,9 @@ export function mobileAppScaffold() {
     theme: "guild-premium",
     defaultEnabledFlags,
     phase2: {
-      flow: "auth -> profile -> consents -> gym role",
+      flow: "auth -> profile -> consents -> gym role -> guild hall",
       checklist: [...phase2OnboardingChecklist],
+      guildHallChecklist: [...guildHallChecklist],
       rpcEndpoints: [
         "log_workout_atomic",
         "join_waitlist",

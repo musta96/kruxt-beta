@@ -39,6 +39,6 @@ Operational features are controlled by flags in `public.feature_flags`.
 
 ## Phase 2 Runtime
 
-- Mobile onboarding services: `apps/mobile/src/services`
-- Admin gym-role services: `apps/admin/src/services`
+- Mobile onboarding + guild hall flows: `apps/mobile/src/services`, `apps/mobile/src/flows`
+- Admin staff ops services + flows: `apps/admin/src/services`, `apps/admin/src/flows`
 - Usage notes: `docs/phase2-runtime.md`

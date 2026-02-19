@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ConsentRecord, PolicyVersion, UpsertConsentInput } from "@kruxt/types";
 
-import { throwIfError } from "./errors";
+import { KruxtAppError, throwIfError } from "./errors";
 
 type PolicyRow = {
   id: string;
@@ -51,13 +51,20 @@ function mapConsent(row: ConsentRow): ConsentRecord {
   };
 }
 
-export interface BaselineConsentInput {
+type BaselinePolicyIds = {
   termsPolicyId: string;
   privacyPolicyId: string;
   healthDataPolicyId: string;
+};
+
+export interface BaselineConsentInput extends Partial<BaselinePolicyIds> {
+  acceptTerms?: boolean;
+  acceptPrivacy?: boolean;
+  acceptHealthData?: boolean;
   marketingEmailOptIn?: boolean;
   pushNotificationsOptIn?: boolean;
   locale?: string;
+  source?: "mobile" | "admin" | "web";
 }
 
 export class PolicyService {
@@ -87,7 +94,31 @@ export class PolicyService {
     return (data as ConsentRow[]).map(mapConsent);
   }
 
+  private async getLatestConsent(userId: string, consentType: ConsentRecord["consentType"]): Promise<ConsentRecord | null> {
+    const { data, error } = await this.supabase
+      .from("consents")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("consent_type", consentType)
+      .order("granted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    throwIfError(error, "CONSENT_READ_LATEST_FAILED", "Unable to read latest consent.");
+
+    return data ? mapConsent(data as ConsentRow) : null;
+  }
+
   async upsertConsent(userId: string, input: UpsertConsentInput): Promise<ConsentRecord> {
+    const latest = await this.getLatestConsent(userId, input.consentType);
+    if (
+      latest &&
+      latest.granted === input.granted &&
+      (latest.policyVersionId ?? null) === (input.policyVersionId ?? null)
+    ) {
+      return latest;
+    }
+
     const { data, error } = await this.supabase
       .from("consents")
       .insert({
@@ -107,42 +138,101 @@ export class PolicyService {
     return mapConsent(data as ConsentRow);
   }
 
+  private resolvePolicyByType(
+    policies: PolicyVersion[],
+    policyType: PolicyVersion["policyType"]
+  ): PolicyVersion | undefined {
+    return policies.find((policy) => policy.policyType === policyType);
+  }
+
+  private async resolveBaselinePolicyIds(input: BaselineConsentInput): Promise<BaselinePolicyIds> {
+    if (input.termsPolicyId && input.privacyPolicyId && input.healthDataPolicyId) {
+      return {
+        termsPolicyId: input.termsPolicyId,
+        privacyPolicyId: input.privacyPolicyId,
+        healthDataPolicyId: input.healthDataPolicyId
+      };
+    }
+
+    const policies = await this.listActivePolicies();
+    const termsPolicy = input.termsPolicyId
+      ? { id: input.termsPolicyId }
+      : this.resolvePolicyByType(policies, "terms");
+    const privacyPolicy = input.privacyPolicyId
+      ? { id: input.privacyPolicyId }
+      : this.resolvePolicyByType(policies, "privacy");
+    const healthDataPolicy = input.healthDataPolicyId
+      ? { id: input.healthDataPolicyId }
+      : this.resolvePolicyByType(policies, "health_data");
+
+    if (!termsPolicy?.id || !privacyPolicy?.id || !healthDataPolicy?.id) {
+      throw new KruxtAppError(
+        "POLICY_BASELINE_MISSING",
+        "Missing active baseline policies for terms, privacy, or health data processing."
+      );
+    }
+
+    return {
+      termsPolicyId: termsPolicy.id,
+      privacyPolicyId: privacyPolicy.id,
+      healthDataPolicyId: healthDataPolicy.id
+    };
+  }
+
   async captureBaselineConsents(userId: string, input: BaselineConsentInput): Promise<ConsentRecord[]> {
+    const acceptTerms = input.acceptTerms ?? true;
+    const acceptPrivacy = input.acceptPrivacy ?? true;
+    const acceptHealthData = input.acceptHealthData ?? true;
+
+    if (!acceptTerms || !acceptPrivacy || !acceptHealthData) {
+      throw new KruxtAppError(
+        "BASELINE_CONSENT_REQUIRED",
+        "Terms, privacy, and health-data processing consent are required to continue."
+      );
+    }
+
+    const policyIds = await this.resolveBaselinePolicyIds(input);
+    const source = input.source ?? "mobile";
+
     const writes: UpsertConsentInput[] = [
       {
         consentType: "terms",
         granted: true,
-        policyVersionId: input.termsPolicyId,
-        locale: input.locale
+        policyVersionId: policyIds.termsPolicyId,
+        locale: input.locale,
+        source
       },
       {
         consentType: "privacy",
         granted: true,
-        policyVersionId: input.privacyPolicyId,
-        locale: input.locale
+        policyVersionId: policyIds.privacyPolicyId,
+        locale: input.locale,
+        source
       },
       {
         consentType: "health_data_processing",
         granted: true,
-        policyVersionId: input.healthDataPolicyId,
-        locale: input.locale
+        policyVersionId: policyIds.healthDataPolicyId,
+        locale: input.locale,
+        source
       },
       {
         consentType: "marketing_email",
         granted: Boolean(input.marketingEmailOptIn),
-        policyVersionId: input.privacyPolicyId,
-        locale: input.locale
+        policyVersionId: policyIds.privacyPolicyId,
+        locale: input.locale,
+        source
       },
       {
         consentType: "push_notifications",
         granted: input.pushNotificationsOptIn ?? true,
-        policyVersionId: input.privacyPolicyId,
-        locale: input.locale
+        policyVersionId: policyIds.privacyPolicyId,
+        locale: input.locale,
+        source
       }
     ];
 
     const records: ConsentRecord[] = [];
-
     for (const write of writes) {
       records.push(await this.upsertConsent(userId, write));
     }

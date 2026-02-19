@@ -100,3 +100,45 @@ export interface ConsentRecord {
   locale?: string | null;
 }
 
+export type GuildRole = "leader" | "officer" | "member";
+
+export interface GuildRosterMember {
+  membershipId: string;
+  userId: string;
+  role: GymRole;
+  guildRole: GuildRole;
+  membershipStatus: MembershipStatus;
+  displayName: string;
+  username: string;
+  avatarUrl?: string | null;
+  level: number;
+  rankTier: RankTier;
+  joinedAt?: string | null;
+}
+
+export interface GuildHallSnapshot {
+  userId: string;
+  gymId?: string;
+  gymName?: string;
+  gymSlug?: string;
+  role?: GymRole;
+  guildRole?: GuildRole;
+  membershipStatus?: MembershipStatus;
+  isStaff: boolean;
+  rosterCount: number;
+  pendingApprovals: number;
+  upcomingClasses: number;
+  rankTier?: RankTier;
+  level?: number;
+  xpTotal?: number;
+  chainDays?: number;
+}
+
+export interface GymOpsSummary {
+  gymId: string;
+  pendingMemberships: number;
+  activeOrTrialMembers: number;
+  upcomingClasses: number;
+  pendingWaitlistEntries: number;
+  openPrivacyRequests: number;
+}
