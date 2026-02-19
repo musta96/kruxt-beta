@@ -28,6 +28,7 @@ KRUXT is a social-first fitness platform with B2C workout tracking, gamification
 3. Review DB migration: `packages/db/supabase/migrations/202602190001_krux_beta_foundation.sql`
 4. Apply schema + seed with Supabase CLI:
    - `./scripts/bootstrap.sh`
+   - This syncs SQL into `supabase/migrations` and `supabase/seed.sql`, then runs `supabase db push --include-seed`.
 5. Deploy edge functions:
    - `./scripts/deploy_functions.sh`
 

@@ -10,4 +10,6 @@ Contains Supabase/Postgres SQL migrations and smoke tests.
 
 ## Apply
 
-Use Supabase CLI or SQL editor to run migration in order.
+Run `./scripts/bootstrap.sh` from repo root. It syncs these SQL files into the
+Supabase CLI default locations (`supabase/migrations`, `supabase/seed.sql`) and
+executes `supabase db push --include-seed`.
