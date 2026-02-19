@@ -1,0 +1,19 @@
+{
+  "name": "@kruxt/admin",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'Configure Next.js runtime and run: next dev'",
+    "build": "echo 'Admin build is handled by Next.js pipeline'",
+    "lint": "echo 'Add eslint config for admin app'",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "echo 'Add admin test suite (vitest/playwright)'"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}

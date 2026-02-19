@@ -1,0 +1,19 @@
+{
+  "name": "@kruxt/mobile",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'Configure Expo runtime and run: npx expo start'",
+    "build": "echo 'Mobile build is handled by EAS in beta pipelines'",
+    "lint": "echo 'Add eslint config for mobile app'",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "echo 'Add mobile test suite (jest + react-native-testing-library)'"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}

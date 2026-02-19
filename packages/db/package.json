@@ -1,0 +1,11 @@
+{
+  "name": "@kruxt/db",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "echo 'Database package contains SQL migrations only'",
+    "lint": "echo 'Add sqlfluff or pg formatter in CI'",
+    "typecheck": "echo 'No TypeScript in db package'",
+    "test": "bash tests/run_smoke.sh"
+  }
+}

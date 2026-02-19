@@ -1,0 +1,36 @@
+project_id = "kruxt-beta"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:19006", "http://localhost:3001"]
+
+[functions.provider_webhook_ingest]
+verify_jwt = true
+
+[functions.sync_dispatcher]
+verify_jwt = true
+
+[functions.rank_recompute_weekly]
+verify_jwt = true
+
+[functions.privacy_request_processor]
+verify_jwt = true
+
+[functions.audit_event_ingest]
+verify_jwt = true

@@ -1,0 +1,19 @@
+{
+  "name": "kruxt-beta",
+  "private": true,
+  "version": "0.1.0",
+  "description": "KRUXT monorepo (mobile, admin, db, shared types)",
+  "packageManager": "pnpm@10.6.5",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:test": "bash packages/db/tests/run_smoke.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.4",
+    "typescript": "^5.8.2"
+  }
+}
