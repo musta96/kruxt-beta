@@ -42,3 +42,9 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Mobile onboarding + guild hall flows: `apps/mobile/src/services`, `apps/mobile/src/flows`
 - Admin staff ops services + flows: `apps/admin/src/services`, `apps/admin/src/flows`
 - Usage notes: `docs/phase2-runtime.md`
+
+## Phase 3 Runtime
+
+- Workout logging service + flow: `apps/mobile/src/services/workout-service.ts`, `apps/mobile/src/flows/phase3-workout-logging.ts`
+- PR auto-detection trigger migration: `packages/db/supabase/migrations/202602190351_krux_beta_part3_s010.sql`
+- Usage notes: `docs/phase3-runtime.md`

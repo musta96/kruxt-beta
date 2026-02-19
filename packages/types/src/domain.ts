@@ -1,5 +1,32 @@
 export type GymRole = "leader" | "officer" | "coach" | "member";
 
+export type WorkoutVisibility = "public" | "followers" | "gym" | "private";
+
+export type WorkoutType =
+  | "strength"
+  | "functional"
+  | "hyrox"
+  | "crossfit"
+  | "conditioning"
+  | "custom";
+
+export type WorkoutBlockType =
+  | "straight_set"
+  | "superset"
+  | "circuit"
+  | "emom"
+  | "amrap";
+
+export type IntegrationProvider =
+  | "apple_health"
+  | "garmin"
+  | "fitbit"
+  | "huawei_health"
+  | "suunto"
+  | "oura"
+  | "whoop"
+  | "manual";
+
 export type MembershipStatus =
   | "pending"
   | "trial"

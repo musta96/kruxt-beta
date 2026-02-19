@@ -15,7 +15,8 @@
    - `GymAdminService.listPendingMemberships`
    - `GymAdminService.listPendingWaitlistEntries`
    - `GymAdminService.listOpenPrivacyRequests`
-5. Implement workout logger UI and wire RPC:
+5. Implement workout logger UI and wire flow:
+   - `createPhase3WorkoutLoggingFlow`
    - `public.log_workout_atomic`
 6. Implement class waitlist action buttons:
    - `public.join_waitlist`

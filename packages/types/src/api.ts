@@ -1,13 +1,51 @@
 import type {
   ConsentType,
+  IntegrationProvider,
+  WorkoutBlockType,
+  WorkoutType,
+  WorkoutVisibility,
   GymRole,
   MembershipStatus,
   PrivacyRequestType
 } from "./domain";
 
+export interface LogWorkoutSetInput {
+  setIndex?: number;
+  reps?: number;
+  weightKg?: number;
+  durationSeconds?: number;
+  distanceM?: number;
+  rpe?: number;
+  isPr?: boolean;
+}
+
+export interface LogWorkoutExerciseInput {
+  exerciseId: string;
+  orderIndex?: number;
+  blockId?: string;
+  blockType?: WorkoutBlockType;
+  targetReps?: string;
+  targetWeightKg?: number;
+  notes?: string;
+  sets?: LogWorkoutSetInput[];
+}
+
+export interface LogWorkoutInput {
+  gymId?: string;
+  title?: string;
+  workoutType?: WorkoutType;
+  notes?: string;
+  startedAt?: string;
+  endedAt?: string;
+  rpe?: number;
+  visibility?: WorkoutVisibility;
+  source?: IntegrationProvider;
+  externalActivityId?: string;
+}
+
 export interface LogWorkoutAtomicInput {
-  workout: Record<string, unknown>;
-  exercises: Array<Record<string, unknown>>;
+  workout: LogWorkoutInput;
+  exercises: LogWorkoutExerciseInput[];
 }
 
 export interface UpsertProfileInput {

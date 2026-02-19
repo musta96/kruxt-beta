@@ -10,7 +10,7 @@
 
 1. Apply DB migration and seed data in Supabase project.
 2. Connect auth flow in mobile/admin to `profiles` creation, consent capture, guild hall load, and staff ops snapshot.
-3. Implement workout logger UI and call `log_workout_atomic` RPC.
+3. Implement workout logger UI and call `log_workout_atomic` RPC (see `createPhase3WorkoutLoggingFlow`).
 4. Build feed UI from `feed_events` + joined `workouts` + `social_interactions`.
 5. Build B2B admin screens for memberships, classes, waitlist, check-ins, waivers.
 6. Activate Apple + Garmin integration paths with `device_connections` + `device_sync_jobs`.
