@@ -17,7 +17,8 @@ begin
       ('class_waitlist'),
       ('device_connections'),
       ('privacy_requests'),
-      ('audit_logs')
+      ('audit_logs'),
+      ('push_notification_tokens')
   )
   select count(*) into v_missing
   from expected e

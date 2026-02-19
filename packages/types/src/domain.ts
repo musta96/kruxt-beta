@@ -27,6 +27,14 @@ export type IntegrationProvider =
   | "whoop"
   | "manual";
 
+export type SocialConnectionStatus = "pending" | "accepted" | "blocked";
+
+export type SocialInteractionType = "reaction" | "comment";
+
+export type ReactionType = "fist" | "fire" | "shield" | "clap" | "crown";
+
+export type ReportTargetType = "workout" | "comment" | "profile" | "gym";
+
 export type MembershipStatus =
   | "pending"
   | "trial"
@@ -168,4 +176,55 @@ export interface GymOpsSummary {
   upcomingClasses: number;
   pendingWaitlistEntries: number;
   openPrivacyRequests: number;
+}
+
+export interface SocialConnection {
+  id: string;
+  followerUserId: string;
+  followedUserId: string;
+  status: SocialConnectionStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SocialInteraction {
+  id: string;
+  workoutId: string;
+  actorUserId: string;
+  interactionType: SocialInteractionType;
+  reactionType?: ReactionType | null;
+  commentText?: string | null;
+  parentInteractionId?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface NotificationPreferences {
+  id: string;
+  userId: string;
+  pushEnabled: boolean;
+  emailEnabled: boolean;
+  inAppEnabled: boolean;
+  marketingEnabled: boolean;
+  workoutReactionsEnabled: boolean;
+  commentsEnabled: boolean;
+  challengeUpdatesEnabled: boolean;
+  classRemindersEnabled: boolean;
+  quietHoursStart?: string | null;
+  quietHoursEnd?: string | null;
+  timezone: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PushNotificationToken {
+  id: string;
+  userId: string;
+  deviceId: string;
+  platform: "ios" | "android" | "web";
+  pushToken: string;
+  isActive: boolean;
+  lastSeenAt: string;
+  createdAt: string;
+  updatedAt: string;
 }

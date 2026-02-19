@@ -18,11 +18,16 @@
 5. Implement workout logger UI and wire flow:
    - `createPhase3WorkoutLoggingFlow`
    - `public.log_workout_atomic`
-6. Implement class waitlist action buttons:
+6. Implement social/feed home surfaces:
+   - `createPhase4SocialFeedFlow`
+   - `FeedService.listHomeFeed`
+   - `SocialService.addReaction` / `SocialService.addComment`
+   - `NotificationService.registerPushToken`
+7. Implement class waitlist action buttons:
    - `public.join_waitlist`
    - `public.promote_waitlist_member`
-7. Implement compliance entry points:
+8. Implement compliance entry points:
    - `public.submit_privacy_request`
    - `public.record_waiver_acceptance`
-8. Configure scheduler for weekly ranks:
+9. Configure scheduler for weekly ranks:
    - call `rank_recompute_weekly` edge function

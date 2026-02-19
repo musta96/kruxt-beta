@@ -48,3 +48,10 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Workout logging service + flow: `apps/mobile/src/services/workout-service.ts`, `apps/mobile/src/flows/phase3-workout-logging.ts`
 - PR auto-detection trigger migration: `packages/db/supabase/migrations/202602190351_krux_beta_part3_s010.sql`
 - Usage notes: `docs/phase3-runtime.md`
+
+## Phase 4 Runtime
+
+- Social/feed/notification services: `apps/mobile/src/services/social-service.ts`, `apps/mobile/src/services/feed-service.ts`, `apps/mobile/src/services/notification-service.ts`
+- Social feed flow: `apps/mobile/src/flows/phase4-social-feed.ts`
+- Push token schema + RLS migration set starts at: `packages/db/supabase/migrations/202602190355_krux_beta_part3_s014.sql`
+- Usage notes: `docs/phase4-runtime.md`

@@ -3,6 +3,7 @@ import type { FeatureFlagKey } from "@kruxt/types";
 import { guildHallChecklist } from "./flows/guild-hall";
 import { phase2OnboardingChecklist } from "./flows/phase2-onboarding";
 import { phase3WorkoutLoggingChecklist } from "./flows/phase3-workout-logging";
+import { phase4SocialFeedChecklist } from "./flows/phase4-social-feed";
 
 const defaultEnabledFlags: FeatureFlagKey[] = [
   "provider_apple_health_enabled",
@@ -36,6 +37,20 @@ export function mobileAppScaffold() {
       checklist: [...phase3WorkoutLoggingChecklist],
       rpcEndpoints: ["log_workout_atomic"],
       expectedSignals: ["feed_events.workout_logged", "feed_events.pr_verified", "profiles.xp_total"]
+    },
+    phase4: {
+      flow: "load ranked feed -> social interactions -> moderation safety -> notifications",
+      checklist: [...phase4SocialFeedChecklist],
+      tables: [
+        "feed_events",
+        "social_connections",
+        "social_interactions",
+        "user_blocks",
+        "user_reports",
+        "notification_preferences",
+        "push_notification_tokens"
+      ],
+      featureFlags: ["public_feed_boost_enabled"]
     }
   };
 }

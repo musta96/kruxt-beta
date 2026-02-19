@@ -1,6 +1,9 @@
 import type {
   ConsentType,
   IntegrationProvider,
+  ReactionType,
+  ReportTargetType,
+  SocialConnectionStatus,
   WorkoutBlockType,
   WorkoutType,
   WorkoutVisibility,
@@ -88,6 +91,58 @@ export interface UpdateMembershipInput {
 
 export interface WaitlistJoinInput {
   classId: string;
+}
+
+export interface FollowUserInput {
+  followedUserId: string;
+}
+
+export interface RespondFollowRequestInput {
+  connectionId: string;
+  status: Extract<SocialConnectionStatus, "accepted" | "blocked">;
+}
+
+export interface ReactionInput {
+  workoutId: string;
+  reactionType: ReactionType;
+}
+
+export interface CommentInput {
+  workoutId: string;
+  commentText: string;
+  parentInteractionId?: string;
+}
+
+export interface BlockUserInput {
+  blockedUserId: string;
+  reason?: string;
+}
+
+export interface UserReportInput {
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: string;
+  details?: string;
+}
+
+export interface UpsertNotificationPreferencesInput {
+  pushEnabled?: boolean;
+  emailEnabled?: boolean;
+  inAppEnabled?: boolean;
+  marketingEnabled?: boolean;
+  workoutReactionsEnabled?: boolean;
+  commentsEnabled?: boolean;
+  challengeUpdatesEnabled?: boolean;
+  classRemindersEnabled?: boolean;
+  quietHoursStart?: string | null;
+  quietHoursEnd?: string | null;
+  timezone?: string;
+}
+
+export interface RegisterPushTokenInput {
+  deviceId: string;
+  platform: "ios" | "android" | "web";
+  pushToken: string;
 }
 
 export interface PrivacyRequestInput {

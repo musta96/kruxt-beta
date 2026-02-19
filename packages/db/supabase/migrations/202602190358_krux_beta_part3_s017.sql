@@ -1,0 +1,1 @@
+drop trigger if exists trg_push_notification_tokens_set_updated_at on public.push_notification_tokens;
