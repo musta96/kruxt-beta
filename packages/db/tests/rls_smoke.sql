@@ -16,6 +16,7 @@ begin
       ('gym_memberships'),
       ('class_waitlist'),
       ('device_connections'),
+      ('device_sync_cursors'),
       ('privacy_requests'),
       ('audit_logs'),
       ('push_notification_tokens')

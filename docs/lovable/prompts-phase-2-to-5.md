@@ -1,4 +1,4 @@
-# Lovable Prompt Pack (Phases 2-5)
+# Lovable Prompt Pack (Phases 2-6)
 
 Use these prompts in order. Keep each generation isolated and commit after each module.
 
@@ -86,3 +86,27 @@ Requirements:
 - Trials list with join/leave and progress indicator
 - Weekly rank reset visual cues and `Legend is rare` microcopy
 - Keep design consistent with existing sigil/banner language
+
+## Prompt 6: Integrations (Apple + Garmin first)
+
+Create `IntegrationsHub` with two sections: `Connected Devices` and `Sync Activity`.
+
+Requirements:
+- Connected devices cards:
+  - providers shown in order: `apple_health`, `garmin`, then disabled providers (`fitbit`, `huawei_health`, `suunto`, `oura`, `whoop`)
+  - each card shows status (`active`, `revoked`, `expired`, `error`), last sync timestamp, and last error if present
+  - CTA labels:
+    - active: `Sync now`
+    - inactive/error: `Reconnect`
+    - disabled providers: `Coming soon`
+- Sync activity panel:
+  - recent sync jobs table (`status`, `retry_count`, `started_at`, `finished_at`)
+  - imported activities list (`activity_type`, `duration`, `distance`, `imported_at`)
+  - cursor snapshot badge (`last_webhook_event_id`, `last_synced_at`)
+- Use direct KRUXT copy:
+  - `Proof from devices still needs receipts.`
+  - `Only verified providers can advance rank data.`
+- Wire actions to runtime contracts:
+  - `IntegrationService.upsertConnection`
+  - `IntegrationService.queueSyncJob`
+  - `createPhase6IntegrationsFlow.load`

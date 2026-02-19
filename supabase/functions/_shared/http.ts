@@ -10,3 +10,11 @@ export function jsonResponse(body: unknown, status = 200): Response {
 export async function parseJson<T>(request: Request): Promise<T> {
   return (await request.json()) as T;
 }
+
+export async function parseJsonOr<T>(request: Request, fallback: T): Promise<T> {
+  try {
+    return (await request.json()) as T;
+  } catch {
+    return fallback;
+  }
+}

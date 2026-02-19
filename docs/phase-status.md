@@ -8,9 +8,9 @@
 - Phase 3 runtime: workout logging flow with proof-feed and progress verification
 - Phase 4 runtime: social graph/feed ranking/notification service layer for mobile
 - Phase 5 runtime: admin B2B ops service layer for classes, waitlist, waivers, contracts, check-ins, and billing telemetry
+- Phase 6 runtime: Apple/Garmin integration pipeline (mobile integration service + webhook ingest + sync dispatcher + cursor persistence)
 - Phase 3 prep: workout atomic logging RPC + XP/chain trigger + feed event trigger
 - Phase 4 prep: social graph, blocks/reports, interaction schema + moderation storage
-- Phase 6 prep: provider connection model, sync jobs, webhook idempotency tables
 - Phase 7 prep: leaderboard rebuild RPC + event outbox hooks
 - Phase 8 prep: privacy requests + audit logs + immutable evidence controls
 
@@ -18,6 +18,6 @@
 
 - Mobile and admin feature-complete UI screen implementation (React Native + Next runtime wiring)
 - Supabase auth wiring and protected client routes
-- Actual provider-specific connector logic for Apple/Garmin
+- Direct provider API polling implementations for production credentials (Apple/Garmin providers currently webhook-first runtime)
 - Scheduled job deployment and production observability dashboards
 - KPI instrumentation and analytics ingestion

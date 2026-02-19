@@ -27,13 +27,14 @@
 14. Duplicate webhook events remain idempotent.
 15. Sync job retries update status and preserve cursor integrity.
 16. Imported activities dedupe by `(user_id, provider, external_activity_id)`.
+17. `device_sync_cursors` updates only by service role; users can read only their own cursors.
 
 ## Compliance
 
-17. Consent records retain policy version evidence.
-18. Privacy request transitions are valid (`submitted -> in_review -> completed/rejected`).
-19. Audit log rows are append-only.
-20. Admin consent/privacy RPCs only return members linked to the requested gym.
+18. Consent records retain policy version evidence.
+19. Privacy request transitions are valid (`submitted -> in_review -> completed/rejected`).
+20. Audit log rows are append-only.
+21. Admin consent/privacy RPCs only return members linked to the requested gym.
 
 ## Performance targets for pilot
 

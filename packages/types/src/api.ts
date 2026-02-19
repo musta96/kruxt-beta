@@ -6,6 +6,7 @@ import type {
   ClassStatus,
   ConsentType,
   DunningStage,
+  IntegrationConnectionStatus,
   IntegrationProvider,
   PaymentStatus,
   ReactionType,
@@ -152,6 +153,35 @@ export interface RegisterPushTokenInput {
   deviceId: string;
   platform: "ios" | "android" | "web";
   pushToken: string;
+}
+
+export interface UpsertDeviceConnectionInput {
+  provider: IntegrationProvider;
+  status?: IntegrationConnectionStatus;
+  providerUserId?: string | null;
+  scopes?: string[];
+  accessTokenEncrypted?: string | null;
+  refreshTokenEncrypted?: string | null;
+  tokenExpiresAt?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface QueueDeviceSyncJobInput {
+  connectionId: string;
+  jobType?: string;
+  cursor?: Record<string, unknown>;
+  sourceWebhookEventId?: string | null;
+}
+
+export interface ProviderWebhookIngestInput {
+  provider: IntegrationProvider;
+  providerEventId?: string;
+  eventType: string;
+  payload?: Record<string, unknown>;
+  payloadHash?: string;
+  userId?: string;
+  connectionId?: string;
+  providerUserId?: string;
 }
 
 export interface CreateMembershipPlanInput {

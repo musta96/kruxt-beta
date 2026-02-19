@@ -6,6 +6,7 @@
 - Phase 1 scaffolded: Supabase schema v2 migration + seed + smoke tests
 - Edge function entrypoints scaffolded for integrations, rankings, compliance, and audit
 - Phase 5 runtime scaffolded: B2B ops service + flow for gym admin operations
+- Phase 6 runtime scaffolded: integration service + Apple/Garmin webhook/sync activation path
 
 ## Ordered build sequence
 
@@ -14,7 +15,7 @@
 3. Implement workout logger UI and call `log_workout_atomic` RPC (see `createPhase3WorkoutLoggingFlow`).
 4. Build feed UI from `createPhase4SocialFeedFlow` (`feed_events` + joined `workouts` + `social_interactions`).
 5. Connect admin UI screens to `createPhase5B2BOpsFlow` and `B2BOpsService`.
-6. Activate Apple + Garmin integration paths with `device_connections` + `device_sync_jobs`.
+6. Wire production provider credentials and scheduler cadence for `provider_webhook_ingest` + `sync_dispatcher`.
 7. Enable weekly rank recompute scheduler calling `rank_recompute_weekly`.
 8. Run privacy workflows (`submit_privacy_request`) and staff handling pipeline.
 

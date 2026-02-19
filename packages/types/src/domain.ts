@@ -27,6 +27,12 @@ export type IntegrationProvider =
   | "whoop"
   | "manual";
 
+export type IntegrationConnectionStatus = "active" | "revoked" | "expired" | "error";
+
+export type SyncJobStatus = "queued" | "running" | "succeeded" | "failed" | "retry_scheduled";
+
+export type IntegrationProcessingStatus = "pending" | "processed" | "failed" | "ignored";
+
 export type SocialConnectionStatus = "pending" | "accepted" | "blocked";
 
 export type SocialInteractionType = "reaction" | "comment";
@@ -272,6 +278,89 @@ export interface PushNotificationToken {
   lastSeenAt: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DeviceConnection {
+  id: string;
+  userId: string;
+  provider: IntegrationProvider;
+  status: IntegrationConnectionStatus;
+  providerUserId?: string | null;
+  scopes: string[];
+  tokenExpiresAt?: string | null;
+  lastSyncedAt?: string | null;
+  lastError?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeviceSyncJob {
+  id: string;
+  connectionId: string;
+  userId: string;
+  provider: IntegrationProvider;
+  jobType: string;
+  status: SyncJobStatus;
+  cursor: Record<string, unknown>;
+  requestedBy?: string | null;
+  retryCount: number;
+  nextRetryAt?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  errorMessage?: string | null;
+  sourceWebhookEventId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeviceSyncCursor {
+  id: string;
+  connectionId: string;
+  userId: string;
+  provider: IntegrationProvider;
+  cursor: Record<string, unknown>;
+  lastSyncedAt?: string | null;
+  lastJobId?: string | null;
+  lastWebhookEventId?: string | null;
+  lastError?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExternalActivityImport {
+  id: string;
+  userId: string;
+  connectionId: string;
+  provider: IntegrationProvider;
+  externalActivityId: string;
+  activityType?: string | null;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  durationSeconds?: number | null;
+  distanceM?: number | null;
+  calories?: number | null;
+  averageHr?: number | null;
+  maxHr?: number | null;
+  rawData: Record<string, unknown>;
+  mappedWorkoutId?: string | null;
+  importedAt: string;
+  createdAt: string;
+}
+
+export interface IntegrationWebhookEvent {
+  id: string;
+  provider: IntegrationProvider;
+  providerEventId: string;
+  eventType: string;
+  payloadHash: string;
+  payloadJson: Record<string, unknown>;
+  processingStatus: IntegrationProcessingStatus;
+  retryCount: number;
+  nextRetryAt?: string | null;
+  errorMessage?: string | null;
+  receivedAt: string;
+  processedAt?: string | null;
 }
 
 export interface GymMembershipPlan {

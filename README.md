@@ -62,3 +62,10 @@ Operational features are controlled by flags in `public.feature_flags`.
 - B2B ops flow snapshot: `apps/admin/src/flows/phase5-b2b-ops.ts`
 - Staff acceptance RPC migration set starts at: `packages/db/supabase/migrations/202602190364_krux_beta_part3_s023.sql`
 - Usage notes: `docs/phase5-runtime.md`
+
+## Phase 6 Runtime
+
+- Mobile integration runtime: `apps/mobile/src/services/integration-service.ts`, `apps/mobile/src/flows/phase6-integrations.ts`
+- Edge activation: `supabase/functions/provider_webhook_ingest`, `supabase/functions/sync_dispatcher`
+- Cursor + webhook sync migration set starts at: `packages/db/supabase/migrations/202602190370_krux_beta_part3_s029.sql`
+- Usage notes: `docs/phase6-runtime.md`

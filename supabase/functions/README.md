@@ -1,7 +1,7 @@
 # KRUXT Edge Functions
 
-- `provider_webhook_ingest`: stores provider callbacks with idempotency fields
-- `sync_dispatcher`: advances queued sync jobs for device integrations
+- `provider_webhook_ingest`: stores provider callbacks with idempotency fields, provider flag gating, and sync job fan-out for Apple/Garmin
+- `sync_dispatcher`: claims queued sync jobs, processes webhook-linked imports, persists cursor state, and handles retry/backoff safely
 - `rank_recompute_weekly`: calls leaderboard rebuild RPC for active boards
 - `privacy_request_processor`: triages submitted privacy requests
 - `audit_event_ingest`: writes append-only audit records

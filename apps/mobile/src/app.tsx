@@ -4,6 +4,7 @@ import { guildHallChecklist } from "./flows/guild-hall";
 import { phase2OnboardingChecklist } from "./flows/phase2-onboarding";
 import { phase3WorkoutLoggingChecklist } from "./flows/phase3-workout-logging";
 import { phase4SocialFeedChecklist } from "./flows/phase4-social-feed";
+import { phase6IntegrationsChecklist } from "./flows/phase6-integrations";
 
 const defaultEnabledFlags: FeatureFlagKey[] = [
   "provider_apple_health_enabled",
@@ -51,6 +52,20 @@ export function mobileAppScaffold() {
         "push_notification_tokens"
       ],
       featureFlags: ["public_feed_boost_enabled"]
+    },
+    phase6: {
+      flow: "connect provider -> queue sync -> import activities -> persist cursor",
+      checklist: [...phase6IntegrationsChecklist],
+      activeProviders: ["apple_health", "garmin"],
+      darkLaunchProviders: ["fitbit", "huawei_health", "suunto", "oura", "whoop"],
+      tables: [
+        "device_connections",
+        "device_sync_jobs",
+        "device_sync_cursors",
+        "external_activity_imports",
+        "integration_webhook_events"
+      ],
+      edgeFunctions: ["provider_webhook_ingest", "sync_dispatcher"]
     }
   };
 }

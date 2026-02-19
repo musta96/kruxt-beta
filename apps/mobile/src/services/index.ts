@@ -9,3 +9,4 @@ export * from "./workout-service";
 export * from "./feed-service";
 export * from "./social-service";
 export * from "./notification-service";
+export * from "./integration-service";
