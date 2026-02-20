@@ -79,9 +79,11 @@ Operational features are controlled by flags in `public.feature_flags`.
 ## Phase 6 Runtime
 
 - Mobile integration runtime: `apps/mobile/src/services/integration-service.ts`, `apps/mobile/src/flows/phase6-integrations.ts`
+- Mobile integrations UI controller: `apps/mobile/src/flows/phase6-integrations-ui.ts`
 - Edge activation: `supabase/functions/provider_webhook_ingest`, `supabase/functions/sync_dispatcher`
 - Cursor + webhook sync migration set starts at: `packages/db/supabase/migrations/202602190370_krux_beta_part3_s029.sql`
 - Usage notes: `docs/phase6-runtime.md`
+- Screen wiring guide: `docs/phase6-integrations-ui-wiring.md`
 
 ## Phase 7 Runtime
 

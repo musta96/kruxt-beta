@@ -120,6 +120,14 @@
 86. `recordCheckinAndAccessLog` records both rows and returns refreshed operational snapshot.
 87. `recordWaiverAcceptance` and `recordContractAcceptance` return acceptance IDs plus refreshed evidence lists.
 
+## Phase 6 Integrations UI
+
+88. `createPhase6IntegrationsUiFlow.load` returns only active beta providers (`apple_health`, `garmin`) plus per-provider state summaries.
+89. `connectProvider` upserts active provider connection, queues initial sync job, and returns refreshed snapshot.
+90. `disconnectProvider` sets provider connection to `revoked` and returns refreshed snapshot.
+91. `queueSync` rejects inactive connections and refreshes snapshot after successful queue.
+92. `validateActivation` reports missing providers, sync backlog, duplicate import groups, and deterministic mapping coverage.
+
 ## Performance targets for pilot
 
 - Feed p95 load < 500ms for 50-card page.

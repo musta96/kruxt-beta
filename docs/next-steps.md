@@ -12,7 +12,7 @@
    - `createPhase6IntegrationMonitorFlow`
    - `IntegrationMonitorService` health + sync-failure records
 5. Connect mobile integration screens to runtime flow:
-   - `createPhase6IntegrationsFlow`
+   - `createPhase6IntegrationsUiFlow`
    - `IntegrationService` methods for provider linking, sync queueing, and import snapshots
 6. Connect mobile Rank Ladder + Trials screens:
    - `createPhase7RankTrialsFlow`

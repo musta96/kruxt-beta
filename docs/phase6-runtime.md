@@ -11,6 +11,7 @@ Phase 6 runtime now includes integration activation for Apple + Garmin with dark
 
 - `apps/mobile/src/services/integration-service.ts`
 - `apps/mobile/src/flows/phase6-integrations.ts`
+- `apps/mobile/src/flows/phase6-integrations-ui.ts`
 - `apps/mobile/src/app.tsx`
 
 Core methods:
@@ -21,6 +22,18 @@ Core methods:
 - `IntegrationService.listSyncJobs(...)`
 - `IntegrationService.getSyncCursor(...)`
 - `IntegrationService.listImportedActivities(...)`
+
+UI controller methods:
+
+- `createPhase6IntegrationsUiFlow.load(...)`
+- `createPhase6IntegrationsUiFlow.connectProvider(...)`
+- `createPhase6IntegrationsUiFlow.disconnectProvider(...)`
+- `createPhase6IntegrationsUiFlow.queueSync(...)`
+- `createPhase6IntegrationsUiFlow.validateActivation(...)`
+
+Wiring guide:
+
+- `docs/phase6-integrations-ui-wiring.md`
 
 ## Admin monitoring entrypoints
 
