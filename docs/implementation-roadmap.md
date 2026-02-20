@@ -23,7 +23,7 @@
 6. Connect integration monitoring UI to `createPhase6IntegrationMonitorFlow`.
 7. Wire production provider credentials and scheduler cadence for `provider_webhook_ingest` + `sync_dispatcher`.
 8. Connect rank/trials UI to `createPhase7RankTrialsFlow` + `CompetitionService`.
-9. Enable weekly rank recompute scheduler calling `rank_recompute_weekly`.
+9. Validate weekly rank recompute scheduler (`.github/workflows/rank-recompute-weekly.yml`) and alert routing.
 10. Run privacy workflows (`submit_privacy_request`) and staff handling pipeline (`transition_privacy_request_status`).
 
 ## Feature flag activation policy

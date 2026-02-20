@@ -23,8 +23,9 @@
 8. Configure recurring runs for integration jobs:
    - schedule `sync_dispatcher` for frequent execution
    - route provider callbacks into `provider_webhook_ingest`
-9. Configure scheduler for weekly ranks:
-   - call `rank_recompute_weekly` edge function
+9. Validate active rank scheduler:
+   - verify `.github/workflows/rank-recompute-weekly.yml` succeeds with project secrets
+   - tune `determinismProbeCount`/`limit` after first two production runs
 10. Configure scheduler for privacy queue:
    - call `privacy_request_processor` with triage/overdue/export limits
 11. Operationalize compliance runbook in staff workflows:

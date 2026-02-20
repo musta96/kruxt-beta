@@ -77,13 +77,16 @@
 58. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
 59. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
 60. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+61. `rank_recompute_weekly` deterministic probe reports `determinismMismatchCount = 0` for stable inputs.
 
 ## Rollout Gates
 
-61. Pavia pilot readiness checklist is fully completed before invite activation.
-62. Weekly KPI board is updated on cadence with explicit gate outcome (`Pass`, `Conditional`, `Fail`).
-63. Incident rollback playbook includes ordered flag rollback actions and communication SLA.
-64. US+EU expansion criteria are tracked and require two consecutive passing weekly reviews.
+62. Pavia pilot readiness checklist is fully completed before invite activation.
+63. Weekly KPI board is updated on cadence with explicit gate outcome (`Pass`, `Conditional`, `Fail`).
+64. Incident rollback playbook includes ordered flag rollback actions and communication SLA.
+65. US+EU expansion criteria are tracked and require two consecutive passing weekly reviews.
+66. Weekly `rank-recompute-weekly` scheduler run produces artifact report and exits non-zero on recompute failure.
+67. Failed scheduler run creates a high-priority phase-7 alert issue with workflow run URL.
 
 ## Performance targets for pilot
 

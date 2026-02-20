@@ -1,0 +1,117 @@
+name: rank-recompute-weekly
+
+on:
+  schedule:
+    - cron: "15 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      timeframe:
+        description: "Leaderboard timeframe to recompute"
+        required: false
+        default: "weekly"
+        type: choice
+        options:
+          - weekly
+          - daily
+          - monthly
+          - all_time
+      limit:
+        description: "Maximum boards to scan"
+        required: false
+        default: "200"
+        type: number
+      determinismProbeCount:
+        description: "How many rebuilt boards to probe for repeated-run determinism"
+        required: false
+        default: "3"
+        type: number
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  recompute:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: rank-recompute-weekly
+      cancel-in-progress: false
+    env:
+      DEFAULT_TIMEFRAME: weekly
+      DEFAULT_LIMIT: "200"
+      DEFAULT_DETERMINISM_PROBE_COUNT: "3"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve parameters
+        id: params
+        shell: bash
+        run: |
+          timeframe="${{ github.event.inputs.timeframe }}"
+          limit="${{ github.event.inputs.limit }}"
+          probe="${{ github.event.inputs.determinismProbeCount }}"
+
+          if [ -z "$timeframe" ]; then timeframe="$DEFAULT_TIMEFRAME"; fi
+          if [ -z "$limit" ]; then limit="$DEFAULT_LIMIT"; fi
+          if [ -z "$probe" ]; then probe="$DEFAULT_DETERMINISM_PROBE_COUNT"; fi
+
+          echo "timeframe=$timeframe" >> "$GITHUB_OUTPUT"
+          echo "limit=$limit" >> "$GITHUB_OUTPUT"
+          echo "probe=$probe" >> "$GITHUB_OUTPUT"
+
+      - name: Validate required secrets
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "Missing required repo secrets SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY." >&2
+            exit 1
+          fi
+
+      - name: Run weekly recompute
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node scripts/run-rank-recompute-weekly.mjs \
+            --timeframe "${{ steps.params.outputs.timeframe }}" \
+            --limit "${{ steps.params.outputs.limit }}" \
+            --determinism-probe-count "${{ steps.params.outputs.probe }}" \
+            --output-file rank-recompute-report.json
+
+      - name: Upload recompute report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rank-recompute-report-${{ github.run_id }}
+          path: rank-recompute-report.json
+
+      - name: Create ops alert issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
+            const title = `[OPS] Rank recompute failed (${new Date().toISOString().slice(0, 10)})`;
+            const body = [
+              "Rank recompute scheduler reported a failure.",
+              `- Workflow run: ${runUrl}`,
+              `- Trigger: ${context.eventName}`,
+              `- Commit: ${context.sha}`,
+              "",
+              "Inspect the `rank-recompute-report` workflow artifact for detailed diagnostics."
+            ].join("\n");
+
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body,
+              labels: ["high-priority", "phase-7"]
+            });
