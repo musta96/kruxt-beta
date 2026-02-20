@@ -11,17 +11,14 @@ import {
   Spinner,
   SkeletonCard,
 } from "../../design-system/primitives";
-import { supabase } from "@/integrations/supabase/client";
+import type { GymSearchResult } from "../types";
 
-interface GymSearchResult {
-  id: string;
-  name: string;
-  city: string | null;
-  is_public: boolean; // true = open gym, false = private/approval-required
-}
-
+/**
+ * GymScreen — gym search delegates to injected services.searchGyms().
+ * No direct supabase usage.
+ */
 export function GymScreen() {
-  const { goTo, setGym, state } = useOnboarding();
+  const { goTo, setGym, state, services } = useOnboarding();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GymSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -46,13 +43,8 @@ export function GymScreen() {
     setSearching(true);
     setSearchError(null);
     try {
-      const { data, error } = await supabase
-        .from("gyms")
-        .select("id, name, city, is_public")
-        .ilike("name", `%${q.trim()}%`)
-        .limit(8);
-      if (error) throw error;
-      setResults((data ?? []) as GymSearchResult[]);
+      const data = await services.searchGyms(q.trim());
+      setResults(data);
     } catch {
       setSearchError("Search failed. Check your connection and try again.");
     } finally {
@@ -69,25 +61,24 @@ export function GymScreen() {
 
   function handleJoinRequest() {
     if (!selected) return;
-    // gym service joinGym is called in CompleteScreen to keep submit atomic
     setJoinRequestSent(true);
     setGym({
       mode: "join",
       gymId: selected.id,
       gymName: selected.name,
-      isPublic: selected.is_public,
+      isPublic: selected.isPublic,
       joinRequestSent: true,
     });
   }
 
   function handleContinue() {
     if (selected) {
-      const isPrivate = !selected.is_public;
+      const isPrivate = !selected.isPublic;
       setGym({
         mode: "join",
         gymId: selected.id,
         gymName: selected.name,
-        isPublic: selected.is_public,
+        isPublic: selected.isPublic,
         joinRequestSent: isPrivate ? joinRequestSent : false,
       });
     } else {
@@ -96,7 +87,7 @@ export function GymScreen() {
     goTo("consents");
   }
 
-  const isPrivateSelected = selected ? !selected.is_public : false;
+  const isPrivateSelected = selected ? !selected.isPublic : false;
   const canContinue = !selected || !isPrivateSelected || joinRequestSent;
 
   return (
@@ -166,7 +157,7 @@ export function GymScreen() {
                       <p className="text-xs text-muted-foreground">{gym.city}</p>
                     )}
                   </div>
-                  {!gym.is_public && (
+                  {!gym.isPublic && (
                     <span className="text-xs font-semibold text-warning bg-warning/10 border border-warning/30 px-2 py-0.5 rounded-md">
                       Private
                     </span>

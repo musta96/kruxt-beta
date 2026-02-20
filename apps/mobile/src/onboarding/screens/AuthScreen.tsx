@@ -10,7 +10,6 @@ import {
   ProgressBar,
   TabStrip,
 } from "../../design-system/primitives";
-import { supabase } from "@/integrations/supabase/client";
 import type { AuthMode, FieldErrors } from "../types";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,43 +24,28 @@ function validate(email: string, password: string, mode: AuthMode): FieldErrors 
   return errors;
 }
 
+/**
+ * AuthScreen — collects credentials only.
+ * Actual auth is deferred to the atomic submit in CompleteScreen
+ * via Phase2OnboardingService.run().
+ */
 export function AuthScreen() {
   const { goTo, setAuth, state } = useOnboarding();
   const [mode, setMode] = useState<AuthMode>(state.auth.mode ?? "signup");
   const [email, setEmail] = useState(state.auth.email ?? "");
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  async function handleSubmit() {
+  function handleSubmit() {
     const errs = validate(email, password, mode);
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
       return;
     }
     setFieldErrors({});
-    setServerError(null);
-    setLoading(true);
-
-    try {
-      if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        setAuth({ mode, email, userId: data.user?.id });
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        setAuth({ mode, email, userId: data.user?.id });
-      }
-      goTo("profile");
-    } catch (err: unknown) {
-      setServerError(
-        err instanceof Error ? err.message : "Authentication failed. Try again."
-      );
-    } finally {
-      setLoading(false);
-    }
+    // Store credentials in state — no supabase call here
+    setAuth({ mode, email: email.trim().toLowerCase(), password });
+    goTo("profile");
   }
 
   return (
@@ -85,14 +69,9 @@ export function AuthScreen() {
           onChange={(m) => {
             setMode(m);
             setFieldErrors({});
-            setServerError(null);
           }}
           ariaLabel="Auth mode"
         />
-
-        {serverError && (
-          <ErrorBanner message={serverError} onRetry={() => setServerError(null)} />
-        )}
 
         <div className="flex flex-col gap-4">
           <InputField
@@ -117,11 +96,7 @@ export function AuthScreen() {
           />
         </div>
 
-        <PrimaryBtn
-          onClick={handleSubmit}
-          loading={loading}
-          loadingLabel={mode === "signup" ? "Creating account..." : "Signing in..."}
-        >
+        <PrimaryBtn onClick={handleSubmit}>
           {mode === "signup" ? "Create account" : "Sign in"}
         </PrimaryBtn>
 

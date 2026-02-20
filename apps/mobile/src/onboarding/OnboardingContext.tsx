@@ -11,6 +11,7 @@ import type {
   ProfileDraft,
   GymDraft,
   ConsentsDraft,
+  OnboardingServices,
 } from "./types";
 
 // ─── Initial state ─────────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ function reducer(state: OnboardingUiState, action: Action): OnboardingUiState {
 // ─── Context ───────────────────────────────────────────────────────────────
 interface OnboardingCtx {
   state: OnboardingUiState;
+  services: OnboardingServices;
   goTo: (step: OnboardingUiStep) => void;
   setAuth: (data: Partial<AuthDraft>) => void;
   setProfile: (data: Partial<ProfileDraft>) => void;
@@ -69,13 +71,19 @@ interface OnboardingCtx {
 
 const OnboardingContext = createContext<OnboardingCtx | null>(null);
 
-export function OnboardingProvider({ children }: { children: ReactNode }) {
+interface OnboardingProviderProps {
+  children: ReactNode;
+  services: OnboardingServices;
+}
+
+export function OnboardingProvider({ children, services }: OnboardingProviderProps) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
 
   return (
     <OnboardingContext.Provider
       value={{
         state,
+        services,
         goTo: (step) => dispatch({ type: "GO_TO", step }),
         setAuth: (data) => dispatch({ type: "SET_AUTH", data }),
         setProfile: (data) => dispatch({ type: "SET_PROFILE", data }),

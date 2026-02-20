@@ -5,6 +5,7 @@ const config: Config = {
   content: [
     "./index.html",
     "./src/**/*.{ts,tsx,js,jsx}",
+    "./apps/mobile/src/**/*.{ts,tsx,js,jsx}",
   ],
   theme: {
     extend: {
