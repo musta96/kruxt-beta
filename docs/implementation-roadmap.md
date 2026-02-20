@@ -7,6 +7,7 @@
 - Edge function entrypoints scaffolded for integrations, rankings, compliance, and audit
 - Phase 5 runtime scaffolded: B2B ops service + flow for gym admin operations
 - Phase 6 runtime scaffolded: integration service + Apple/Garmin webhook/sync activation path
+- Phase 6 mobile UI scaffolded: connector activation flow with sync/idempotency/mapping validation
 - Phase 6 monitoring scaffolded: gym staff integration health and sync failure monitor flow
 - Phase 7 runtime scaffolded: challenge/trials service + rank ladder flow + hardened leaderboard recompute
 - Phase 8 runtime slice 1 scaffolded: privacy request mobile/admin flows + queue processor + status transition RPCs
@@ -21,10 +22,11 @@
 4. Build feed UI from `createPhase4ProofFeedUiFlow` (`feed_events` + joined `workouts` + `social_interactions`).
 5. Connect admin UI screens to `createPhase5OpsConsoleUiFlow` and `B2BOpsService`.
 6. Connect integration monitoring UI to `createPhase6IntegrationMonitorFlow`.
-7. Wire production provider credentials and scheduler cadence for `provider_webhook_ingest` + `sync_dispatcher`.
-8. Connect rank/trials UI to `createPhase7RankTrialsFlow` + `CompetitionService`.
-9. Validate weekly rank recompute scheduler (`.github/workflows/rank-recompute-weekly.yml`) and alert routing.
-10. Run privacy workflows (`submit_privacy_request`) and staff handling pipeline (`transition_privacy_request_status`).
+7. Connect mobile integration screens to `createPhase6IntegrationsUiFlow` + `IntegrationService`.
+8. Wire production provider credentials and scheduler cadence for `provider_webhook_ingest` + `sync_dispatcher`.
+9. Connect rank/trials UI to `createPhase7RankTrialsFlow` + `CompetitionService`.
+10. Validate weekly rank recompute scheduler (`.github/workflows/rank-recompute-weekly.yml`) and alert routing.
+11. Run privacy workflows (`submit_privacy_request`) and staff handling pipeline (`transition_privacy_request_status`).
 
 ## Feature flag activation policy
 

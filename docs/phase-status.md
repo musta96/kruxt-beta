@@ -14,6 +14,7 @@
 - Phase 5 runtime: admin B2B ops service layer for classes, waitlist, waivers, contracts, check-ins, and billing telemetry
 - Phase 5 admin UI wiring: Ops Console controller with class/waitlist/check-in/acceptance mutation refresh loops
 - Phase 6 runtime: Apple/Garmin integration pipeline (mobile integration service + webhook ingest + sync dispatcher + cursor persistence)
+- Phase 6 mobile UI wiring: connector controller with provider activation, sync queueing, and mapping/idempotency validation
 - Phase 6 monitoring runtime: admin integration health + sync failure monitor flow for gym staff
 - Phase 7 runtime: rank ladder + trials service layer with deterministic leaderboard recompute and challenge progress RPCs
 - Phase 7 ops follow-up: weekly rank recompute scheduler workflow + deterministic repeat probes + failure issue alerts

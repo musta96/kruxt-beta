@@ -4,7 +4,7 @@ import { guildHallChecklist } from "./flows/guild-hall";
 import { phase2OnboardingChecklist } from "./flows/phase2-onboarding";
 import { phase3WorkoutLoggingChecklist } from "./flows/phase3-workout-logging";
 import { phase4SocialFeedChecklist } from "./flows/phase4-social-feed";
-import { phase6IntegrationsChecklist } from "./flows/phase6-integrations";
+import { phase6IntegrationsUiChecklist } from "./flows/phase6-integrations-ui";
 import { phase7RankTrialsChecklist } from "./flows/phase7-rank-trials";
 import { phase8PrivacyRequestsChecklist } from "./flows/phase8-privacy-requests";
 
@@ -80,7 +80,16 @@ export function mobileAppScaffold() {
     },
     phase6: {
       flow: "connect provider -> queue sync -> import activities -> persist cursor",
-      checklist: [...phase6IntegrationsChecklist],
+      screenFlow:
+        "provider selection -> connect/disconnect -> request sync -> validate imports/mapping -> activation report",
+      checklist: [...phase6IntegrationsUiChecklist],
+      recoverableErrors: [
+        "INTEGRATION_CONNECTION_UPSERT_FAILED",
+        "INTEGRATION_CONNECTION_STATUS_UPDATE_FAILED",
+        "INTEGRATION_SYNC_JOB_QUEUE_FAILED",
+        "INTEGRATION_CONNECTION_INACTIVE",
+        "INTEGRATION_IMPORTS_READ_FAILED"
+      ],
       activeProviders: ["apple_health", "garmin"],
       darkLaunchProviders: ["fitbit", "huawei_health", "suunto", "oura", "whoop"],
       tables: [
@@ -90,7 +99,13 @@ export function mobileAppScaffold() {
         "external_activity_imports",
         "integration_webhook_events"
       ],
-      edgeFunctions: ["provider_webhook_ingest", "sync_dispatcher"]
+      edgeFunctions: ["provider_webhook_ingest", "sync_dispatcher"],
+      activationSurface: [
+        "createPhase6IntegrationsUiFlow.connectProvider",
+        "createPhase6IntegrationsUiFlow.disconnectProvider",
+        "createPhase6IntegrationsUiFlow.queueSync",
+        "createPhase6IntegrationsUiFlow.validateActivation"
+      ]
     },
     phase7: {
       flow: "load weekly rank ladders -> load trials -> submit challenge progress -> weekly recompute",
