@@ -16,5 +16,10 @@
   "devDependencies": {
     "turbo": "^2.4.4",
     "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react-swc": "^4.2.3",
+    "autoprefixer": "^10.4.24",
+    "postcss": "^8.5.6"
   }
 }
