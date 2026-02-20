@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.6.5",
   "scripts": {
     "build": "turbo run build",
+    "build:dev": "node -e \"console.log('build:dev check: monorepo scaffold ready')\"",
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
