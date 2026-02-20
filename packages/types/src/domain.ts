@@ -131,6 +131,31 @@ export type PrivacyRequestStatus =
   | "completed"
   | "rejected";
 
+export type IncidentSeverity = "low" | "medium" | "high" | "critical";
+
+export type IncidentStatus =
+  | "detected"
+  | "triaged"
+  | "investigating"
+  | "contained"
+  | "notified"
+  | "resolved"
+  | "closed";
+
+export type IncidentActionType =
+  | "created"
+  | "status_changed"
+  | "deadline_recomputed"
+  | "escalation_triggered"
+  | "notification_queued"
+  | "notification_sent"
+  | "notification_failed"
+  | "note_added";
+
+export type IncidentNotificationChannel = "email" | "webhook";
+
+export type IncidentDeliveryMode = "drill" | "live";
+
 export type LegalHoldType =
   | "litigation"
   | "fraud_investigation"
@@ -304,6 +329,67 @@ export interface LegalHold {
   releasedBy?: string | null;
   releasedAt?: string | null;
   metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SecurityIncident {
+  id: string;
+  gymId?: string | null;
+  title: string;
+  description?: string | null;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  source: string;
+  drillMode: boolean;
+  requiresFtcNotice: boolean;
+  requiresGdprNotice: boolean;
+  detectedAt: string;
+  ftcNoticeDueAt?: string | null;
+  gdprNoticeDueAt?: string | null;
+  firstTriagedAt?: string | null;
+  investigationStartedAt?: string | null;
+  containedAt?: string | null;
+  notifiedAt?: string | null;
+  resolvedAt?: string | null;
+  closedAt?: string | null;
+  affectedUserCount: number;
+  affectedGymCount: number;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IncidentAction {
+  id: string;
+  incidentId: string;
+  actionType: IncidentActionType;
+  actionNote?: string | null;
+  metadata: Record<string, unknown>;
+  actorUserId?: string | null;
+  actorRole?: string | null;
+  createdAt: string;
+}
+
+export interface IncidentNotificationJob {
+  id: string;
+  incidentId: string;
+  channel: IncidentNotificationChannel;
+  destination: string;
+  templateKey: string;
+  payload: Record<string, unknown>;
+  deliveryMode: IncidentDeliveryMode;
+  provider: string;
+  status: Extract<SyncJobStatus, "queued" | "running" | "succeeded" | "failed" | "retry_scheduled">;
+  attemptCount: number;
+  nextAttemptAt?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  lastError?: string | null;
+  responsePayload: Record<string, unknown>;
+  createdBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }

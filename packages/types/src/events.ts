@@ -19,7 +19,13 @@ export const KRUXT_EVENT_TYPES = [
   "privacy.export_failed",
   "privacy.delete_completed",
   "privacy.delete_failed",
-  "security.event_outbox"
+  "security.event_outbox",
+  "incident.created",
+  "incident.status_changed",
+  "incident.deadline_recomputed",
+  "incident.escalation_triggered",
+  "incident.notification_delivered",
+  "incident.notification_failed"
 ] as const;
 
 export type KruxtEventType = (typeof KRUXT_EVENT_TYPES)[number];

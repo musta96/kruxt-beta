@@ -14,6 +14,7 @@ FUNCTIONS=(
   rank_recompute_weekly
   privacy_request_processor
   audit_event_ingest
+  incident_notifier
 )
 
 for fn in "${FUNCTIONS[@]}"; do

@@ -113,3 +113,11 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Integrity monitoring RPCs: `audit_log_integrity_drift`, `audit_log_integrity_summary`
 - Security event coverage trigger: `trg_event_outbox_audit_security_event` emits `security.event_outbox`
 - Audit hardening migration: `packages/db/supabase/migrations/202602190411_krux_beta_part4_s070.sql`
+
+## Phase 8 Runtime (Slice 6)
+
+- Breach response tables: `public.security_incidents`, `public.incident_actions`, `public.incident_notification_jobs`
+- Incident lifecycle/deadline RPCs: `create_security_incident`, `transition_security_incident_status`, `recompute_security_incident_deadlines`, `admin_list_security_incidents`
+- Escalation + notifier queue RPCs: `queue_incident_escalation_notifications`, `claim_incident_notification_jobs`, `complete_incident_notification_job`, `fail_incident_notification_job`
+- Edge notifier stub: `supabase/functions/incident_notifier` (provider-agnostic email/webhook interface with drill-safe mode)
+- Breach-response migration: `packages/db/supabase/migrations/202602190412_krux_beta_part4_s071.sql`

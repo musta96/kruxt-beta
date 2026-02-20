@@ -54,14 +54,20 @@
 38. `audit_log_integrity_drift` detects sequence/hash mismatches after forced tamper simulation.
 39. Security-relevant `event_outbox` inserts produce `security.event_outbox` audit entries.
 40. Staff/user direct inserts into `audit_logs` are denied; service pipeline inserts remain valid.
+41. `create_security_incident` enforces gym-staff or service access and writes action/outbox/audit records.
+42. `transition_security_incident_status` enforces valid lifecycle transitions and stage timestamps.
+43. `admin_list_security_incidents` exposes deadline countdown and breached flags to operators.
+44. `queue_incident_escalation_notifications` creates drill/live jobs with auditable escalation actions.
+45. `incident_notifier` drill mode processes jobs without external sends while preserving completion metadata.
+46. `fail_incident_notification_job` retries with backoff and marks terminal failures deterministically.
 
 ## Rank + Trials
 
-41. `join_challenge` allows visible, non-ended challenges only.
-42. `leave_challenge` rejects completed participants and only removes caller-owned rows.
-43. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
-44. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
-45. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+47. `join_challenge` allows visible, non-ended challenges only.
+48. `leave_challenge` rejects completed participants and only removes caller-owned rows.
+49. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
+50. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
+51. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
 
 ## Performance targets for pilot
 

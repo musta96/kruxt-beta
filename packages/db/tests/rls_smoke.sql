@@ -25,6 +25,9 @@ begin
       ('privacy_export_jobs'),
       ('legal_holds'),
       ('privacy_delete_jobs'),
+      ('security_incidents'),
+      ('incident_actions'),
+      ('incident_notification_jobs'),
       ('audit_logs'),
       ('push_notification_tokens')
   )

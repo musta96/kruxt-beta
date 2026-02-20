@@ -24,6 +24,9 @@ import type {
   WorkoutVisibility,
   GymRole,
   MembershipStatus,
+  IncidentNotificationChannel,
+  IncidentSeverity,
+  IncidentStatus,
   PrivacyRequestType,
   PrivacyRequestStatus
 } from "./domain";
@@ -382,6 +385,48 @@ export interface UpdateDunningEventInput {
 export interface PrivacyRequestInput {
   requestType: PrivacyRequestType;
   reason?: string;
+}
+
+export interface CreateSecurityIncidentInput {
+  gymId?: string | null;
+  title: string;
+  description?: string;
+  severity?: IncidentSeverity;
+  source?: string;
+  drillMode?: boolean;
+  requiresFtcNotice?: boolean;
+  requiresGdprNotice?: boolean;
+  detectedAt?: string;
+  ftcDeadlineHours?: number;
+  gdprDeadlineHours?: number;
+  affectedUserCount?: number;
+  affectedGymCount?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TransitionSecurityIncidentInput {
+  incidentId: string;
+  nextStatus: IncidentStatus;
+  note?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface QueueIncidentEscalationInput {
+  incidentId: string;
+  reason?: string;
+  channels?: IncidentNotificationChannel[];
+  emailDestination?: string;
+  webhookDestination?: string;
+  payload?: Record<string, unknown>;
+  forceLive?: boolean;
+  templateKey?: string;
+}
+
+export interface RunIncidentNotifierInput {
+  claimLimit?: number;
+  retryDelaySeconds?: number;
+  maxRetries?: number;
+  forceDrill?: boolean;
 }
 
 export interface WaiverAcceptanceInput {

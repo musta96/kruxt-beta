@@ -4,6 +4,7 @@ import type {
   GymMembership,
   GymOpsSummary,
   GymRole,
+  IncidentStatus,
   MembershipStatus,
   PrivacyRequestStatus
 } from "@kruxt/types";
@@ -87,6 +88,27 @@ type GymClassRow = {
   capacity: number;
 };
 
+type SecurityIncidentRow = {
+  id: string;
+  gym_id: string | null;
+  title: string;
+  severity: "low" | "medium" | "high" | "critical";
+  status: IncidentStatus;
+  drill_mode: boolean;
+  detected_at: string;
+  requires_ftc_notice: boolean;
+  requires_gdpr_notice: boolean;
+  ftc_notice_due_at: string | null;
+  gdpr_notice_due_at: string | null;
+  next_deadline_at: string | null;
+  next_deadline_label: "ftc" | "gdpr" | "mixed" | null;
+  seconds_to_next_deadline: number | null;
+  is_deadline_breached: boolean;
+  affected_user_count: number;
+  affected_gym_count: number;
+  updated_at: string;
+};
+
 export interface OpenPrivacyRequest {
   id: string;
   userId: string;
@@ -117,6 +139,27 @@ export interface GymClassScheduleItem {
   startsAt: string;
   endsAt: string;
   capacity: number;
+}
+
+export interface SecurityIncidentOperatorItem {
+  id: string;
+  gymId?: string | null;
+  title: string;
+  severity: SecurityIncidentRow["severity"];
+  status: IncidentStatus;
+  drillMode: boolean;
+  detectedAt: string;
+  requiresFtcNotice: boolean;
+  requiresGdprNotice: boolean;
+  ftcNoticeDueAt?: string | null;
+  gdprNoticeDueAt?: string | null;
+  nextDeadlineAt?: string | null;
+  nextDeadlineLabel?: "ftc" | "gdpr" | "mixed" | null;
+  secondsToNextDeadline?: number | null;
+  isDeadlineBreached: boolean;
+  affectedUserCount: number;
+  affectedGymCount: number;
+  updatedAt: string;
 }
 
 function mapMembership(row: MembershipRow): GymMembership {
@@ -343,6 +386,43 @@ export class GymAdminService {
       dueAt: row.due_at as string | null,
       slaBreachedAt: row.sla_breached_at as string | null,
       isOverdue: Boolean(row.is_overdue)
+    }));
+  }
+
+  async listSecurityIncidents(
+    gymId: string,
+    options: { limit?: number; status?: IncidentStatus } = {}
+  ): Promise<SecurityIncidentOperatorItem[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    const { data, error } = await this.supabase.rpc("admin_list_security_incidents", {
+      p_gym_id: gymId,
+      p_limit: limit,
+      p_status_filter: options.status ?? null
+    });
+
+    throwIfAdminError(error, "ADMIN_SECURITY_INCIDENTS_LIST_FAILED", "Unable to load security incidents.");
+
+    return ((data as SecurityIncidentRow[]) ?? []).map((row) => ({
+      id: row.id,
+      gymId: row.gym_id,
+      title: row.title,
+      severity: row.severity,
+      status: row.status,
+      drillMode: row.drill_mode,
+      detectedAt: row.detected_at,
+      requiresFtcNotice: row.requires_ftc_notice,
+      requiresGdprNotice: row.requires_gdpr_notice,
+      ftcNoticeDueAt: row.ftc_notice_due_at,
+      gdprNoticeDueAt: row.gdpr_notice_due_at,
+      nextDeadlineAt: row.next_deadline_at,
+      nextDeadlineLabel: row.next_deadline_label,
+      secondsToNextDeadline: row.seconds_to_next_deadline,
+      isDeadlineBreached: Boolean(row.is_deadline_breached),
+      affectedUserCount: row.affected_user_count,
+      affectedGymCount: row.affected_gym_count,
+      updatedAt: row.updated_at
     }));
   }
 
