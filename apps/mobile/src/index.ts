@@ -6,6 +6,7 @@ export * from "./flows/guild-hall";
 export * from "./flows/phase3-workout-logging";
 export * from "./flows/phase3-workout-logger-ui";
 export * from "./flows/phase4-social-feed";
+export * from "./flows/phase4-proof-feed-ui";
 export * from "./flows/phase6-integrations";
 export * from "./flows/phase7-rank-trials";
 export * from "./flows/phase8-privacy-requests";
