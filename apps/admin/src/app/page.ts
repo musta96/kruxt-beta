@@ -52,6 +52,7 @@ export function adminHomePageScaffold() {
       modules: [...phase8ComplianceOpsChecklist],
       serviceSurface: [
         "GymAdminService.listOpenPrivacyRequests",
+        "GymAdminService.getPrivacyOpsMetrics",
         "GymAdminService.transitionPrivacyRequest"
       ]
     }

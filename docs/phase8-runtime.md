@@ -1,6 +1,6 @@
 # Phase 8 Runtime Implementation
 
-Phase 8 runtime now includes three compliance execution slices:
+Phase 8 runtime includes compliance execution slices and hardening increments:
 
 - Mobile privacy-request center service + flow
 - Admin compliance ops flow for open request triage
@@ -14,6 +14,7 @@ Phase 8 runtime now includes three compliance execution slices:
 - Audit log hardening with append-only integrity chain and drift checks
 - Breach-response incident lifecycle + deadline/escalation notifier stubs
 - Localization baseline for legal copy with locale fallback + timestamp formatting
+- Compliance ops console hardening with queue filters, SLA badges, runbook mapping, and privacy metrics
 
 ## Mobile entrypoints
 
@@ -38,6 +39,7 @@ Core methods:
 Core methods:
 
 - `GymAdminService.listOpenPrivacyRequests(...)`
+- `GymAdminService.getPrivacyOpsMetrics(...)`
 - `GymAdminService.transitionPrivacyRequest(...)`
 - `GymAdminService.listSecurityIncidents(...)`
 
@@ -77,6 +79,7 @@ Core methods:
 - `public.legal_locale_fallback_chain(text)`
 - `public.resolve_legal_copy(text, text)`
 - `public.list_legal_copy_bundle(text, text)`
+- `public.admin_get_privacy_ops_metrics(uuid, integer)`
 
 ## Edge function behavior
 
@@ -101,6 +104,8 @@ Core methods:
   - translation-key resolver for legal/compliance copy
   - deterministic locale fallback chain (`requested -> en-US`)
   - timezone-safe legal timestamp formatter
+- `docs/compliance-ops-runbook.md`
+  - operator playbook mapped to queue actions, SLA badges, and escalation rules
 
 ## DB migration hooks
 
@@ -120,3 +125,4 @@ Core methods:
 - `packages/db/supabase/migrations/202602190411_krux_beta_part4_s070.sql`
 - `packages/db/supabase/migrations/202602190412_krux_beta_part4_s071.sql`
 - `packages/db/supabase/migrations/202602190413_krux_beta_part4_s072.sql`
+- `packages/db/supabase/migrations/202602190414_krux_beta_part4_s073.sql`

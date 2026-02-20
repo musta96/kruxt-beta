@@ -18,9 +18,9 @@
 - Phase 8 runtime (slice 5): audit-log integrity hardening with hash chain + security event coverage
 - Phase 8 runtime (slice 6): breach-response incident plumbing + deadline/escalation notifier stubs
 - Phase 8 runtime (slice 7): localization baseline for legal surfaces with deterministic locale fallback
+- Phase 8 runtime (slice 8): compliance ops console hardening with queue filters, SLA badges, metrics, and runbook mapping
 - Phase 3 prep: workout atomic logging RPC + XP/chain trigger + feed event trigger
 - Phase 4 prep: social graph, blocks/reports, interaction schema + moderation storage
-- Phase 8 prep (remaining): support console hardening
 
 ## Pending implementation in runtime apps
 

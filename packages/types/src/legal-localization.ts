@@ -32,6 +32,11 @@ const EN_US_LEGAL_TEXT = {
   "legal.flow.admin.phase8.load_open_requests": "Load open privacy requests for gym members",
   "legal.flow.admin.phase8.highlight_overdue": "Highlight overdue and SLA-breached requests",
   "legal.flow.admin.phase8.transition_status_notes": "Transition request status with auditable notes",
+  "legal.flow.admin.phase8.load_queue_filters": "Apply queue filters (status/type/SLA/user)",
+  "legal.flow.admin.phase8.show_sla_badges": "Render SLA badges (breached/at risk/on track)",
+  "legal.flow.admin.phase8.load_privacy_metrics":
+    "Load privacy ops metrics (open, overdue, avg completion)",
+  "legal.flow.admin.phase8.open_runbook": "Open compliance runbook mapped to queue actions",
   "legal.error.reconsent_required_action": "Legal re-consent is required before this action can continue.",
   "legal.error.reconsent_required_workout": "Legal re-consent is required before workout logging can continue.",
   "legal.error.policy_baseline_missing":
@@ -71,6 +76,11 @@ const IT_IT_LEGAL_TEXT: Partial<Record<LegalTranslationKey, string>> = {
   "legal.flow.admin.phase8.load_open_requests": "Carica richieste privacy aperte dei membri palestra",
   "legal.flow.admin.phase8.highlight_overdue": "Evidenzia richieste scadute e con SLA violata",
   "legal.flow.admin.phase8.transition_status_notes": "Transiziona stato richiesta con note verificabili",
+  "legal.flow.admin.phase8.load_queue_filters": "Applica filtri coda (stato/tipo/SLA/utente)",
+  "legal.flow.admin.phase8.show_sla_badges": "Mostra badge SLA (violata/a rischio/in linea)",
+  "legal.flow.admin.phase8.load_privacy_metrics":
+    "Carica metriche privacy ops (aperte/scadute/tempo medio)",
+  "legal.flow.admin.phase8.open_runbook": "Apri runbook compliance collegato alle azioni coda",
   "legal.error.reconsent_required_action": "È richiesto un nuovo consenso legale prima di continuare questa azione.",
   "legal.error.reconsent_required_workout": "È richiesto un nuovo consenso legale prima di registrare il workout.",
   "legal.error.policy_baseline_missing":

@@ -12,6 +12,8 @@ import type {
 import { KruxtAdminError, throwIfAdminError } from "./errors";
 import { StaffAccessService } from "./staff-access-service";
 
+type OpenPrivacyRequestStatus = Extract<PrivacyRequestStatus, "submitted" | "triaged" | "in_progress">;
+
 type MembershipRow = {
   id: string;
   gym_id: string;
@@ -39,7 +41,7 @@ type OpenPrivacyRequestRow = {
   id: string;
   user_id: string;
   request_type: "access" | "export" | "delete" | "rectify" | "restrict_processing";
-  status: PrivacyRequestStatus;
+  status: OpenPrivacyRequestStatus;
   submitted_at: string;
   due_at: string | null;
   sla_breached_at: string | null;
@@ -53,6 +55,16 @@ type GymOpsSummaryRow = {
   upcoming_classes: number;
   pending_waitlist_entries: number;
   open_privacy_requests: number;
+};
+
+type PrivacyOpsMetricsRow = {
+  gym_id: string;
+  open_requests: number;
+  overdue_requests: number;
+  avg_completion_hours: number;
+  fulfilled_requests_window: number;
+  rejected_requests_window: number;
+  measured_window_days: number;
 };
 
 type WaitlistWithClassRow = {
@@ -113,7 +125,7 @@ export interface OpenPrivacyRequest {
   id: string;
   userId: string;
   type: OpenPrivacyRequestRow["request_type"];
-  status: PrivacyRequestStatus;
+  status: OpenPrivacyRequestStatus;
   submittedAt: string;
   dueAt?: string | null;
   slaBreachedAt?: string | null;
@@ -160,6 +172,16 @@ export interface SecurityIncidentOperatorItem {
   affectedUserCount: number;
   affectedGymCount: number;
   updatedAt: string;
+}
+
+export interface PrivacyOpsMetrics {
+  gymId: string;
+  openRequests: number;
+  overdueRequests: number;
+  avgCompletionHours: number;
+  fulfilledRequestsWindow: number;
+  rejectedRequestsWindow: number;
+  measuredWindowDays: number;
 }
 
 function mapMembership(row: MembershipRow): GymMembership {
@@ -387,6 +409,40 @@ export class GymAdminService {
       slaBreachedAt: row.sla_breached_at as string | null,
       isOverdue: Boolean(row.is_overdue)
     }));
+  }
+
+  async getPrivacyOpsMetrics(gymId: string, windowDays = 30): Promise<PrivacyOpsMetrics> {
+    await this.access.requireGymStaff(gymId);
+    const boundedWindowDays = Math.max(1, Math.min(windowDays, 365));
+
+    const { data, error } = await this.supabase
+      .rpc("admin_get_privacy_ops_metrics", { p_gym_id: gymId, p_window_days: boundedWindowDays })
+      .maybeSingle();
+
+    throwIfAdminError(error, "ADMIN_PRIVACY_OPS_METRICS_FAILED", "Unable to load privacy ops metrics.");
+
+    if (!data) {
+      return {
+        gymId,
+        openRequests: 0,
+        overdueRequests: 0,
+        avgCompletionHours: 0,
+        fulfilledRequestsWindow: 0,
+        rejectedRequestsWindow: 0,
+        measuredWindowDays: boundedWindowDays
+      };
+    }
+
+    const row = data as PrivacyOpsMetricsRow;
+    return {
+      gymId: row.gym_id,
+      openRequests: Number(row.open_requests ?? 0),
+      overdueRequests: Number(row.overdue_requests ?? 0),
+      avgCompletionHours: Number(row.avg_completion_hours ?? 0),
+      fulfilledRequestsWindow: Number(row.fulfilled_requests_window ?? 0),
+      rejectedRequestsWindow: Number(row.rejected_requests_window ?? 0),
+      measuredWindowDays: Number(row.measured_window_days ?? boundedWindowDays)
+    };
   }
 
   async listSecurityIncidents(

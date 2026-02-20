@@ -1,6 +1,6 @@
 # Immediate Next Steps
 
-1. Re-run schema sync to apply latest Phase 8 (slice 7) migrations:
+1. Re-run schema sync to apply latest Phase 8 (slice 8) migrations:
    - `./scripts/bootstrap.sh`
    - (syncs `packages/db/supabase/migrations/*` + `packages/db/supabase/seeds/001_feature_flags.sql` and pushes linked DB)
 2. Verify smoke checks in target DB:
@@ -27,8 +27,9 @@
    - call `rank_recompute_weekly` edge function
 10. Configure scheduler for privacy queue:
    - call `privacy_request_processor` with triage/overdue/export limits
-11. Continue Phase 8 hardening:
-   - compliance support tooling
+11. Operationalize compliance runbook in staff workflows:
+   - map admin queue actions to `docs/compliance-ops-runbook.md`
+   - enforce transition-note quality checks in operator QA
 12. Add explicit re-consent UI flow:
    - show `list_missing_required_consents` reasons in-app
    - route users to policy acceptance screens before protected modules

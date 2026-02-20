@@ -129,3 +129,11 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Shared app localization utility: `packages/types/src/legal-localization.ts`
 - Critical mobile/admin legal flows now use translation keys + localized legal timestamp formatting
 - Localization migration: `packages/db/supabase/migrations/202602190413_krux_beta_part4_s072.sql`
+
+## Phase 8 Runtime (Slice 8)
+
+- Admin compliance queue supports deterministic filters (`status`, `requestType`, `SLA badge`, `userQuery`)
+- SLA badges derived in flow layer: `breached`, `at_risk`, `on_track`, `no_due_date`
+- Privacy metrics RPC: `admin_get_privacy_ops_metrics` (`open`, `overdue`, `avg completion hours`, window outcomes)
+- Compliance operator runbook: `docs/compliance-ops-runbook.md` mapped to console actions
+- Compliance console hardening migration: `packages/db/supabase/migrations/202602190414_krux_beta_part4_s073.sql`

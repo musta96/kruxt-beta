@@ -64,14 +64,18 @@
 48. `resolve_legal_copy` and `list_legal_copy_bundle` return localized legal strings with stable fallback rank.
 49. Legal checklists in mobile/admin Phase 8 flows are key-driven (no hardcoded legal copy in flow definitions).
 50. Legal timestamp formatting returns locale/timezone-correct output for EU and US timezone inputs.
+51. `admin_get_privacy_ops_metrics` returns deterministic open/overdue counters and bounded measurement window.
+52. Phase 8 compliance queue filters (`status/type/SLA/user`) return stable subsets for identical inputs.
+53. SLA badge derivation in admin flow is deterministic at boundary conditions (`breached`, `at_risk`, `on_track`, `no_due_date`).
+54. Compliance runbook mapping exists and matches admin queue actions (`load`, `transition`, `metrics`).
 
 ## Rank + Trials
 
-51. `join_challenge` allows visible, non-ended challenges only.
-52. `leave_challenge` rejects completed participants and only removes caller-owned rows.
-53. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
-54. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
-55. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+55. `join_challenge` allows visible, non-ended challenges only.
+56. `leave_challenge` rejects completed participants and only removes caller-owned rows.
+57. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
+58. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
+59. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
 
 ## Performance targets for pilot
 
