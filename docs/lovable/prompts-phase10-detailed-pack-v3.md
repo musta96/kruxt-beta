@@ -30,6 +30,9 @@ Code locations:
 3. Keep all high-risk actions confirm-gated.
 4. Render loading, empty, error, retry, and success states on each async module.
 5. Keep feature-flag copy visible where activation is controlled (`billing_live`, provider flags, data export approvals).
+6. This repository is a monorepo. Never scaffold a new root app.
+7. Never create root-level `src/`, `index.html`, `vite.config.*`, `tailwind.config.*`, `postcss.config.*`, `tsconfig.json`, or `package-lock.json`.
+8. Admin prompt output must stay under `apps/admin/**`; mobile prompt output must stay under `apps/mobile/**`.
 
 ## Prompt 20A (Admin): Platform Control Plane Command Deck
 
