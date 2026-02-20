@@ -1,0 +1,109 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── KRUXT guild-premium design tokens ─────────────────────────────────────── */
+:root {
+  /* Core palette — dark void */
+  --background: 240 15% 4%;
+  --foreground: 0 0% 94%;
+
+  --card: 240 12% 7%;
+  --card-foreground: 0 0% 94%;
+
+  --popover: 240 12% 7%;
+  --popover-foreground: 0 0% 94%;
+
+  /* Amber-gold primary */
+  --primary: 38 92% 52%;
+  --primary-foreground: 240 15% 4%;
+
+  /* Muted secondary */
+  --secondary: 240 10% 12%;
+  --secondary-foreground: 0 0% 70%;
+
+  --muted: 240 10% 14%;
+  --muted-foreground: 0 0% 52%;
+
+  /* Cyan accent */
+  --accent: 185 84% 50%;
+  --accent-foreground: 240 15% 4%;
+
+  /* Semantic */
+  --destructive: 0 72% 58%;
+  --destructive-foreground: 0 0% 98%;
+
+  --warning: 35 91% 55%;
+  --warning-foreground: 240 15% 4%;
+
+  --border: 240 10% 18%;
+  --input: 240 10% 12%;
+  --ring: 38 92% 52%;
+
+  --radius: 0.75rem;
+
+  /* Gradient helpers */
+  --gradient-gold: linear-gradient(135deg, hsl(38 92% 52%), hsl(30 90% 45%));
+  --gradient-hero: linear-gradient(160deg, hsl(240 15% 4%) 0%, hsl(240 12% 8%) 100%);
+  --shadow-gold: 0 0 24px -4px hsl(38 92% 52% / 0.4);
+}
+
+/* ── Base layer ─────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border box-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+
+  .font-display {
+    font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+/* ── Utility animations ─────────────────────────────────────────────────────── */
+@layer utilities {
+  .animate-pulse-gold {
+    animation: gold-pulse 3s ease-in-out infinite;
+  }
+
+  .shadow-gold {
+    box-shadow: var(--shadow-gold);
+  }
+
+  .bg-primary\/8 {
+    background-color: hsl(38 92% 52% / 0.08);
+  }
+}
+
+@keyframes gold-pulse {
+  0%, 100% { box-shadow: 0 0 12px -4px hsl(38 92% 52% / 0.3); }
+  50% { box-shadow: 0 0 28px -2px hsl(38 92% 52% / 0.6); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
