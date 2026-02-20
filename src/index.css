@@ -1,0 +1,139 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── KRUXT Design Tokens ─── */
+:root {
+  /* Void/Graphite base */
+  --background: 240 10% 4%;
+  --foreground: 210 20% 94%;
+
+  /* Cards / panels (equipment-panel feel) */
+  --card: 240 8% 8%;
+  --card-foreground: 210 20% 94%;
+
+  /* Ion blue accent */
+  --primary: 193 100% 60%;
+  --primary-foreground: 240 10% 4%;
+
+  /* Steel secondary */
+  --secondary: 220 14% 20%;
+  --secondary-foreground: 210 20% 80%;
+
+  /* Muted surfaces */
+  --muted: 240 6% 14%;
+  --muted-foreground: 220 10% 50%;
+
+  /* Accent (same as ion blue for components) */
+  --accent: 193 100% 60%;
+  --accent-foreground: 240 10% 4%;
+
+  /* Status */
+  --destructive: 0 72% 55%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 142 70% 45%;
+  --warning: 38 95% 55%;
+  --danger: 0 72% 55%;
+
+  /* Input / border */
+  --border: 240 6% 18%;
+  --input: 240 6% 12%;
+  --ring: 193 100% 60%;
+
+  /* Brand primitives */
+  --ion-blue: 193 100% 60%;
+  --void-dark: 240 10% 4%;
+  --graphite: 240 5% 18%;
+  --steel: 220 14% 38%;
+
+  /* Shape */
+  --radius: 0.75rem;
+  --radius-panel: 1rem;
+}
+
+/* ─── Base resets ─── */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+/* ─── Component utilities ─── */
+@layer components {
+  /* Equipment-panel card */
+  .panel {
+    @apply bg-card border border-border rounded-panel;
+  }
+
+  /* Ion-blue glow ring */
+  .ring-ion {
+    box-shadow: 0 0 0 2px hsl(var(--ion-blue) / 0.5);
+  }
+
+  /* Shimmer skeleton */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--graphite)) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    @apply animate-shimmer rounded-md;
+  }
+
+  /* Primary CTA button */
+  .btn-primary {
+    @apply w-full py-4 px-6 rounded-panel font-display font-bold text-base
+           bg-primary text-primary-foreground
+           active:scale-95 transition-all duration-150
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Ghost/secondary button */
+  .btn-ghost {
+    @apply w-full py-3 px-6 rounded-panel font-display font-semibold text-sm
+           border border-border text-foreground
+           active:scale-95 transition-all duration-150
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Form input */
+  .input-field {
+    @apply w-full px-4 py-3 rounded-lg bg-input border border-border
+           text-foreground placeholder:text-muted-foreground
+           focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent
+           transition-colors;
+  }
+
+  /* Validation error text */
+  .field-error {
+    @apply text-destructive text-xs mt-1 font-medium;
+  }
+
+  /* Screen wrapper — iPhone 15 Pro safe-area aware */
+  .screen {
+    @apply min-h-screen flex flex-col px-5 pt-14 pb-10 overflow-y-auto;
+  }
+
+  /* Progress bar track */
+  .progress-track {
+    @apply h-1 rounded-full bg-muted overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full rounded-full bg-primary transition-all duration-500;
+  }
+}
