@@ -122,8 +122,10 @@ This enables scalable add-on monetization, partner-install revenue tracking, and
 
 - Service:
   - `apps/admin/src/services/customization-support-service.ts`
+  - `apps/admin/src/services/platform-control-plane-service.ts`
 - Flow:
   - `apps/admin/src/flows/phase10-customization-support.ts`
+  - `apps/admin/src/flows/phase10-platform-control-plane.ts`
 
 Flow snapshot includes:
 
@@ -147,12 +149,25 @@ Supported mutation actions:
 - support message append
 - support automation run create/approve
 
+Founder control-plane flow snapshot includes:
+
+- platform overview RPC payload + KPI snapshots
+- operator accounts + permission overrides
+- support access grants/sessions
+- feature overrides
+- data partner/product/grant/export governance
+- add-on catalog/subscriptions + analytics/automation controls
+- partner app installs + partner revenue events
+- data aggregation/anonymization/release approval queues
+
 ## Mobile Runtime
 
 - Service:
   - `apps/mobile/src/services/support-service.ts`
+  - `apps/mobile/src/services/security-service.ts`
 - Flow:
   - `apps/mobile/src/flows/phase10-support-center.ts`
+  - `apps/mobile/src/flows/phase10-security-center.ts`
 
 Flow snapshot includes:
 
@@ -165,6 +180,12 @@ Supported mutation actions:
 - submit ticket
 - append ticket message
 - approve/reject automation run
+
+Security center flow mutation actions:
+
+- upsert security settings
+- upsert/revoke trusted device
+- log auth/security event
 
 ## Index Exports Updated
 
