@@ -122,6 +122,15 @@ export type PrivacyRequestType =
   | "rectify"
   | "restrict_processing";
 
+export type PrivacyRequestStatus =
+  | "submitted"
+  | "triaged"
+  | "in_progress"
+  | "in_review"
+  | "fulfilled"
+  | "completed"
+  | "rejected";
+
 export type RankTier =
   | "initiate"
   | "apprentice"
@@ -199,6 +208,25 @@ export interface ConsentRecord {
   revokedAt?: string | null;
   source: string;
   locale?: string | null;
+}
+
+export interface PrivacyRequest {
+  id: string;
+  userId: string;
+  requestType: PrivacyRequestType;
+  status: PrivacyRequestStatus;
+  reason?: string | null;
+  submittedAt: string;
+  dueAt: string;
+  triagedAt?: string | null;
+  inProgressAt?: string | null;
+  resolvedAt?: string | null;
+  responseLocation?: string | null;
+  handledBy?: string | null;
+  notes?: string | null;
+  slaBreachedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type GuildRole = "leader" | "officer" | "member";

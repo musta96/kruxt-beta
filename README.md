@@ -76,3 +76,11 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Rank recompute hardening: `supabase/functions/rank_recompute_weekly`
 - Challenge/trials RPC migration set starts at: `packages/db/supabase/migrations/202602190385_krux_beta_part3_s044.sql`
 - Usage notes: `docs/phase7-runtime.md`
+
+## Phase 8 Runtime (Slice 1)
+
+- Mobile privacy request center runtime: `apps/mobile/src/services/privacy-request-service.ts`, `apps/mobile/src/flows/phase8-privacy-requests.ts`
+- Admin compliance ops flow: `apps/admin/src/flows/phase8-compliance-ops.ts`
+- Privacy queue edge function: `supabase/functions/privacy_request_processor`
+- Privacy lifecycle migration set starts at: `packages/db/supabase/migrations/202602190398_krux_beta_part4_s057.sql`
+- Usage notes: `docs/phase8-runtime.md`

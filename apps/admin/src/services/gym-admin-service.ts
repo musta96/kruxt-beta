@@ -4,10 +4,11 @@ import type {
   GymMembership,
   GymOpsSummary,
   GymRole,
-  MembershipStatus
+  MembershipStatus,
+  PrivacyRequestStatus
 } from "@kruxt/types";
 
-import { throwIfAdminError } from "./errors";
+import { KruxtAdminError, throwIfAdminError } from "./errors";
 import { StaffAccessService } from "./staff-access-service";
 
 type MembershipRow = {
@@ -36,10 +37,12 @@ type ConsentRow = {
 type OpenPrivacyRequestRow = {
   id: string;
   user_id: string;
-  request_type: string;
-  status: string;
+  request_type: "access" | "export" | "delete" | "rectify" | "restrict_processing";
+  status: PrivacyRequestStatus;
   submitted_at: string;
   due_at: string | null;
+  sla_breached_at: string | null;
+  is_overdue: boolean;
 };
 
 type GymOpsSummaryRow = {
@@ -87,10 +90,12 @@ type GymClassRow = {
 export interface OpenPrivacyRequest {
   id: string;
   userId: string;
-  type: string;
-  status: string;
+  type: OpenPrivacyRequestRow["request_type"];
+  status: PrivacyRequestStatus;
   submittedAt: string;
   dueAt?: string | null;
+  slaBreachedAt?: string | null;
+  isOverdue: boolean;
 }
 
 export interface PendingWaitlistEntry {
@@ -332,10 +337,42 @@ export class GymAdminService {
     return ((data as OpenPrivacyRequestRow[]) ?? []).map((row) => ({
       id: row.id as string,
       userId: row.user_id as string,
-      type: row.request_type as string,
-      status: row.status as string,
+      type: row.request_type,
+      status: row.status,
       submittedAt: row.submitted_at as string,
-      dueAt: row.due_at as string | null
+      dueAt: row.due_at as string | null,
+      slaBreachedAt: row.sla_breached_at as string | null,
+      isOverdue: Boolean(row.is_overdue)
     }));
+  }
+
+  async transitionPrivacyRequest(
+    gymId: string,
+    requestId: string,
+    nextStatus: Extract<PrivacyRequestStatus, "triaged" | "in_progress" | "fulfilled" | "rejected">,
+    notes?: string
+  ): Promise<string> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase.rpc("transition_privacy_request_status", {
+      p_request_id: requestId,
+      p_next_status: nextStatus,
+      p_notes: notes?.trim() || null
+    });
+
+    throwIfAdminError(
+      error,
+      "ADMIN_PRIVACY_REQUEST_TRANSITION_FAILED",
+      "Unable to transition privacy request status."
+    );
+
+    if (!data || typeof data !== "string") {
+      throw new KruxtAdminError(
+        "ADMIN_PRIVACY_REQUEST_TRANSITION_NO_ID",
+        "Privacy request status transition completed without a request id."
+      );
+    }
+
+    return data;
   }
 }

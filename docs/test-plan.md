@@ -32,7 +32,7 @@
 ## Compliance
 
 18. Consent records retain policy version evidence.
-19. Privacy request transitions are valid (`submitted -> in_review -> completed/rejected`).
+19. Privacy request transitions are valid (`submitted -> triaged -> in_progress -> fulfilled/rejected`).
 20. Audit log rows are append-only.
 21. Admin consent/privacy RPCs only return members linked to the requested gym.
 

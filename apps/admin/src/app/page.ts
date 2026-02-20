@@ -1,6 +1,7 @@
 import { phase2StaffOpsChecklist } from "../flows/phase2-staff-ops";
 import { phase6IntegrationMonitorChecklist } from "../flows/phase6-integration-monitor";
 import { phase5B2BOpsChecklist } from "../flows/phase5-b2b-ops";
+import { phase8ComplianceOpsChecklist } from "../flows/phase8-compliance-ops";
 
 export function adminHomePageScaffold() {
   return {
@@ -45,6 +46,13 @@ export function adminHomePageScaffold() {
         "IntegrationMonitorService.getSummary",
         "IntegrationMonitorService.listConnectionHealth",
         "IntegrationMonitorService.listRecentSyncFailures"
+      ]
+    },
+    phase8: {
+      modules: [...phase8ComplianceOpsChecklist],
+      serviceSurface: [
+        "GymAdminService.listOpenPrivacyRequests",
+        "GymAdminService.transitionPrivacyRequest"
       ]
     }
   };

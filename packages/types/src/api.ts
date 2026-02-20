@@ -24,7 +24,8 @@ import type {
   WorkoutVisibility,
   GymRole,
   MembershipStatus,
-  PrivacyRequestType
+  PrivacyRequestType,
+  PrivacyRequestStatus
 } from "./domain";
 
 export interface LogWorkoutSetInput {
@@ -96,6 +97,17 @@ export interface UpsertConsentInput {
   policyVersionId?: string;
   source?: "mobile" | "admin" | "web";
   locale?: string;
+}
+
+export interface SubmitPrivacyRequestInput {
+  requestType: PrivacyRequestType;
+  reason?: string;
+}
+
+export interface TransitionPrivacyRequestInput {
+  requestId: string;
+  nextStatus: PrivacyRequestStatus;
+  notes?: string;
 }
 
 export interface UpdateMembershipInput {

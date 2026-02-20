@@ -9,6 +9,7 @@
 - Phase 6 runtime scaffolded: integration service + Apple/Garmin webhook/sync activation path
 - Phase 6 monitoring scaffolded: gym staff integration health and sync failure monitor flow
 - Phase 7 runtime scaffolded: challenge/trials service + rank ladder flow + hardened leaderboard recompute
+- Phase 8 runtime slice 1 scaffolded: privacy request mobile/admin flows + queue processor + status transition RPCs
 
 ## Ordered build sequence
 
@@ -21,7 +22,7 @@
 7. Wire production provider credentials and scheduler cadence for `provider_webhook_ingest` + `sync_dispatcher`.
 8. Connect rank/trials UI to `createPhase7RankTrialsFlow` + `CompetitionService`.
 9. Enable weekly rank recompute scheduler calling `rank_recompute_weekly`.
-10. Run privacy workflows (`submit_privacy_request`) and staff handling pipeline.
+10. Run privacy workflows (`submit_privacy_request`) and staff handling pipeline (`transition_privacy_request_status`).
 
 ## Feature flag activation policy
 

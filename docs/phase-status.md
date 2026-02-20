@@ -11,9 +11,10 @@
 - Phase 6 runtime: Apple/Garmin integration pipeline (mobile integration service + webhook ingest + sync dispatcher + cursor persistence)
 - Phase 6 monitoring runtime: admin integration health + sync failure monitor flow for gym staff
 - Phase 7 runtime: rank ladder + trials service layer with deterministic leaderboard recompute and challenge progress RPCs
+- Phase 8 runtime (slice 1): privacy request lifecycle services/flows + queue processor for triage and SLA breach marking
 - Phase 3 prep: workout atomic logging RPC + XP/chain trigger + feed event trigger
 - Phase 4 prep: social graph, blocks/reports, interaction schema + moderation storage
-- Phase 8 prep: privacy requests + audit logs + immutable evidence controls
+- Phase 8 prep (remaining): export/delete fulfillment pipeline, breach hooks, localization, support console hardening
 
 ## Pending implementation in runtime apps
 

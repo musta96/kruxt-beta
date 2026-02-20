@@ -1,6 +1,6 @@
 # Immediate Next Steps
 
-1. Re-run schema sync to apply latest Phase 7 migrations:
+1. Re-run schema sync to apply latest Phase 8 (slice 1) migrations:
    - `./scripts/bootstrap.sh`
    - (syncs `packages/db/supabase/migrations/*` + `packages/db/supabase/seeds/001_feature_flags.sql` and pushes linked DB)
 2. Verify smoke checks in target DB:
@@ -25,6 +25,9 @@
    - route provider callbacks into `provider_webhook_ingest`
 9. Configure scheduler for weekly ranks:
    - call `rank_recompute_weekly` edge function
-10. Start Phase 8 hardening:
-   - privacy request handling dashboard
-   - policy versioning verification and audit-log review workflow
+10. Configure scheduler for privacy queue:
+   - call `privacy_request_processor` with triage/overdue limits
+11. Continue Phase 8 hardening:
+   - data export package generation
+   - delete/anonymize fulfillment pipeline
+   - breach response and compliance support tooling

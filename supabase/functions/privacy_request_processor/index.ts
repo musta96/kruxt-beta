@@ -1,5 +1,18 @@
-import { jsonResponse } from "../_shared/http.ts";
+import { jsonResponse, parseJsonOr } from "../_shared/http.ts";
 import { serviceClient } from "../_shared/supabase.ts";
+
+interface PrivacyQueuePayload {
+  triageLimit?: number;
+  overdueLimit?: number;
+}
+
+function clamp(value: number | undefined, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.min(Math.max(Math.trunc(value as number), min), max);
+}
 
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
@@ -8,38 +21,32 @@ Deno.serve(async (request) => {
 
   try {
     const supabase = serviceClient();
+    const payload = await parseJsonOr<PrivacyQueuePayload>(request, {});
+    const triageLimit = clamp(payload.triageLimit, 1, 200, 25);
+    const overdueLimit = clamp(payload.overdueLimit, 1, 500, 100);
 
-    const { data: requests, error: fetchError } = await supabase
-      .from("privacy_requests")
-      .select("id,status")
-      .eq("status", "submitted")
-      .order("submitted_at", { ascending: true })
-      .limit(25);
+    const { data, error } = await supabase.rpc("process_privacy_request_queue", {
+      p_triage_limit: triageLimit,
+      p_overdue_limit: overdueLimit
+    });
 
-    if (fetchError) {
-      throw fetchError;
+    if (error) {
+      throw error;
     }
 
-    const touched: string[] = [];
+    const result = (data ?? {}) as {
+      triagedCount?: number;
+      overdueMarkedCount?: number;
+      triagedRequestIds?: string[];
+      overdueRequestIds?: string[];
+    };
 
-    for (const req of requests ?? []) {
-      const now = new Date().toISOString();
-      const { error } = await supabase
-        .from("privacy_requests")
-        .update({
-          status: "in_review",
-          notes: "Queued by privacy_request_processor",
-          updated_at: now
-        })
-        .eq("id", req.id)
-        .eq("status", "submitted");
-
-      if (!error) {
-        touched.push(req.id);
-      }
-    }
-
-    return jsonResponse({ queuedCount: touched.length, requestIds: touched });
+    return jsonResponse({
+      triagedCount: result.triagedCount ?? 0,
+      overdueMarkedCount: result.overdueMarkedCount ?? 0,
+      triagedRequestIds: result.triagedRequestIds ?? [],
+      overdueRequestIds: result.overdueRequestIds ?? []
+    });
   } catch (error) {
     return jsonResponse({ error: String(error) }, 500);
   }
