@@ -53,8 +53,10 @@ Operational features are controlled by flags in `public.feature_flags`.
 ## Phase 3 Runtime
 
 - Workout logging service + flow: `apps/mobile/src/services/workout-service.ts`, `apps/mobile/src/flows/phase3-workout-logging.ts`
+- WorkoutLogger UI controller: `apps/mobile/src/flows/phase3-workout-logger-ui.ts`
 - PR auto-detection trigger migration: `packages/db/supabase/migrations/202602190351_krux_beta_part3_s010.sql`
 - Usage notes: `docs/phase3-runtime.md`
+- Screen wiring guide: `docs/phase3-workout-logger-ui-wiring.md`
 
 ## Phase 4 Runtime
 

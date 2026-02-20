@@ -8,6 +8,7 @@
 - Phase 2 mobile UI wiring: onboarding screen controller with recoverable step-level errors and submit routing
 - Phase 2 admin UI wiring: staff console controller with queue actions and post-mutation snapshot refresh
 - Phase 3 runtime: workout logging flow with proof-feed and progress verification
+- Phase 3 mobile UI wiring: WorkoutLogger controller with draft helpers, validation, and signal checks
 - Phase 4 runtime: social graph/feed ranking/notification service layer for mobile
 - Phase 5 runtime: admin B2B ops service layer for classes, waitlist, waivers, contracts, check-ins, and billing telemetry
 - Phase 6 runtime: Apple/Garmin integration pipeline (mobile integration service + webhook ingest + sync dispatcher + cursor persistence)

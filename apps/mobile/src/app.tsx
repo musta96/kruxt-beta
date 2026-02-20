@@ -46,7 +46,14 @@ export function mobileAppScaffold() {
     },
     phase3: {
       flow: "consent gate check -> log workout -> auto proof post -> xp/chain/rank progress",
+      screenFlow: "metadata -> exercise blocks -> sets -> visibility -> review -> submit",
       checklist: [...phase3WorkoutLoggingChecklist],
+      recoverableErrors: [
+        "WORKOUT_LOGGER_VALIDATION_FAILED",
+        "RECONSENT_REQUIRED",
+        "WORKOUT_LOG_RPC_FAILED",
+        "WORKOUT_LOGGER_SIGNALS_INCOMPLETE"
+      ],
       rpcEndpoints: ["log_workout_atomic"],
       expectedSignals: ["feed_events.workout_logged", "feed_events.pr_verified", "profiles.xp_total"]
     },
