@@ -7,3 +7,4 @@ export * from "./flows/phase5-ops-console-ui";
 export * from "./flows/phase6-integration-monitor";
 export * from "./flows/phase8-compliance-ops";
 export * from "./flows/phase10-customization-support";
+export * from "./flows/phase10-platform-control-plane";
