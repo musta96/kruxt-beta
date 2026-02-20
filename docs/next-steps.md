@@ -48,6 +48,7 @@
    - migration: `packages/db/supabase/migrations/202602200007_krux_beta_part5_s007_addons_partner_dataops.sql`
 15. Build UI in strict Lovable order:
    - follow `docs/lovable/prompts-beta-master-pack-v2.md`
+   - for deeper Phase 10 screen generation, use `docs/lovable/prompts-phase10-detailed-pack-v3.md`
    - wire each generated screen to existing flow/service contracts before next prompt
 16. Operationalize support automation with approval gates:
    - follow `docs/ops/maintenance-agent-architecture.md`
