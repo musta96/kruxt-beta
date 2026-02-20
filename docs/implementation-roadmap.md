@@ -19,7 +19,7 @@
 2. Connect auth flow in mobile/admin to `profiles` creation, consent capture, guild hall load, and staff ops snapshot (`createPhase2OnboardingUiFlow` + `createPhase2StaffConsoleUiFlow`).
 3. Implement workout logger UI and call `log_workout_atomic` RPC (see `createPhase3WorkoutLoggerUiFlow`).
 4. Build feed UI from `createPhase4ProofFeedUiFlow` (`feed_events` + joined `workouts` + `social_interactions`).
-5. Connect admin UI screens to `createPhase5B2BOpsFlow` and `B2BOpsService`.
+5. Connect admin UI screens to `createPhase5OpsConsoleUiFlow` and `B2BOpsService`.
 6. Connect integration monitoring UI to `createPhase6IntegrationMonitorFlow`.
 7. Wire production provider credentials and scheduler cadence for `provider_webhook_ingest` + `sync_dispatcher`.
 8. Connect rank/trials UI to `createPhase7RankTrialsFlow` + `CompetitionService`.

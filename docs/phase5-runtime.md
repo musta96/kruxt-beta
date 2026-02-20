@@ -12,6 +12,7 @@ Phase 5 runtime now includes an admin service layer for B2B daily operations:
 
 - `apps/admin/src/services/b2b-ops-service.ts`
 - `apps/admin/src/flows/phase5-b2b-ops.ts`
+- `apps/admin/src/flows/phase5-ops-console-ui.ts`
 - `apps/admin/src/app/page.ts`
 
 Core methods:
@@ -29,6 +30,20 @@ Core methods:
 - `B2BOpsService.upsertMemberSubscription(...)`
 - `B2BOpsService.updateInvoice(...)`
 - `B2BOpsService.updateDunningEvent(...)`
+
+UI controller methods:
+
+- `createPhase5OpsConsoleUiFlow.load(...)`
+- `createPhase5OpsConsoleUiFlow.createClass(...)`
+- `createPhase5OpsConsoleUiFlow.upsertClassBooking(...)`
+- `createPhase5OpsConsoleUiFlow.promoteWaitlistMember(...)`
+- `createPhase5OpsConsoleUiFlow.recordCheckinAndAccessLog(...)`
+- `createPhase5OpsConsoleUiFlow.recordWaiverAcceptance(...)`
+- `createPhase5OpsConsoleUiFlow.recordContractAcceptance(...)`
+
+Wiring guide:
+
+- `docs/phase5-ops-console-ui-wiring.md`
 
 ## DB migration hooks
 

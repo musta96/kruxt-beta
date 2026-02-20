@@ -6,7 +6,7 @@
 2. Verify smoke checks in target DB:
    - `packages/db/tests/rls_smoke.sql`
 3. Connect admin B2B screens to runtime flow:
-   - `createPhase5B2BOpsFlow`
+   - `createPhase5OpsConsoleUiFlow`
    - `B2BOpsService` methods for plans/classes/waitlist/waivers/contracts/check-ins
 4. Connect admin integration monitor screen:
    - `createPhase6IntegrationMonitorFlow`
