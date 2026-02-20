@@ -4,6 +4,7 @@ import { phase5OpsConsoleUiChecklist } from "../flows/phase5-ops-console-ui";
 import { phase8ComplianceOpsChecklist } from "../flows/phase8-compliance-ops";
 import { phase10CustomizationSupportChecklist } from "../flows/phase10-customization-support";
 import { phase10PlatformControlPlaneChecklist } from "../flows/phase10-platform-control-plane";
+import { phase10PlatformControlPlaneUiChecklist } from "../flows/phase10-platform-control-plane-ui";
 
 export function adminHomePageScaffold() {
   return {
@@ -121,6 +122,17 @@ export function adminHomePageScaffold() {
         "createPhase10PlatformControlPlaneFlow.upsertAddonSubscription",
         "createPhase10PlatformControlPlaneFlow.createPartnerRevenueEvent",
         "createPhase10PlatformControlPlaneFlow.upsertDataReleaseApproval"
+      ]
+    },
+    phase10ControlPlaneUi: {
+      modules: [...phase10PlatformControlPlaneUiChecklist],
+      screenFlow: "summary cards -> alert rail -> domain board actions -> mutation -> refreshed UI snapshot",
+      serviceSurface: [
+        "createPhase10PlatformControlPlaneUiFlow.load",
+        "createPhase10PlatformControlPlaneUiFlow.upsertOperatorAccount",
+        "createPhase10PlatformControlPlaneUiFlow.createSupportAccessGrant",
+        "createPhase10PlatformControlPlaneUiFlow.upsertFeatureOverride",
+        "createPhase10PlatformControlPlaneUiFlow.upsertDataReleaseApproval"
       ]
     }
   };

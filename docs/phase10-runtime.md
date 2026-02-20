@@ -126,6 +126,7 @@ This enables scalable add-on monetization, partner-install revenue tracking, and
 - Flow:
   - `apps/admin/src/flows/phase10-customization-support.ts`
   - `apps/admin/src/flows/phase10-platform-control-plane.ts`
+  - `apps/admin/src/flows/phase10-platform-control-plane-ui.ts`
 
 Flow snapshot includes:
 
@@ -168,6 +169,7 @@ Founder control-plane flow snapshot includes:
 - Flow:
   - `apps/mobile/src/flows/phase10-support-center.ts`
   - `apps/mobile/src/flows/phase10-security-center.ts`
+  - `apps/mobile/src/flows/phase10-security-center-ui.ts`
 
 Flow snapshot includes:
 
@@ -186,6 +188,12 @@ Security center flow mutation actions:
 - upsert security settings
 - upsert/revoke trusted device
 - log auth/security event
+
+Security center UI flow adds:
+
+- risk summary counters (high-risk/failed login/revoked-device windows)
+- timeline grouping buckets (24h / 7d / older)
+- action-card recommendations for immediate security posture moves
 
 ## Index Exports Updated
 

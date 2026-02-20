@@ -9,6 +9,7 @@ import { phase7RankTrialsChecklist } from "./flows/phase7-rank-trials";
 import { phase8PrivacyRequestsChecklist } from "./flows/phase8-privacy-requests";
 import { phase10SupportCenterChecklist } from "./flows/phase10-support-center";
 import { phase10SecurityCenterChecklist } from "./flows/phase10-security-center";
+import { phase10SecurityCenterUiChecklist } from "./flows/phase10-security-center-ui";
 
 const defaultEnabledFlags: FeatureFlagKey[] = [
   "provider_apple_health_enabled",
@@ -143,6 +144,17 @@ export function mobileAppScaffold() {
       modules: ["SecurityCenter", "TrustedDevices", "AuthTimeline"],
       tables: ["user_security_settings", "user_trusted_devices", "user_auth_events"],
       rpcEndpoints: ["log_user_auth_event"]
+    },
+    phase10SecurityUi: {
+      flow: "summary/risk cards -> timeline groups -> device actions -> refresh-safe state",
+      checklist: [...phase10SecurityCenterUiChecklist],
+      modules: ["SecuritySummaryCards", "RiskActionRail", "TimelineBuckets"],
+      uiSurface: [
+        "createPhase10SecurityCenterUiFlow.load",
+        "createPhase10SecurityCenterUiFlow.upsertSettings",
+        "createPhase10SecurityCenterUiFlow.revokeTrustedDevice",
+        "createPhase10SecurityCenterUiFlow.logAuthEvent"
+      ]
     }
   };
 }
