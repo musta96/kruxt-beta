@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { useOnboarding } from "../OnboardingContext";
 import {
   Screen,
@@ -8,68 +8,26 @@ import {
   ErrorBanner,
   ProgressBar,
 } from "../../design-system/primitives";
-import { supabase } from "@/integrations/supabase/client";
 
 interface CompleteScreenProps {
   onComplete: () => void;
 }
 
+/**
+ * CompleteScreen — calls injected services.submit() which maps to
+ * Phase2OnboardingService.run(). No direct supabase usage.
+ */
 export function CompleteScreen({ onComplete }: CompleteScreenProps) {
-  const { state, setSubmitting, setError } = useOnboarding();
+  const { state, setSubmitting, setError, services } = useOnboarding();
   const { isSubmitting, submitError, profile, gym, consents, auth } = state;
 
-  // ─── createPhase2OnboardingUiFlow.submit ──────────────────────────────────
-  // Executes the onboarding atomic write sequence: profile upsert →
-  // gym membership → baseline consents (record_user_consent RPC).
   async function handleEnter() {
     if (isSubmitting) return;
     setSubmitting(true);
     setError(null);
 
     try {
-      // 1. Upsert profile (schema: preferred_units, display_name, username)
-      const { error: profileErr } = await supabase.from("profiles").upsert({
-        id: auth.userId!,
-        username: profile.username!,
-        display_name: profile.displayName!,
-        preferred_units: profile.unitSystem ?? "metric",
-      });
-      if (profileErr) throw profileErr;
-
-      // 2. Gym membership — only for open gyms; private gyms already sent join request
-      if (gym.mode === "join" && gym.gymId && !gym.joinRequestSent) {
-        await supabase.from("gym_memberships").upsert(
-          {
-            user_id: auth.userId!,
-            gym_id: gym.gymId,
-            membership_status: "active",
-            role: "member",
-          },
-          { onConflict: "gym_id,user_id" }
-        );
-      }
-
-      // 3. Baseline consents via record_user_consent RPC
-      // consent_type enum: "terms" | "privacy" | "health_data_processing"
-      const consentPairs: Array<{ type: "terms" | "privacy" | "health_data_processing"; granted: boolean }> = [
-        { type: "terms", granted: consents.acceptTerms },
-        { type: "privacy", granted: consents.acceptPrivacy },
-        { type: "health_data_processing", granted: consents.acceptHealthData },
-      ];
-      for (const cp of consentPairs) {
-        const { error: cErr } = await supabase.rpc("record_user_consent", {
-          p_consent_type: cp.type,
-          p_granted: cp.granted,
-          p_source: "onboarding_v2",
-          p_locale: undefined,
-          p_user_id: auth.userId!,
-          p_ip_address: undefined,
-          p_user_agent: undefined,
-          p_evidence: {},
-        });
-        if (cErr) throw cErr;
-      }
-
+      await services.submit({ auth, profile, gym, consents });
       onComplete();
     } catch (err: unknown) {
       setError(
