@@ -2,6 +2,8 @@ import { phase2StaffConsoleUiChecklist } from "../flows/phase2-staff-console-ui"
 import { phase6IntegrationMonitorChecklist } from "../flows/phase6-integration-monitor";
 import { phase5OpsConsoleUiChecklist } from "../flows/phase5-ops-console-ui";
 import { phase8ComplianceOpsChecklist } from "../flows/phase8-compliance-ops";
+import { phase10CustomizationSupportChecklist } from "../flows/phase10-customization-support";
+import { phase10PlatformControlPlaneChecklist } from "../flows/phase10-platform-control-plane";
 
 export function adminHomePageScaffold() {
   return {
@@ -73,6 +75,52 @@ export function adminHomePageScaffold() {
         "GymAdminService.listActivePolicyVersions",
         "GymAdminService.getPrivacyOpsMetrics",
         "GymAdminService.transitionPrivacyRequest"
+      ]
+    },
+    phase10CustomizationSupport: {
+      modules: [...phase10CustomizationSupportChecklist],
+      screenFlow: "branding/feature toggles -> invoice adapters -> support queue/thread -> automation approvals",
+      recoverableErrors: [
+        "ADMIN_GYM_BRAND_SETTINGS_UPSERT_FAILED",
+        "ADMIN_GYM_FEATURE_SETTING_UPSERT_FAILED",
+        "ADMIN_INVOICE_PROVIDER_CONNECTION_UPSERT_FAILED",
+        "ADMIN_INVOICE_COMPLIANCE_PROFILE_UPSERT_FAILED",
+        "ADMIN_SUPPORT_TICKET_SUBMIT_FAILED",
+        "ADMIN_SUPPORT_AUTOMATION_RUN_APPROVAL_FAILED"
+      ],
+      serviceSurface: [
+        "createPhase10CustomizationSupportFlow.load",
+        "createPhase10CustomizationSupportFlow.upsertBrandSettings",
+        "createPhase10CustomizationSupportFlow.upsertFeatureSetting",
+        "createPhase10CustomizationSupportFlow.upsertInvoiceProviderConnection",
+        "createPhase10CustomizationSupportFlow.upsertInvoiceComplianceProfile",
+        "createPhase10CustomizationSupportFlow.submitSupportTicket",
+        "createPhase10CustomizationSupportFlow.approveSupportAutomationRun"
+      ]
+    },
+    phase10ControlPlane: {
+      modules: [...phase10PlatformControlPlaneChecklist],
+      screenFlow: "overview -> operator/security governance -> delegated support access -> add-ons/partner/data-ops",
+      recoverableErrors: [
+        "ADMIN_PLATFORM_OVERVIEW_READ_FAILED",
+        "ADMIN_PLATFORM_OPERATOR_ACCOUNT_UPSERT_FAILED",
+        "ADMIN_SUPPORT_ACCESS_GRANT_CREATE_FAILED",
+        "ADMIN_PLATFORM_FEATURE_OVERRIDE_UPSERT_FAILED",
+        "ADMIN_DATA_PARTNER_ACCESS_GRANT_UPSERT_FAILED",
+        "ADMIN_GYM_ADDON_SUBSCRIPTION_UPSERT_FAILED",
+        "ADMIN_PARTNER_REVENUE_EVENT_CREATE_FAILED",
+        "ADMIN_DATA_RELEASE_APPROVAL_UPSERT_FAILED"
+      ],
+      serviceSurface: [
+        "createPhase10PlatformControlPlaneFlow.load",
+        "createPhase10PlatformControlPlaneFlow.upsertOperatorAccount",
+        "createPhase10PlatformControlPlaneFlow.createSupportAccessGrant",
+        "createPhase10PlatformControlPlaneFlow.upsertFeatureOverride",
+        "createPhase10PlatformControlPlaneFlow.createDataPartner",
+        "createPhase10PlatformControlPlaneFlow.upsertDataPartnerAccessGrant",
+        "createPhase10PlatformControlPlaneFlow.upsertAddonSubscription",
+        "createPhase10PlatformControlPlaneFlow.createPartnerRevenueEvent",
+        "createPhase10PlatformControlPlaneFlow.upsertDataReleaseApproval"
       ]
     }
   };

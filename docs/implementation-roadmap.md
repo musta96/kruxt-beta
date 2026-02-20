@@ -14,6 +14,8 @@
 - Phase 8 runtime slice 2 scaffolded: immutable policy/consent registry and re-consent gates for protected actions
 - Phase 8 runtime slice 3 scaffolded: data export package queue + signed link delivery pipeline
 - Phase 10 runtime scaffolded: gym customization + support ops + monetization experiment + platform SaaS billing + gym RBAC/workforce/CRM + platform control-plane governance + account security + add-ons/partner/data-ops foundations
+- Phase 10 control-plane wired: admin founder governance/runtime flow (`createPhase10PlatformControlPlaneFlow`) + platform control-plane service
+- Phase 10 security center wired: mobile account security runtime flow (`createPhase10SecurityCenterFlow`) + security service
 
 ## Ordered build sequence
 
