@@ -12,3 +12,4 @@ export * from "./notification-service";
 export * from "./integration-service";
 export * from "./competition-service";
 export * from "./privacy-request-service";
+export * from "./support-service";
