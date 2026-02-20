@@ -134,6 +134,7 @@ Operational features are controlled by flags in `public.feature_flags`.
 
 - Admin compliance queue supports deterministic filters (`status`, `requestType`, `SLA badge`, `userQuery`)
 - SLA badges derived in flow layer: `breached`, `at_risk`, `on_track`, `no_due_date`
+- Active policy version visibility wired for staff compliance workflows
 - Privacy metrics RPC: `admin_get_privacy_ops_metrics` (`open`, `overdue`, `avg completion hours`, window outcomes)
 - Compliance operator runbook: `docs/compliance-ops-runbook.md` mapped to console actions
 - Compliance console hardening migration: `packages/db/supabase/migrations/202602190414_krux_beta_part4_s073.sql`

@@ -1,4 +1,4 @@
-import type { PrivacyRequestStatus } from "@kruxt/types";
+import type { PolicyVersion, PrivacyRequestStatus } from "@kruxt/types";
 import {
   formatLegalTimestamp,
   type LegalTranslationKey,
@@ -49,6 +49,7 @@ export interface Phase8ComplianceOpsSnapshot {
   queue: ComplianceQueueItem[];
   openRequests: OpenPrivacyRequest[];
   overdueRequests: OpenPrivacyRequest[];
+  policyVersions: PolicyVersion[];
   metrics: PrivacyOpsMetrics;
   localizedTimeline: LocalizedComplianceRequestTimelineItem[];
   filtersApplied: Required<ComplianceQueueFilters>;
@@ -68,6 +69,7 @@ const PHASE8_COMPLIANCE_OPS_CHECKLIST_KEYS = [
   "legal.flow.admin.phase8.load_queue_filters",
   "legal.flow.admin.phase8.highlight_overdue",
   "legal.flow.admin.phase8.show_sla_badges",
+  "legal.flow.admin.phase8.load_policy_versions",
   "legal.flow.admin.phase8.load_privacy_metrics",
   "legal.flow.admin.phase8.transition_status_notes",
   "legal.flow.admin.phase8.open_runbook"
@@ -204,9 +206,10 @@ export function createPhase8ComplianceOpsFlow(options: Phase8ComplianceOpsFlowOp
     filters: ComplianceQueueFilters = {}
   ): Promise<Phase8ComplianceOpsSnapshot> => {
     const normalizedFilters = normalizeFilters(filters);
-    const [openRequests, metrics] = await Promise.all([
+    const [openRequests, metrics, policyVersions] = await Promise.all([
       admin.listOpenPrivacyRequests(gymId),
-      admin.getPrivacyOpsMetrics(gymId, metricsWindowDays)
+      admin.getPrivacyOpsMetrics(gymId, metricsWindowDays),
+      admin.listActivePolicyVersions(gymId)
     ]);
     const nowMs = Date.now();
     const overdueRequests = openRequests.filter((request) => request.isOverdue || Boolean(request.slaBreachedAt));
@@ -265,6 +268,7 @@ export function createPhase8ComplianceOpsFlow(options: Phase8ComplianceOpsFlowOp
       queue,
       openRequests,
       overdueRequests,
+      policyVersions,
       metrics,
       localizedTimeline,
       filtersApplied: normalizedFilters,

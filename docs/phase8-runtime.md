@@ -39,6 +39,7 @@ Core methods:
 Core methods:
 
 - `GymAdminService.listOpenPrivacyRequests(...)`
+- `GymAdminService.listActivePolicyVersions(...)`
 - `GymAdminService.getPrivacyOpsMetrics(...)`
 - `GymAdminService.transitionPrivacyRequest(...)`
 - `GymAdminService.listSecurityIncidents(...)`

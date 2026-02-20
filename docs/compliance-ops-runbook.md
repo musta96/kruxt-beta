@@ -27,6 +27,7 @@ Process privacy requests inside the admin console with auditable transitions, vi
 ## Request Lifecycle Controls
 
 1. `submitted -> triaged`
+   - Confirm active policy versions and effective dates visible in console.
    - Verify requester scope and request type.
    - Confirm legal basis and any hold constraints.
 2. `triaged -> in_progress`

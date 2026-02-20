@@ -34,6 +34,7 @@ const EN_US_LEGAL_TEXT = {
   "legal.flow.admin.phase8.transition_status_notes": "Transition request status with auditable notes",
   "legal.flow.admin.phase8.load_queue_filters": "Apply queue filters (status/type/SLA/user)",
   "legal.flow.admin.phase8.show_sla_badges": "Render SLA badges (breached/at risk/on track)",
+  "legal.flow.admin.phase8.load_policy_versions": "Load active policy versions and effective dates",
   "legal.flow.admin.phase8.load_privacy_metrics":
     "Load privacy ops metrics (open, overdue, avg completion)",
   "legal.flow.admin.phase8.open_runbook": "Open compliance runbook mapped to queue actions",
@@ -78,6 +79,7 @@ const IT_IT_LEGAL_TEXT: Partial<Record<LegalTranslationKey, string>> = {
   "legal.flow.admin.phase8.transition_status_notes": "Transiziona stato richiesta con note verificabili",
   "legal.flow.admin.phase8.load_queue_filters": "Applica filtri coda (stato/tipo/SLA/utente)",
   "legal.flow.admin.phase8.show_sla_badges": "Mostra badge SLA (violata/a rischio/in linea)",
+  "legal.flow.admin.phase8.load_policy_versions": "Carica versioni policy attive e date di efficacia",
   "legal.flow.admin.phase8.load_privacy_metrics":
     "Carica metriche privacy ops (aperte/scadute/tempo medio)",
   "legal.flow.admin.phase8.open_runbook": "Apri runbook compliance collegato alle azioni coda",

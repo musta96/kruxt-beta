@@ -68,14 +68,15 @@
 52. Phase 8 compliance queue filters (`status/type/SLA/user`) return stable subsets for identical inputs.
 53. SLA badge derivation in admin flow is deterministic at boundary conditions (`breached`, `at_risk`, `on_track`, `no_due_date`).
 54. Compliance runbook mapping exists and matches admin queue actions (`load`, `transition`, `metrics`).
+55. Admin compliance view exposes active policy versions with effective dates for operator verification.
 
 ## Rank + Trials
 
-55. `join_challenge` allows visible, non-ended challenges only.
-56. `leave_challenge` rejects completed participants and only removes caller-owned rows.
-57. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
-58. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
-59. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+56. `join_challenge` allows visible, non-ended challenges only.
+57. `leave_challenge` rejects completed participants and only removes caller-owned rows.
+58. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
+59. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
+60. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
 
 ## Performance targets for pilot
 

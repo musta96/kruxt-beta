@@ -6,6 +6,7 @@ import type {
   GymRole,
   IncidentStatus,
   MembershipStatus,
+  PolicyVersion,
   PrivacyRequestStatus
 } from "@kruxt/types";
 
@@ -65,6 +66,20 @@ type PrivacyOpsMetricsRow = {
   fulfilled_requests_window: number;
   rejected_requests_window: number;
   measured_window_days: number;
+};
+
+type PolicyVersionRow = {
+  id: string;
+  policy_type: PolicyVersion["policyType"];
+  version: string;
+  label: string | null;
+  document_url: string;
+  effective_at: string;
+  is_active: boolean;
+  published_at: string;
+  requires_reconsent: boolean;
+  change_summary: string | null;
+  supersedes_policy_version_id: string | null;
 };
 
 type WaitlistWithClassRow = {
@@ -219,6 +234,22 @@ function mapOpsSummary(row: GymOpsSummaryRow): GymOpsSummary {
     upcomingClasses: row.upcoming_classes,
     pendingWaitlistEntries: row.pending_waitlist_entries,
     openPrivacyRequests: row.open_privacy_requests
+  };
+}
+
+function mapPolicyVersion(row: PolicyVersionRow): PolicyVersion {
+  return {
+    id: row.id,
+    policyType: row.policy_type,
+    version: row.version,
+    label: row.label,
+    documentUrl: row.document_url,
+    effectiveAt: row.effective_at,
+    isActive: row.is_active,
+    publishedAt: row.published_at,
+    requiresReconsent: row.requires_reconsent,
+    changeSummary: row.change_summary,
+    supersedesPolicyVersionId: row.supersedes_policy_version_id
   };
 }
 
@@ -443,6 +474,23 @@ export class GymAdminService {
       rejectedRequestsWindow: Number(row.rejected_requests_window ?? 0),
       measuredWindowDays: Number(row.measured_window_days ?? boundedWindowDays)
     };
+  }
+
+  async listActivePolicyVersions(gymId: string): Promise<PolicyVersion[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase
+      .from("policy_version_tracking")
+      .select(
+        "id,policy_type,version,label,document_url,effective_at,is_active,published_at,requires_reconsent,change_summary,supersedes_policy_version_id"
+      )
+      .eq("is_active", true)
+      .order("policy_type", { ascending: true })
+      .order("effective_at", { ascending: false });
+
+    throwIfAdminError(error, "ADMIN_POLICY_VERSIONS_LIST_FAILED", "Unable to load active policy versions.");
+
+    return ((data as PolicyVersionRow[]) ?? []).map(mapPolicyVersion);
   }
 
   async listSecurityIncidents(

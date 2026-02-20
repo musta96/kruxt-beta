@@ -87,6 +87,7 @@ insert into public.legal_copy_keys(copy_key, default_text, description)
 values
   ('legal.flow.admin.phase8.load_queue_filters', 'Apply queue filters (status/type/SLA/user)', 'Phase 8 admin checklist item'),
   ('legal.flow.admin.phase8.show_sla_badges', 'Render SLA badges (breached/at risk/on track)', 'Phase 8 admin checklist item'),
+  ('legal.flow.admin.phase8.load_policy_versions', 'Load active policy versions and effective dates', 'Phase 8 admin checklist item'),
   ('legal.flow.admin.phase8.load_privacy_metrics', 'Load privacy ops metrics (open, overdue, avg completion)', 'Phase 8 admin checklist item'),
   ('legal.flow.admin.phase8.open_runbook', 'Open compliance runbook mapped to queue actions', 'Phase 8 admin checklist item')
 on conflict (copy_key)
@@ -99,6 +100,7 @@ insert into public.legal_copy_translations(copy_key, locale, translated_text)
 values
   ('legal.flow.admin.phase8.load_queue_filters', 'it-IT', 'Applica filtri coda (stato/tipo/SLA/utente)'),
   ('legal.flow.admin.phase8.show_sla_badges', 'it-IT', 'Mostra badge SLA (violata/a rischio/in linea)'),
+  ('legal.flow.admin.phase8.load_policy_versions', 'it-IT', 'Carica versioni policy attive e date di efficacia'),
   ('legal.flow.admin.phase8.load_privacy_metrics', 'it-IT', 'Carica metriche privacy ops (aperte/scadute/tempo medio)'),
   ('legal.flow.admin.phase8.open_runbook', 'it-IT', 'Apri runbook compliance collegato alle azioni coda')
 on conflict (copy_key, locale)
