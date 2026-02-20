@@ -25,8 +25,17 @@ export function mobileAppScaffold() {
     defaultEnabledFlags,
     phase2: {
       flow: "auth -> profile -> consents -> gym role -> guild hall",
+      screenFlow: "welcome -> auth -> profile -> consents -> gym -> review -> guild hall",
       checklist: [...phase2OnboardingChecklist],
       guildHallChecklist: [...guildHallChecklist],
+      recoverableErrors: [
+        "ONBOARDING_VALIDATION_FAILED",
+        "AUTH_SIGNIN_FAILED",
+        "PROFILE_UPSERT_FAILED",
+        "BASELINE_CONSENT_REQUIRED",
+        "GYM_JOIN_FAILED",
+        "ONBOARDING_HOME_GYM_NOT_PERSISTED"
+      ],
       rpcEndpoints: [
         "log_workout_atomic",
         "join_waitlist",

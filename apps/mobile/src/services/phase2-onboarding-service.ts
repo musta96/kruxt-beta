@@ -120,9 +120,28 @@ export class Phase2OnboardingService {
       locale: input.profile?.locale ?? input.baselineConsents.locale,
       source: "mobile"
     });
+    await localizedPolicies.assertRequiredConsents(userId);
+
+    const requiredConsentTypes: Array<ConsentRecord["consentType"]> = [
+      "terms",
+      "privacy",
+      "health_data_processing"
+    ];
+    const missingRequiredConsentType = requiredConsentTypes.find(
+      (consentType) => !consents.some((consent) => consent.consentType === consentType && consent.granted)
+    );
+
+    if (missingRequiredConsentType) {
+      throw new KruxtAppError(
+        "ONBOARDING_CONSENT_CAPTURE_INCOMPLETE",
+        "Unable to continue until required baseline consents are recorded.",
+        { missingConsentType: missingRequiredConsentType }
+      );
+    }
 
     let gym: Gym | undefined;
     let membership: GymMembership | undefined;
+    let profileAfterHomeGymUpdate: Profile | undefined;
 
     if (input.gymPreference?.createGym) {
       const created = await this.gyms.createGymWithLeaderMembership(userId, input.gymPreference.createGym);
@@ -141,16 +160,32 @@ export class Phase2OnboardingService {
     if (shouldSetHomeGym) {
       const homeGymId = gym?.id ?? membership?.gymId;
       if (homeGymId) {
-        await this.profiles.setHomeGym(userId, homeGymId);
+        profileAfterHomeGymUpdate = await this.profiles.setHomeGym(userId, homeGymId);
       }
     }
 
-    const finalProfile = await this.profiles.getProfileById(userId);
+    const finalProfile =
+      (await this.profiles.getProfileById(userId)) ??
+      profileAfterHomeGymUpdate ??
+      profile;
+    const expectedHomeGymId = shouldSetHomeGym ? gym?.id ?? membership?.gymId ?? null : null;
+
+    if (expectedHomeGymId && finalProfile.homeGymId !== expectedHomeGymId) {
+      throw new KruxtAppError(
+        "ONBOARDING_HOME_GYM_NOT_PERSISTED",
+        "Home gym could not be confirmed. Please retry this step.",
+        {
+          expectedHomeGymId,
+          actualHomeGymId: finalProfile.homeGymId ?? null
+        }
+      );
+    }
+
     const guildHall = await this.gyms.getGuildHallSnapshot(userId);
 
     return {
       userId,
-      profile: finalProfile ?? profile,
+      profile: finalProfile,
       consents,
       gym,
       membership,

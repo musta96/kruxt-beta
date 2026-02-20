@@ -5,6 +5,7 @@
 - Phase 0: monorepo scaffold, CI skeleton, env template, shared packages, scripts
 - Phase 1: complete Supabase schema v2 migration with RLS, RPCs, triggers, seed flags
 - Phase 2 runtime: mobile onboarding + guild hall flows + admin staff ops/triage services
+- Phase 2 mobile UI wiring: onboarding screen controller with recoverable step-level errors and submit routing
 - Phase 3 runtime: workout logging flow with proof-feed and progress verification
 - Phase 4 runtime: social graph/feed ranking/notification service layer for mobile
 - Phase 5 runtime: admin B2B ops service layer for classes, waitlist, waivers, contracts, check-ins, and billing telemetry
