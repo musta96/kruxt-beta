@@ -98,6 +98,13 @@
 73. `rejectPendingMembership` transitions pending member to cancelled and removes it from pending queue on refreshed snapshot.
 74. `assignMembershipRole` updates role and refreshed snapshot reflects new role immediately.
 
+## Phase 3 WorkoutLogger UI
+
+75. `createPhase3WorkoutLoggerUiFlow.validate` returns field-level errors for missing exercise IDs and empty set payloads.
+76. `submit` returns `WORKOUT_LOGGER_VALIDATION_FAILED` without RPC call when draft validation fails.
+77. Successful submit returns verification flags with `totalsUpdated=true`, `proofEventCreated=true`, `progressUpdated=true`.
+78. Missing post-submit signals return recoverable `WORKOUT_LOGGER_SIGNALS_INCOMPLETE` error.
+
 ## Performance targets for pilot
 
 - Feed p95 load < 500ms for 50-card page.

@@ -12,11 +12,14 @@ Phase 3 runtime now includes a concrete workout logging path that validates:
 
 - `apps/mobile/src/services/workout-service.ts`
 - `apps/mobile/src/flows/phase3-workout-logging.ts`
+- `apps/mobile/src/flows/phase3-workout-logger-ui.ts`
 
 Core methods:
 
 - `WorkoutService.logWorkoutAtomic(...)`
 - `createPhase3WorkoutLoggingFlow().run(...)`
+- `createPhase3WorkoutLoggerUiFlow().validate(...)`
+- `createPhase3WorkoutLoggerUiFlow().submit(...)`
 
 ## DB migration hooks
 
@@ -24,3 +27,11 @@ Core methods:
 - `packages/db/supabase/migrations/202602190353_krux_beta_part3_s012.sql`
 
 These add the PR detection trigger pipeline for `public.workout_sets`.
+
+## Wiring expectations
+
+- Workout logger screens should use `createPhase3WorkoutLoggerUiFlow` for:
+  - sub-60-second set/exercise interactions (`addExercise`, `addSet`, `removeSet`)
+  - field-level validation before submit
+  - post-submit verification of totals/feed/progress signals
+- Runtime wiring details: `docs/phase3-workout-logger-ui-wiring.md`.
