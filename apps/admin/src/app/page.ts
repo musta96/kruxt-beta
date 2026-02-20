@@ -1,6 +1,6 @@
 import { phase2StaffConsoleUiChecklist } from "../flows/phase2-staff-console-ui";
 import { phase6IntegrationMonitorChecklist } from "../flows/phase6-integration-monitor";
-import { phase5B2BOpsChecklist } from "../flows/phase5-b2b-ops";
+import { phase5OpsConsoleUiChecklist } from "../flows/phase5-ops-console-ui";
 import { phase8ComplianceOpsChecklist } from "../flows/phase8-compliance-ops";
 
 export function adminHomePageScaffold() {
@@ -30,21 +30,32 @@ export function adminHomePageScaffold() {
       ]
     },
     phase5: {
-      modules: [...phase5B2BOpsChecklist],
+      modules: [...phase5OpsConsoleUiChecklist],
+      screenFlow:
+        "class schedule -> bookings/waitlist -> check-in/access -> waiver/contract evidence -> refreshed snapshot",
+      recoverableErrors: [
+        "ADMIN_CLASS_CREATE_FAILED",
+        "ADMIN_CLASS_BOOKING_UPSERT_FAILED",
+        "ADMIN_CLASS_WAITLIST_UPDATE_FAILED",
+        "ADMIN_WAITLIST_PROMOTE_FAILED",
+        "ADMIN_CHECKIN_CREATE_FAILED",
+        "ADMIN_ACCESS_LOG_CREATE_FAILED",
+        "ADMIN_WAIVER_ACCEPTANCE_RECORD_FAILED",
+        "ADMIN_CONTRACT_ACCEPTANCE_RECORD_FAILED"
+      ],
       serviceSurface: [
-        "B2BOpsService.listMembershipPlans",
-        "B2BOpsService.createGymClass",
-        "B2BOpsService.listClassBookings",
-        "B2BOpsService.listClassWaitlist",
-        "B2BOpsService.promoteWaitlistMember",
-        "B2BOpsService.listWaivers",
-        "B2BOpsService.recordWaiverAcceptanceByStaff",
-        "B2BOpsService.listContracts",
-        "B2BOpsService.recordContractAcceptanceByStaff",
-        "B2BOpsService.recordCheckin",
-        "B2BOpsService.recordAccessLog",
+        "createPhase5OpsConsoleUiFlow.load",
+        "createPhase5OpsConsoleUiFlow.createClass",
+        "createPhase5OpsConsoleUiFlow.upsertClassBooking",
+        "createPhase5OpsConsoleUiFlow.promoteWaitlistMember",
+        "createPhase5OpsConsoleUiFlow.recordCheckinAndAccessLog",
+        "createPhase5OpsConsoleUiFlow.recordWaiverAcceptance",
+        "createPhase5OpsConsoleUiFlow.recordContractAcceptance",
         "B2BOpsService.listMemberSubscriptions",
-        "B2BOpsService.listInvoices"
+        "B2BOpsService.listInvoices",
+        "B2BOpsService.listPaymentTransactions",
+        "B2BOpsService.listRefunds",
+        "B2BOpsService.listDunningEvents"
       ]
     },
     phase6: {

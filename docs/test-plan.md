@@ -112,6 +112,14 @@
 81. `commentOnWorkout` persists comment state and returns refreshed snapshot plus filtered thread.
 82. `reportContent` creates moderation record and includes it in refreshed `myReports`.
 
+## Phase 5 Ops Console UI
+
+83. `createPhase5OpsConsoleUiFlow.load` returns class/bookings/waitlist/check-in/waiver/contract/billing snapshot in one call.
+84. `createClass`/`updateClass`/`setClassStatus` return refreshed snapshot with selected class state.
+85. `promoteWaitlistMember` returns booking id and refreshed booking/waitlist snapshot.
+86. `recordCheckinAndAccessLog` records both rows and returns refreshed operational snapshot.
+87. `recordWaiverAcceptance` and `recordContractAcceptance` return acceptance IDs plus refreshed evidence lists.
+
 ## Performance targets for pilot
 
 - Feed p95 load < 500ms for 50-card page.
