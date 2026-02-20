@@ -6,6 +6,7 @@ Phase 7 runtime now includes the Rank Ladder + Trials execution layer:
 - Atomic challenge RPCs for join/leave/progress submissions
 - Deterministic leaderboard rebuild logic with anti-cheat filters
 - Weekly recompute edge function with per-board failure reporting
+- Scheduled weekly recompute workflow with failure alerts and deterministic repeat probes
 
 ## Mobile entrypoints
 
@@ -34,8 +35,17 @@ Core methods:
 
 - `supabase/functions/rank_recompute_weekly/index.ts`
   - defaults to weekly boards
-  - supports optional body filters (`timeframe`, `leaderboardIds`, `limit`)
-  - returns `rebuiltCount` and `failures` for deterministic job monitoring
+  - supports optional body filters (`timeframe`, `leaderboardIds`, `limit`, `determinismProbeCount`)
+  - returns `rebuiltCount`, `failures`, and `determinismFailures` for deterministic job monitoring
+
+## Scheduler and monitoring
+
+- `.github/workflows/rank-recompute-weekly.yml`
+  - weekly auto-run (`04:15 UTC` Monday) + manual dispatch
+  - calls `scripts/run-rank-recompute-weekly.mjs`
+  - uploads run artifact with full diagnostics
+  - opens a high-priority phase-7 issue if recompute fails
+- `docs/rank-recompute-ops.md` documents secret setup, runbook, and expected success signals
 
 ## DB migration hooks
 

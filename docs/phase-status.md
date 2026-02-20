@@ -11,6 +11,7 @@
 - Phase 6 runtime: Apple/Garmin integration pipeline (mobile integration service + webhook ingest + sync dispatcher + cursor persistence)
 - Phase 6 monitoring runtime: admin integration health + sync failure monitor flow for gym staff
 - Phase 7 runtime: rank ladder + trials service layer with deterministic leaderboard recompute and challenge progress RPCs
+- Phase 7 ops follow-up: weekly rank recompute scheduler workflow + deterministic repeat probes + failure issue alerts
 - Phase 8 runtime (slice 1): privacy request lifecycle services/flows + queue processor for triage and SLA breach marking
 - Phase 8 runtime (slice 2): immutable policy/consent registry + audited consent RPCs + workout re-consent gate
 - Phase 8 runtime (slice 3): export package generation with signed URL delivery + retry-safe queue processing
@@ -28,5 +29,6 @@
 - Mobile and admin feature-complete UI screen implementation (React Native + Next runtime wiring)
 - Supabase auth wiring and protected client routes
 - Direct provider API polling implementations for production credentials (Apple/Garmin providers currently webhook-first runtime)
-- Scheduled job orchestration (cron cadence + alerting) and production observability dashboards
+- Scheduled job orchestration still pending for `sync_dispatcher` and `privacy_request_processor`
+- Production observability dashboards
 - KPI instrumentation and analytics ingestion
