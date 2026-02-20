@@ -91,6 +91,13 @@
 69. Weekly `rank-recompute-weekly` scheduler run produces artifact report and exits non-zero on recompute failure.
 70. Failed scheduler run creates a high-priority phase-7 alert issue with workflow run URL.
 
+## Phase 2 Admin Console
+
+71. Non-staff actor receives `ADMIN_STAFF_ACCESS_DENIED` on load and all membership mutations.
+72. `approvePendingMembership` transitions pending member to active and returns refreshed snapshot with queue update.
+73. `rejectPendingMembership` transitions pending member to cancelled and removes it from pending queue on refreshed snapshot.
+74. `assignMembershipRole` updates role and refreshed snapshot reflects new role immediately.
+
 ## Performance targets for pilot
 
 - Feed p95 load < 500ms for 50-card page.

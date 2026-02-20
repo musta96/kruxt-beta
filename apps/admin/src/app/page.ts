@@ -1,4 +1,4 @@
-import { phase2StaffOpsChecklist } from "../flows/phase2-staff-ops";
+import { phase2StaffConsoleUiChecklist } from "../flows/phase2-staff-console-ui";
 import { phase6IntegrationMonitorChecklist } from "../flows/phase6-integration-monitor";
 import { phase5B2BOpsChecklist } from "../flows/phase5-b2b-ops";
 import { phase8ComplianceOpsChecklist } from "../flows/phase8-compliance-ops";
@@ -9,7 +9,13 @@ export function adminHomePageScaffold() {
     description: "Manage memberships, classes, waivers, contracts, and operations.",
     brandRule: "Proof counts. Rank is earned weekly.",
     phase2: {
-      modules: [...phase2StaffOpsChecklist],
+      modules: [...phase2StaffConsoleUiChecklist],
+      screenFlow: "staff access gate -> membership queue -> approve/reject -> role assignment -> refreshed snapshot",
+      recoverableErrors: [
+        "ADMIN_MEMBERSHIP_UPDATE_FAILED",
+        "ADMIN_ROLE_ASSIGN_FAILED",
+        "ADMIN_PENDING_MEMBERSHIPS_FAILED"
+      ],
       serviceSurface: [
         "GymAdminService.getGymOpsSummary",
         "GymAdminService.listGymMemberships",
@@ -17,6 +23,7 @@ export function adminHomePageScaffold() {
         "GymAdminService.listPendingWaitlistEntries",
         "GymAdminService.listUpcomingClasses",
         "GymAdminService.approveMembership",
+        "GymAdminService.updateMembershipStatus",
         "GymAdminService.assignMembershipRole",
         "GymAdminService.listUserConsentRecords",
         "GymAdminService.listOpenPrivacyRequests"

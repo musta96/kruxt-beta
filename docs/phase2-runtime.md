@@ -30,6 +30,7 @@ Core methods:
 - `apps/admin/src/services/staff-access-service.ts`
 - `apps/admin/src/services/gym-admin-service.ts`
 - `apps/admin/src/flows/phase2-staff-ops.ts`
+- `apps/admin/src/flows/phase2-staff-console-ui.ts`
 
 Core methods:
 
@@ -43,6 +44,10 @@ Core methods:
 - `GymAdminService.assignMembershipRole(...)`
 - `GymAdminService.listUserConsentRecords(...)`
 - `GymAdminService.listOpenPrivacyRequests(...)`
+- `createPhase2StaffConsoleUiFlow(...).load(...)`
+- `createPhase2StaffConsoleUiFlow(...).approvePendingMembership(...)`
+- `createPhase2StaffConsoleUiFlow(...).rejectPendingMembership(...)`
+- `createPhase2StaffConsoleUiFlow(...).assignMembershipRole(...)`
 
 Supporting DB RPCs for strict-RLS admin reads:
 
@@ -59,5 +64,11 @@ Supporting DB RPCs for strict-RLS admin reads:
   - end-to-end submit that returns `nextRoute = guild_hall`
 - Mobile app can load guild hall state after onboarding/auth via `createGuildHallFlow`.
 - Admin routes should enforce `requireGymStaff` before any management action.
+- Admin membership queue screens should use `createPhase2StaffConsoleUiFlow` so:
+  - non-staff access attempts fail at action boundary
+  - approve/reject/role actions return refreshed membership snapshot
+  - UI always reflects latest membership state after each action
 - All actions rely on existing RLS policies in the migration file.
-- Detailed screen wiring reference: `docs/phase2-mobile-onboarding-ui-wiring.md`.
+- Detailed screen wiring references:
+  - `docs/phase2-mobile-onboarding-ui-wiring.md`
+  - `docs/phase2-admin-console-ui-wiring.md`

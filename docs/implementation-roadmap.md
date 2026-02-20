@@ -16,7 +16,7 @@
 ## Ordered build sequence
 
 1. Apply DB migration and seed data in Supabase project.
-2. Connect auth flow in mobile/admin to `profiles` creation, consent capture, guild hall load, and staff ops snapshot (`createPhase2OnboardingUiFlow` for mobile screens).
+2. Connect auth flow in mobile/admin to `profiles` creation, consent capture, guild hall load, and staff ops snapshot (`createPhase2OnboardingUiFlow` + `createPhase2StaffConsoleUiFlow`).
 3. Implement workout logger UI and call `log_workout_atomic` RPC (see `createPhase3WorkoutLoggingFlow`).
 4. Build feed UI from `createPhase4SocialFeedFlow` (`feed_events` + joined `workouts` + `social_interactions`).
 5. Connect admin UI screens to `createPhase5B2BOpsFlow` and `B2BOpsService`.
