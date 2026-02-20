@@ -138,3 +138,8 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Privacy metrics RPC: `admin_get_privacy_ops_metrics` (`open`, `overdue`, `avg completion hours`, window outcomes)
 - Compliance operator runbook: `docs/compliance-ops-runbook.md` mapped to console actions
 - Compliance console hardening migration: `packages/db/supabase/migrations/202602190414_krux_beta_part4_s073.sql`
+
+## Phase 9 Rollout
+
+- Closed-beta rollout checklist and KPI gates: `docs/phase9-closed-beta-rollout.md`
+- Includes Pavia readiness criteria, weekly KPI tracking board, rollback playbook, and US+EU expansion gates

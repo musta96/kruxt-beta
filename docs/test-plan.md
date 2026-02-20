@@ -78,6 +78,13 @@
 59. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
 60. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
 
+## Rollout Gates
+
+61. Pavia pilot readiness checklist is fully completed before invite activation.
+62. Weekly KPI board is updated on cadence with explicit gate outcome (`Pass`, `Conditional`, `Fail`).
+63. Incident rollback playbook includes ordered flag rollback actions and communication SLA.
+64. US+EU expansion criteria are tracked and require two consecutive passing weekly reviews.
+
 ## Performance targets for pilot
 
 - Feed p95 load < 500ms for 50-card page.

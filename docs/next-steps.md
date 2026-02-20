@@ -33,3 +33,6 @@
 12. Add explicit re-consent UI flow:
    - show `list_missing_required_consents` reasons in-app
    - route users to policy acceptance screens before protected modules
+13. Start Phase 9 rollout operations:
+   - execute `docs/phase9-closed-beta-rollout.md` Pavia readiness checklist
+   - update weekly KPI tracking board every Friday before gate review
