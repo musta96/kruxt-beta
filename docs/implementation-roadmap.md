@@ -13,6 +13,7 @@
 - Phase 8 runtime slice 1 scaffolded: privacy request mobile/admin flows + queue processor + status transition RPCs
 - Phase 8 runtime slice 2 scaffolded: immutable policy/consent registry and re-consent gates for protected actions
 - Phase 8 runtime slice 3 scaffolded: data export package queue + signed link delivery pipeline
+- Phase 10 runtime scaffolded: gym customization + support ops + monetization experiment + platform SaaS billing + gym RBAC/workforce/CRM + platform control-plane governance + account security + add-ons/partner/data-ops foundations
 
 ## Ordered build sequence
 
@@ -27,12 +28,20 @@
 9. Connect rank/trials UI to `createPhase7RankTrialsFlow` + `CompetitionService`.
 10. Validate weekly rank recompute scheduler (`.github/workflows/rank-recompute-weekly.yml`) and alert routing.
 11. Run privacy workflows (`submit_privacy_request`) and staff handling pipeline (`transition_privacy_request_status`).
+12. Wire Phase 10 admin customization/support surfaces (`createPhase10CustomizationSupportFlow`).
+13. Wire mobile support center (`createPhase10SupportCenterFlow`) with ticket submission + threaded replies.
+14. Wire monetization screens behind feature flags (consumer paywall, pricing experiments, discount campaigns).
+15. Wire staff role-permission gating + phone/iPad/desktop surface split from `user_has_gym_permission(...)`.
+16. Wire founder control-plane with delegated support access and governance workflows.
+17. Wire user account security center (MFA/device/session controls + auth timeline).
+18. Wire add-on marketplace, partner revenue, and governed data-ops modules in control plane.
 
 ## Feature flag activation policy
 
 - Keep `billing_live = false` until pilot retention + reliability targets are met.
 - Keep non-priority provider flags off (`fitbit`, `oura`, `whoop`, `suunto`, `huawei`).
 - Enable only one major flag category per release window.
+- Keep support automation high-risk actions on explicit approval path until two stable gate reviews.
 
 ## Pilot gates (Pavia)
 

@@ -128,6 +128,80 @@
 91. `queueSync` rejects inactive connections and refreshes snapshot after successful queue.
 92. `validateActivation` reports missing providers, sync backlog, duplicate import groups, and deterministic mapping coverage.
 
+## Phase 10 Customization + Support
+
+93. Gym staff can upsert `gym_brand_settings` and read back deterministic values (colors/fonts/links) through `CustomizationSupportService`.
+94. Per-gym feature toggles upsert by `(gym_id, feature_key)` and preserve rollout percentage bounds (`0..100`).
+95. Invoice provider connections enforce single default provider per gym after `setDefaultInvoiceProviderConnection`.
+96. Invoice compliance profile accepts Italy-ready fields (`invoice_scheme = it_fatturapa`, `pec_email`, `sdi_destination_code`) and remains staff-scoped.
+97. Invoice delivery jobs keep idempotency uniqueness and retry metadata integrity under repeated inserts.
+98. `createPhase10CustomizationSupportFlow.load` returns a coherent snapshot across branding, feature controls, invoicing, and support queue.
+99. Support ticket list filters (`status/includeClosed/search`) produce deterministic subsets for a fixed dataset.
+100. `submit_support_ticket` RPC creates a ticket with audit evidence and returns row data to caller.
+101. Support messages append chronologically and enforce ticket-scope access via RLS.
+102. `approve_support_automation_run` transitions status (`approved`/`rejected`) and appends audit entries.
+103. `createPhase10SupportCenterFlow.load` returns user-scoped tickets with selected-thread messages and automation runs.
+104. Mobile support center mutation chain (`submitTicket -> createMessage -> approveAutomationRun`) always refreshes with latest selected ticket state.
+
+## Phase 10 Monetization Readiness
+
+105. `consumer_plans` and `consumer_plan_prices` expose active rows to authenticated users while rejecting non-service mutations.
+106. `consumer_entitlements` remains readable only by entitlement owner or service role.
+107. `pricing_experiments` enforce scope checks (`b2c` with null gym, `b2b` with non-null gym).
+108. Only gym staff can mutate `b2b` pricing experiments, variants, and assignments for their own gym.
+109. `pricing_experiment_assignments` enforce subject exclusivity (`user_id xor gym_id`) and uniqueness per experiment subject.
+110. `discount_campaigns` enforce type-dependent fields (`percent_off`, `amount_off_cents`, `trial_days_off`) and scope constraints.
+111. Public `b2c` discount campaigns are readable only when active; `b2b` campaigns are gym-scoped.
+112. `discount_redemptions` remain user/gym scoped and preserve idempotent uniqueness (`campaign_id`, `user_id`, `invoice_id`).
+113. Pricing/discount helper functions reject cross-gym management attempts via RLS-aware checks.
+114. `platform_plans` allow authenticated reads for active plans while rejecting non-service mutations.
+115. `gym_platform_subscriptions` remain readable only to gym staff for that gym (or service role).
+116. `gym_platform_invoices` and `gym_platform_payment_transactions` stay gym-scoped for reads and service-scoped for writes.
+117. `gym_platform_refunds` visibility follows parent transaction gym access and blocks cross-gym reads.
+118. `discount_redemptions.gym_platform_invoice_id` FK integrity holds under invoice deletion (`set null` behavior).
+
+## Phase 10 Gym RBAC + Workforce + CRM
+
+119. `seed_default_gym_permissions` creates deterministic role matrix rows for each gym without duplicates.
+120. `user_has_gym_permission` respects precedence order: owner/service -> user override -> role permission -> deny.
+121. Staff with `staff.shifts.manage` can create/update shifts; staff without it are denied by RLS.
+122. Shift assignment trigger rejects non-staff users (`member` role or inactive memberships).
+123. Time entry trigger rejects mismatched `(shift_id, gym_id, staff_user_id)` combinations.
+124. Staff can submit own time entries, but cannot self-approve without `staff.time_entries.manage`.
+125. `gym_kpi_daily_snapshots` are readable to users with `analytics.view` and service-only writable.
+126. `gym_crm_leads` and `gym_crm_lead_activities` remain inaccessible to users lacking `crm.leads.manage`.
+127. Gym-level permission overrides (`gym_user_permission_overrides`) immediately affect effective access checks.
+
+## Phase 10 Platform Control Plane + Governance
+
+128. `platform_operator_has_permission` resolves effective access by role + override with deterministic fallback deny.
+129. Non-operator users cannot read platform-operator, feature-override, or data-governance tables.
+130. `gym_support_access_grants` can be created by operator request flow but approval/revocation remains constrained to authorized actors.
+131. `gym_support_access_sessions` require active approved grants at insertion time.
+132. `get_platform_admin_overview()` rejects unauthorized callers and returns deterministic KPI payload shape for authorized operators.
+133. `user_data_sharing_preferences` remains user-owned for writes and cannot be mutated cross-user.
+134. `data_partner_exports` enforce aggregate-only rule when `export_level = aggregate_anonymous` (`includes_personal_data = false`).
+135. Platform feature override uniqueness (`feature_key`,`target_scope`,`target_value`) prevents duplicate conflicting rows.
+
+## Phase 10 Account Security Foundations
+
+136. `user_security_settings` rows are user-owned and immutable cross-user by RLS.
+137. `user_trusted_devices` upsert/revoke is limited to the owning user (or service role).
+138. `user_auth_events` are append-only from user/service inserts and readable only by owner/service.
+139. `log_user_auth_event(...)` rejects unauthenticated callers and writes actor-bound event rows.
+140. Session timeout and login-alert channel constraints enforce valid bounds/enum values.
+
+## Phase 10 Add-ons + Partner + Data Ops
+
+141. `gym_addon_subscriptions` remain gym-scoped and mutable only by users with `addons.manage`.
+142. `gym_advanced_analytics_views` are writable only with `analytics.advanced.view`; staff without it remain read-only/denied.
+143. `gym_automation_playbooks` and `gym_automation_runs` remain gated by `automation.manage`.
+144. `partner_marketplace_apps` catalog is publicly readable when active and protected for mutation by platform governance roles.
+145. `gym_partner_app_installs` enforce gym permission checks (`partner.apps.manage` or `integrations.manage`).
+146. `partner_revenue_events` balance check holds (`gross = platform + partner`) for non-zero rows.
+147. `data_aggregation_jobs` and `data_anonymization_checks` are restricted to platform analytics/governance operators.
+148. `data_release_approvals` enforce one row per required approval type per export.
+
 ## Performance targets for pilot
 
 - Feed p95 load < 500ms for 50-card page.
