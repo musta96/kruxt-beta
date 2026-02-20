@@ -84,3 +84,11 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Privacy queue edge function: `supabase/functions/privacy_request_processor`
 - Privacy lifecycle migration set starts at: `packages/db/supabase/migrations/202602190398_krux_beta_part4_s057.sql`
 - Usage notes: `docs/phase8-runtime.md`
+
+## Phase 8 Runtime (Slice 2)
+
+- Immutable policy registry publishing RPC: `public.publish_policy_version(...)`
+- Immutable consent capture RPC: `public.record_user_consent(...)`
+- Re-consent gate RPCs: `public.list_missing_required_consents(...)`, `public.user_has_required_consents(...)`
+- Workout logging gate wiring: `apps/mobile/src/services/workout-service.ts`
+- Policy/consent migration set starts at: `packages/db/supabase/migrations/202602190402_krux_beta_part4_s061.sql`

@@ -39,6 +39,18 @@ type ProfileProgressRow = {
   last_workout_at: string | null;
 };
 
+type RequiredConsentGapRow = {
+  consent_type: "terms" | "privacy" | "health_data_processing";
+  required_policy_version_id: string | null;
+  required_policy_version: string | null;
+  reason:
+    | "missing_active_policy"
+    | "missing_consent_record"
+    | "latest_record_revoked"
+    | "missing_policy_binding"
+    | "reconsent_required";
+};
+
 export interface LoggedWorkoutSnapshot {
   id: string;
   userId: string;
@@ -154,6 +166,42 @@ function toExercisePayload(
 export class WorkoutService {
   constructor(private readonly supabase: SupabaseClient) {}
 
+  private async requireCurrentUserId(): Promise<string> {
+    const { data: authData, error: authError } = await this.supabase.auth.getUser();
+    throwIfError(authError, "AUTH_GET_USER_FAILED", "Unable to resolve current user.");
+
+    const currentUser = authData.user;
+    if (!currentUser) {
+      throw new KruxtAppError("AUTH_REQUIRED", "Authentication required.");
+    }
+
+    return currentUser.id;
+  }
+
+  private async ensureConsentGate(userId: string): Promise<void> {
+    const { data: hasRequiredConsents, error: gateError } = await this.supabase.rpc("user_has_required_consents", {
+      p_user_id: userId
+    });
+
+    throwIfError(gateError, "CONSENT_GATE_CHECK_FAILED", "Unable to validate legal consent requirements.");
+
+    if (Boolean(hasRequiredConsents)) {
+      return;
+    }
+
+    const { data: missingData, error: missingError } = await this.supabase.rpc("list_missing_required_consents", {
+      p_user_id: userId
+    });
+
+    throwIfError(missingError, "CONSENT_GAPS_READ_FAILED", "Unable to load required consent gaps.");
+
+    throw new KruxtAppError(
+      "RECONSENT_REQUIRED",
+      "Legal re-consent is required before workout logging can continue.",
+      { missing: (missingData as RequiredConsentGapRow[]) ?? [] }
+    );
+  }
+
   async logWorkoutAtomic(input: LogWorkoutAtomicInput): Promise<LogWorkoutAtomicResult> {
     if ((input.exercises ?? []).length === 0) {
       throw new KruxtAppError(
@@ -161,6 +209,9 @@ export class WorkoutService {
         "Workout logging requires at least one exercise block."
       );
     }
+
+    const currentUserId = await this.requireCurrentUserId();
+    await this.ensureConsentGate(currentUserId);
 
     const { data: workoutIdData, error: logError } = await this.supabase.rpc("log_workout_atomic", {
       p_workout: toWorkoutPayload(input.workout),
@@ -172,14 +223,6 @@ export class WorkoutService {
     const workoutId = workoutIdData as string | null;
     if (!workoutId) {
       throw new KruxtAppError("WORKOUT_LOG_RPC_NO_ID", "Workout logging completed without a workout id.");
-    }
-
-    const { data: authData, error: authError } = await this.supabase.auth.getUser();
-    throwIfError(authError, "AUTH_GET_USER_FAILED", "Unable to resolve user after workout logging.");
-
-    const currentUser = authData.user;
-    if (!currentUser) {
-      throw new KruxtAppError("AUTH_REQUIRED", "Authentication required.");
     }
 
     const [workoutResponse, feedResponse, profileResponse] = await Promise.all([
@@ -198,7 +241,7 @@ export class WorkoutService {
       this.supabase
         .from("profiles")
         .select("id,xp_total,level,rank_tier,chain_days,last_workout_at")
-        .eq("id", currentUser.id)
+        .eq("id", currentUserId)
         .maybeSingle()
     ]);
 

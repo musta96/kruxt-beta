@@ -97,6 +97,21 @@ export interface UpsertConsentInput {
   policyVersionId?: string;
   source?: "mobile" | "admin" | "web";
   locale?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  evidence?: Record<string, unknown>;
+}
+
+export interface PublishPolicyVersionInput {
+  policyType: "terms" | "privacy" | "health_data" | "waiver";
+  version: string;
+  documentUrl: string;
+  effectiveAt?: string;
+  label?: string;
+  requiresReconsent?: boolean;
+  changeSummary?: string;
+  isActive?: boolean;
+  supersedesPolicyVersionId?: string;
 }
 
 export interface SubmitPrivacyRequestInput {

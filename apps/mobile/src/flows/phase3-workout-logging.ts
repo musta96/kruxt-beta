@@ -4,6 +4,7 @@ import type { LogWorkoutAtomicResult } from "../services";
 
 export const phase3WorkoutLoggingChecklist = [
   "Validate workout payload",
+  "Validate required legal consents",
   "Call log_workout_atomic RPC",
   "Confirm proof feed event",
   "Confirm XP/rank/chain progress update"

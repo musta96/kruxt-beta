@@ -35,14 +35,19 @@
 19. Privacy request transitions are valid (`submitted -> triaged -> in_progress -> fulfilled/rejected`).
 20. Audit log rows are append-only.
 21. Admin consent/privacy RPCs only return members linked to the requested gym.
+22. Consent rows are immutable (`update/delete` attempts fail for all roles).
+23. Policy version rows are immutable after insert (new versions publish as new rows only).
+24. `record_user_consent` always writes audit + outbox events with policy bindings.
+25. `list_missing_required_consents` returns deterministic gaps for missing/revoked/reconsent-required states.
+26. `user_has_required_consents` blocks protected actions when re-consent is required.
 
 ## Rank + Trials
 
-22. `join_challenge` allows visible, non-ended challenges only.
-23. `leave_challenge` rejects completed participants and only removes caller-owned rows.
-24. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
-25. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
-26. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+27. `join_challenge` allows visible, non-ended challenges only.
+28. `leave_challenge` rejects completed participants and only removes caller-owned rows.
+29. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
+30. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
+31. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
 
 ## Performance targets for pilot
 

@@ -3,6 +3,7 @@
 Phase 3 runtime now includes a concrete workout logging path that validates:
 
 - `log_workout_atomic` inserts workout/exercise/set payloads atomically.
+- Required legal consent gate before workout logging.
 - Feed auto-post generation on workout insert.
 - XP/level/chain progression update on workout insert.
 - PR auto-detection and `pr_verified` feed event emission.

@@ -196,6 +196,10 @@ export interface PolicyVersion {
   documentUrl: string;
   effectiveAt: string;
   isActive: boolean;
+  publishedAt: string;
+  requiresReconsent: boolean;
+  changeSummary?: string | null;
+  supersedesPolicyVersionId?: string | null;
 }
 
 export interface ConsentRecord {
@@ -208,6 +212,18 @@ export interface ConsentRecord {
   revokedAt?: string | null;
   source: string;
   locale?: string | null;
+}
+
+export interface RequiredConsentGap {
+  consentType: ConsentType;
+  requiredPolicyVersionId?: string | null;
+  requiredPolicyVersion?: string | null;
+  reason:
+    | "missing_active_policy"
+    | "missing_consent_record"
+    | "latest_record_revoked"
+    | "missing_policy_binding"
+    | "reconsent_required";
 }
 
 export interface PrivacyRequest {

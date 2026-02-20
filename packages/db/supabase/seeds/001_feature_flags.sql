@@ -24,14 +24,19 @@ set description = excluded.description,
     updated_at = now();
 
 -- Initial policy versions
-insert into public.policy_version_tracking(policy_type, version, label, document_url, effective_at, is_active)
+insert into public.policy_version_tracking(
+  policy_type,
+  version,
+  label,
+  document_url,
+  effective_at,
+  is_active,
+  requires_reconsent,
+  change_summary
+)
 values
-  ('terms', 'v1.0.0', 'KRUXT Terms of Service', 'https://kruxt.app/legal/terms/v1.0.0', now(), true),
-  ('privacy', 'v1.0.0', 'KRUXT Privacy Notice', 'https://kruxt.app/legal/privacy/v1.0.0', now(), true),
-  ('health_data', 'v1.0.0', 'KRUXT Health Data Processing', 'https://kruxt.app/legal/health/v1.0.0', now(), true)
+  ('terms', 'v1.0.0', 'KRUXT Terms of Service', 'https://kruxt.app/legal/terms/v1.0.0', now(), true, true, 'Initial baseline policy'),
+  ('privacy', 'v1.0.0', 'KRUXT Privacy Notice', 'https://kruxt.app/legal/privacy/v1.0.0', now(), true, true, 'Initial baseline policy'),
+  ('health_data', 'v1.0.0', 'KRUXT Health Data Processing', 'https://kruxt.app/legal/health/v1.0.0', now(), true, true, 'Initial baseline policy')
 on conflict (policy_type, version)
-do update
-set label = excluded.label,
-    document_url = excluded.document_url,
-    effective_at = excluded.effective_at,
-    is_active = excluded.is_active;
+do nothing;

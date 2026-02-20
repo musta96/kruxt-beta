@@ -36,7 +36,7 @@ export function mobileAppScaffold() {
       ]
     },
     phase3: {
-      flow: "log workout -> auto proof post -> xp/chain/rank progress",
+      flow: "consent gate check -> log workout -> auto proof post -> xp/chain/rank progress",
       checklist: [...phase3WorkoutLoggingChecklist],
       rpcEndpoints: ["log_workout_atomic"],
       expectedSignals: ["feed_events.workout_logged", "feed_events.pr_verified", "profiles.xp_total"]
@@ -80,9 +80,14 @@ export function mobileAppScaffold() {
     phase8: {
       flow: "submit privacy request -> triage/processing -> fulfillment timeline",
       checklist: [...phase8PrivacyRequestsChecklist],
-      modules: ["PrivacyRequestCenter"],
+      modules: ["PrivacyRequestCenter", "ReconsentGate"],
       tables: ["privacy_requests", "consents", "policy_version_tracking", "audit_logs"],
-      rpcEndpoints: ["submit_privacy_request"],
+      rpcEndpoints: [
+        "submit_privacy_request",
+        "record_user_consent",
+        "list_missing_required_consents",
+        "user_has_required_consents"
+      ],
       edgeFunctions: ["privacy_request_processor"]
     }
   };

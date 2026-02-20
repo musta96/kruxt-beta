@@ -9,6 +9,8 @@ export const KRUXT_EVENT_TYPES = [
   "class.waitlist_promoted",
   "integration.sync_failed",
   "integration.sync_succeeded",
+  "consent.recorded",
+  "policy.version_published",
   "privacy.request_submitted",
   "privacy.request_status_changed",
   "privacy.request_overdue"

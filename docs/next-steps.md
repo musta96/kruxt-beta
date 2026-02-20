@@ -31,3 +31,6 @@
    - data export package generation
    - delete/anonymize fulfillment pipeline
    - breach response and compliance support tooling
+12. Add explicit re-consent UI flow:
+   - show `list_missing_required_consents` reasons in-app
+   - route users to policy acceptance screens before protected modules
