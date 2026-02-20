@@ -22,6 +22,7 @@
     "@vitejs/plugin-react-swc": "^4.2.3",
     "autoprefixer": "^10.4.24",
     "clsx": "^2.1.1",
+    "lovable-tagger": "^1.1.13",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^3.5.0",
