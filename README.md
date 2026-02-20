@@ -23,13 +23,16 @@ KRUXT is a social-first fitness platform with B2C workout tracking, gamification
 
 ## Quick start
 
-1. Install deps: `pnpm install`
-2. Run checks: `pnpm lint && pnpm typecheck && pnpm test`
-3. Review DB migrations: `packages/db/supabase/migrations/`
-4. Apply schema + seed with Supabase CLI:
+1. Prerequisites:
+   - Node.js `>=20` (CI uses Node `22`)
+   - Corepack enabled (`corepack enable`)
+2. Install deps: `pnpm install`
+3. Run checks: `pnpm lint && pnpm typecheck && pnpm test`
+4. Review DB migrations: `packages/db/supabase/migrations/`
+5. Apply schema + seed with Supabase CLI:
    - `./scripts/bootstrap.sh`
    - This syncs SQL into `supabase/migrations` and `supabase/seed.sql`, then runs `supabase db push --include-seed`.
-5. Deploy edge functions:
+6. Deploy edge functions:
    - `./scripts/deploy_functions.sh`
 
 ## Important

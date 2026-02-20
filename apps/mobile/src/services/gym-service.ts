@@ -409,8 +409,8 @@ export class GymService {
       profileById.set(row.id, row);
     }
 
-    return memberships
-      .map((row) => {
+    const rosterMembers = memberships
+      .map((row): GuildRosterMember | null => {
         const profile = profileById.get(row.user_id);
         if (!profile) {
           return null;
@@ -424,11 +424,11 @@ export class GymService {
           membershipStatus: row.membership_status,
           displayName: profile.display_name,
           username: profile.username,
-          avatarUrl: profile.avatar_url,
+          avatarUrl: profile.avatar_url ?? undefined,
           level: profile.level,
           rankTier: profile.rank_tier ?? "initiate",
           joinedAt: row.started_at ?? row.created_at
-        } satisfies GuildRosterMember;
+        };
       })
       .filter((member): member is GuildRosterMember => member !== null)
       .sort((a, b) => {
@@ -439,5 +439,7 @@ export class GymService {
 
         return a.displayName.localeCompare(b.displayName);
       });
+
+    return rosterMembers;
   }
 }
