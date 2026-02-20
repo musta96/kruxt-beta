@@ -131,6 +131,14 @@ export type PrivacyRequestStatus =
   | "completed"
   | "rejected";
 
+export type LegalHoldType =
+  | "litigation"
+  | "fraud_investigation"
+  | "payment_dispute"
+  | "safety_incident"
+  | "regulatory_inquiry"
+  | "other";
+
 export type RankTier =
   | "initiate"
   | "apprentice"
@@ -264,6 +272,38 @@ export interface PrivacyExportJob {
   startedAt?: string | null;
   finishedAt?: string | null;
   errorMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PrivacyDeleteJob {
+  id: string;
+  privacyRequestId: string;
+  userId: string;
+  status: Extract<SyncJobStatus, "queued" | "running" | "succeeded" | "failed" | "retry_scheduled">;
+  anonymizationSummary: Record<string, unknown>;
+  retryCount: number;
+  nextRetryAt?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  errorMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LegalHold {
+  id: string;
+  userId: string;
+  privacyRequestId?: string | null;
+  holdType: LegalHoldType;
+  reason: string;
+  isActive: boolean;
+  startsAt: string;
+  endsAt?: string | null;
+  createdBy?: string | null;
+  releasedBy?: string | null;
+  releasedAt?: string | null;
+  metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }

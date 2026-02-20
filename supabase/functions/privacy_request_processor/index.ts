@@ -9,6 +9,10 @@ interface PrivacyQueuePayload {
   exportUrlTtlSeconds?: number;
   exportRetryDelaySeconds?: number;
   exportMaxRetries?: number;
+  deleteQueueLimit?: number;
+  deleteClaimLimit?: number;
+  deleteRetryDelaySeconds?: number;
+  deleteMaxRetries?: number;
 }
 
 interface ClaimedPrivacyExportJob {
@@ -16,6 +20,18 @@ interface ClaimedPrivacyExportJob {
   privacy_request_id: string;
   user_id: string;
   retry_count: number;
+}
+
+interface ClaimedPrivacyDeleteJob {
+  id: string;
+  privacy_request_id: string;
+  user_id: string;
+  retry_count: number;
+}
+
+interface FailureResult {
+  status?: string;
+  finalFailure?: boolean;
 }
 
 function normalizeSignedUrl(url: string): string {
@@ -80,6 +96,10 @@ Deno.serve(async (request) => {
     const exportUrlTtlSeconds = clamp(payload.exportUrlTtlSeconds, 300, 604800, 86400);
     const exportRetryDelaySeconds = clamp(payload.exportRetryDelaySeconds, 60, 86400, 900);
     const exportMaxRetries = clamp(payload.exportMaxRetries, 1, 20, 5);
+    const deleteQueueLimit = clamp(payload.deleteQueueLimit, 1, 200, 25);
+    const deleteClaimLimit = clamp(payload.deleteClaimLimit, 1, 50, 6);
+    const deleteRetryDelaySeconds = clamp(payload.deleteRetryDelaySeconds, 60, 86400, 900);
+    const deleteMaxRetries = clamp(payload.deleteMaxRetries, 1, 20, 5);
 
     const { data, error } = await supabase.rpc("process_privacy_request_queue", {
       p_triage_limit: triageLimit,
@@ -200,15 +220,132 @@ Deno.serve(async (request) => {
           continue;
         }
 
-        const failureResult = (failureResultData ?? {}) as {
-          status?: string;
-          finalFailure?: boolean;
-        };
+        const failureResult = (failureResultData ?? {}) as FailureResult;
 
         if (failureResult.finalFailure || failureResult.status === "failed") {
           exportFinalFailedJobIds.push(job.id);
         } else {
           exportRetryScheduledJobIds.push(job.id);
+        }
+      }
+    }
+
+    const { data: queuedDeleteData, error: queueDeleteError } = await supabase.rpc("queue_privacy_delete_jobs", {
+      p_limit: deleteQueueLimit
+    });
+
+    if (queueDeleteError) {
+      throw queueDeleteError;
+    }
+
+    const { data: claimedDeleteData, error: claimDeleteError } = await supabase.rpc("claim_privacy_delete_jobs", {
+      p_limit: deleteClaimLimit
+    });
+
+    if (claimDeleteError) {
+      throw claimDeleteError;
+    }
+
+    const claimedDeleteJobs = (claimedDeleteData ?? []) as ClaimedPrivacyDeleteJob[];
+    const deleteSucceededJobIds: string[] = [];
+    const deleteFailedJobIds: string[] = [];
+    const deleteRetryScheduledJobIds: string[] = [];
+    const deleteFinalFailedJobIds: string[] = [];
+    const deleteErrors: Array<{ jobId: string; error: string }> = [];
+
+    for (const job of claimedDeleteJobs) {
+      try {
+        const { data: legalHoldData, error: legalHoldError } = await supabase.rpc("has_active_legal_hold", {
+          p_user_id: job.user_id
+        });
+
+        if (legalHoldError) {
+          throw legalHoldError;
+        }
+
+        if (Boolean(legalHoldData)) {
+          const holdError = "Active legal hold blocks delete fulfillment.";
+
+          const { data: holdFailureData, error: holdFailureError } = await supabase.rpc(
+            "fail_privacy_delete_job",
+            {
+              p_job_id: job.id,
+              p_error: holdError,
+              p_retry_delay_seconds: deleteRetryDelaySeconds,
+              p_max_retries: deleteMaxRetries,
+              p_force_final: true
+            }
+          );
+
+          deleteFailedJobIds.push(job.id);
+          deleteErrors.push({ jobId: job.id, error: holdError });
+
+          if (holdFailureError) {
+            deleteFinalFailedJobIds.push(job.id);
+            continue;
+          }
+
+          const holdFailureResult = (holdFailureData ?? {}) as FailureResult;
+
+          if (holdFailureResult.finalFailure || holdFailureResult.status === "failed") {
+            deleteFinalFailedJobIds.push(job.id);
+          } else {
+            deleteRetryScheduledJobIds.push(job.id);
+          }
+
+          continue;
+        }
+
+        const { data: anonymizationSummary, error: anonymizationError } = await supabase.rpc(
+          "apply_user_anonymization",
+          {
+            p_user_id: job.user_id,
+            p_privacy_request_id: job.privacy_request_id
+          }
+        );
+
+        if (anonymizationError) {
+          throw anonymizationError;
+        }
+
+        const { error: completeDeleteError } = await supabase.rpc("complete_privacy_delete_job", {
+          p_job_id: job.id,
+          p_anonymization_summary: anonymizationSummary ?? {}
+        });
+
+        if (completeDeleteError) {
+          throw completeDeleteError;
+        }
+
+        deleteSucceededJobIds.push(job.id);
+      } catch (jobError) {
+        const errorText = jobError instanceof Error ? jobError.message : String(jobError);
+
+        const { data: failureResultData, error: failureResultError } = await supabase.rpc(
+          "fail_privacy_delete_job",
+          {
+            p_job_id: job.id,
+            p_error: errorText,
+            p_retry_delay_seconds: deleteRetryDelaySeconds,
+            p_max_retries: deleteMaxRetries,
+            p_force_final: false
+          }
+        );
+
+        deleteFailedJobIds.push(job.id);
+        deleteErrors.push({ jobId: job.id, error: errorText });
+
+        if (failureResultError) {
+          deleteFinalFailedJobIds.push(job.id);
+          continue;
+        }
+
+        const failureResult = (failureResultData ?? {}) as FailureResult;
+
+        if (failureResult.finalFailure || failureResult.status === "failed") {
+          deleteFinalFailedJobIds.push(job.id);
+        } else {
+          deleteRetryScheduledJobIds.push(job.id);
         }
       }
     }
@@ -228,7 +365,18 @@ Deno.serve(async (request) => {
       exportFailedJobIds,
       exportRetryScheduledJobIds,
       exportFinalFailedJobIds,
-      exportErrors
+      exportErrors,
+      queuedDeleteCount: Number(queuedDeleteData ?? 0),
+      claimedDeleteCount: claimedDeleteJobs.length,
+      deleteSucceededCount: deleteSucceededJobIds.length,
+      deleteFailedCount: deleteFailedJobIds.length,
+      deleteRetryScheduledCount: deleteRetryScheduledJobIds.length,
+      deleteFinalFailedCount: deleteFinalFailedJobIds.length,
+      deleteSucceededJobIds,
+      deleteFailedJobIds,
+      deleteRetryScheduledJobIds,
+      deleteFinalFailedJobIds,
+      deleteErrors
     });
   } catch (error) {
     return jsonResponse({ error: String(error) }, 500);

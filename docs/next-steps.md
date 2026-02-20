@@ -28,7 +28,6 @@
 10. Configure scheduler for privacy queue:
    - call `privacy_request_processor` with triage/overdue/export limits
 11. Continue Phase 8 hardening:
-   - delete/anonymize fulfillment pipeline
    - breach response and compliance support tooling
 12. Add explicit re-consent UI flow:
    - show `list_missing_required_consents` reasons in-app

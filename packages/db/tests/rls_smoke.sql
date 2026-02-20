@@ -23,6 +23,8 @@ begin
       ('device_sync_cursors'),
       ('privacy_requests'),
       ('privacy_export_jobs'),
+      ('legal_holds'),
+      ('privacy_delete_jobs'),
       ('audit_logs'),
       ('push_notification_tokens')
   )

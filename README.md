@@ -99,3 +99,10 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Export pipeline RPCs: `queue_privacy_export_jobs`, `claim_privacy_export_jobs`, `build_privacy_export_payload`, `complete_privacy_export_job`, `fail_privacy_export_job`
 - Privacy processor now generates signed export packages in `privacy-exports` bucket
 - Export migration set starts at: `packages/db/supabase/migrations/202602190407_krux_beta_part4_s066.sql`
+
+## Phase 8 Runtime (Slice 4)
+
+- Legal hold registry + delete job queue table: `public.legal_holds`, `public.privacy_delete_jobs`
+- Delete/anonymize RPCs: `has_active_legal_hold`, `apply_user_anonymization`, `queue_privacy_delete_jobs`, `claim_privacy_delete_jobs`, `complete_privacy_delete_job`, `fail_privacy_delete_job`
+- Privacy processor now executes export + delete pipelines in one run with retry-safe outcomes
+- Delete/anonymize migration: `packages/db/supabase/migrations/202602190410_krux_beta_part4_s069.sql`

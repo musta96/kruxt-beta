@@ -14,9 +14,10 @@
 - Phase 8 runtime (slice 1): privacy request lifecycle services/flows + queue processor for triage and SLA breach marking
 - Phase 8 runtime (slice 2): immutable policy/consent registry + audited consent RPCs + workout re-consent gate
 - Phase 8 runtime (slice 3): export package generation with signed URL delivery + retry-safe queue processing
+- Phase 8 runtime (slice 4): delete/anonymize fulfillment pipeline with legal holds + retry-safe delete jobs
 - Phase 3 prep: workout atomic logging RPC + XP/chain trigger + feed event trigger
 - Phase 4 prep: social graph, blocks/reports, interaction schema + moderation storage
-- Phase 8 prep (remaining): delete/anonymize fulfillment pipeline, breach hooks, localization, support console hardening
+- Phase 8 prep (remaining): breach hooks, localization, support console hardening
 
 ## Pending implementation in runtime apps
 

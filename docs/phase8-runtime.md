@@ -10,6 +10,7 @@ Phase 8 runtime now includes three compliance execution slices:
 - Immutable consent records captured through audited RPCs
 - Re-consent gate RPCs wired into protected workout logging flow
 - Export job queue + storage delivery with signed URL expiration
+- Delete/anonymize job queue with legal-hold guardrails and retry-safe fulfillment
 
 ## Mobile entrypoints
 
@@ -52,6 +53,12 @@ Core methods:
 - `public.build_privacy_export_payload(uuid)`
 - `public.complete_privacy_export_job(...)`
 - `public.fail_privacy_export_job(...)`
+- `public.has_active_legal_hold(uuid)`
+- `public.apply_user_anonymization(uuid, uuid)`
+- `public.queue_privacy_delete_jobs(integer)`
+- `public.claim_privacy_delete_jobs(integer)`
+- `public.complete_privacy_delete_job(uuid, jsonb)`
+- `public.fail_privacy_delete_job(uuid, text, integer, integer, boolean)`
 
 ## Edge function behavior
 
@@ -62,6 +69,10 @@ Core methods:
   - queues and claims export jobs
   - uploads export JSON into `privacy-exports` bucket
   - writes expiring signed links and marks requests fulfilled
+  - queues and claims delete jobs
+  - blocks delete fulfillment when active legal hold exists
+  - applies anonymization and marks delete requests fulfilled
+  - retries or hard-fails delete jobs with audited events
 
 ## DB migration hooks
 
@@ -77,3 +88,4 @@ Core methods:
 - `packages/db/supabase/migrations/202602190407_krux_beta_part4_s066.sql`
 - `packages/db/supabase/migrations/202602190408_krux_beta_part4_s067.sql`
 - `packages/db/supabase/migrations/202602190409_krux_beta_part4_s068.sql`
+- `packages/db/supabase/migrations/202602190410_krux_beta_part4_s069.sql`

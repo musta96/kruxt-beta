@@ -45,14 +45,19 @@
 29. Export payload excludes secret credentials (no encrypted device tokens present in output).
 30. `complete_privacy_export_job` writes expiring response link metadata and emits `privacy.export_ready`.
 31. `fail_privacy_export_job` schedules retries and hard-fails with request rejection at max retry count.
+32. `queue_privacy_delete_jobs` queues only open `delete` requests and remains idempotent under retries.
+33. `has_active_legal_hold` blocks delete fulfillment for held users, with terminal fail when forced final.
+34. `apply_user_anonymization` is idempotent and removes/scrubs targeted rows without FK breakage.
+35. `complete_privacy_delete_job` marks request fulfilled and stores anonymization summary payload.
+36. `fail_privacy_delete_job` retries with backoff and rejects the request at final failure.
 
 ## Rank + Trials
 
-32. `join_challenge` allows visible, non-ended challenges only.
-33. `leave_challenge` rejects completed participants and only removes caller-owned rows.
-34. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
-35. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
-36. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+37. `join_challenge` allows visible, non-ended challenges only.
+38. `leave_challenge` rejects completed participants and only removes caller-owned rows.
+39. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
+40. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
+41. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
 
 ## Performance targets for pilot
 
