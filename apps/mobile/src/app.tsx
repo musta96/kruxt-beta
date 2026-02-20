@@ -7,6 +7,8 @@ import { phase4SocialFeedChecklist } from "./flows/phase4-social-feed";
 import { phase6IntegrationsUiChecklist } from "./flows/phase6-integrations-ui";
 import { phase7RankTrialsChecklist } from "./flows/phase7-rank-trials";
 import { phase8PrivacyRequestsChecklist } from "./flows/phase8-privacy-requests";
+import { phase10SupportCenterChecklist } from "./flows/phase10-support-center";
+import { phase10SecurityCenterChecklist } from "./flows/phase10-security-center";
 
 const defaultEnabledFlags: FeatureFlagKey[] = [
   "provider_apple_health_enabled",
@@ -127,6 +129,20 @@ export function mobileAppScaffold() {
         "user_has_required_consents"
       ],
       edgeFunctions: ["privacy_request_processor"]
+    },
+    phase10Support: {
+      flow: "open support center -> submit ticket -> message thread -> automation approval",
+      checklist: [...phase10SupportCenterChecklist],
+      modules: ["SupportCenter", "TicketThread", "AutomationApproval"],
+      tables: ["support_tickets", "support_ticket_messages", "support_automation_runs"],
+      rpcEndpoints: ["submit_support_ticket", "approve_support_automation_run"]
+    },
+    phase10Security: {
+      flow: "review settings -> manage trusted devices -> inspect auth timeline -> apply security actions",
+      checklist: [...phase10SecurityCenterChecklist],
+      modules: ["SecurityCenter", "TrustedDevices", "AuthTimeline"],
+      tables: ["user_security_settings", "user_trusted_devices", "user_auth_events"],
+      rpcEndpoints: ["log_user_auth_event"]
     }
   };
 }

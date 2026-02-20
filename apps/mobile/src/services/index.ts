@@ -13,3 +13,4 @@ export * from "./integration-service";
 export * from "./competition-service";
 export * from "./privacy-request-service";
 export * from "./support-service";
+export * from "./security-service";
