@@ -60,14 +60,18 @@
 44. `queue_incident_escalation_notifications` creates drill/live jobs with auditable escalation actions.
 45. `incident_notifier` drill mode processes jobs without external sends while preserving completion metadata.
 46. `fail_incident_notification_job` retries with backoff and marks terminal failures deterministically.
+47. `normalize_legal_locale` + `legal_locale_fallback_chain` always produce deterministic fallback (`requested -> en-US`).
+48. `resolve_legal_copy` and `list_legal_copy_bundle` return localized legal strings with stable fallback rank.
+49. Legal checklists in mobile/admin Phase 8 flows are key-driven (no hardcoded legal copy in flow definitions).
+50. Legal timestamp formatting returns locale/timezone-correct output for EU and US timezone inputs.
 
 ## Rank + Trials
 
-47. `join_challenge` allows visible, non-ended challenges only.
-48. `leave_challenge` rejects completed participants and only removes caller-owned rows.
-49. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
-50. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
-51. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+51. `join_challenge` allows visible, non-ended challenges only.
+52. `leave_challenge` rejects completed participants and only removes caller-owned rows.
+53. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
+54. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
+55. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
 
 ## Performance targets for pilot
 

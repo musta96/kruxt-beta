@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { LogWorkoutAtomicInput, RankTier, WorkoutType, WorkoutVisibility } from "@kruxt/types";
+import type {
+  LegalLocalizationOptions,
+  LogWorkoutAtomicInput,
+  RankTier,
+  WorkoutType,
+  WorkoutVisibility
+} from "@kruxt/types";
+import { translateLegalText } from "@kruxt/types";
 
 import { KruxtAppError, throwIfError } from "./errors";
 
@@ -164,7 +171,10 @@ function toExercisePayload(
 }
 
 export class WorkoutService {
-  constructor(private readonly supabase: SupabaseClient) {}
+  constructor(
+    private readonly supabase: SupabaseClient,
+    private readonly localization: Pick<LegalLocalizationOptions, "locale"> = {}
+  ) {}
 
   private async requireCurrentUserId(): Promise<string> {
     const { data: authData, error: authError } = await this.supabase.auth.getUser();
@@ -197,7 +207,7 @@ export class WorkoutService {
 
     throw new KruxtAppError(
       "RECONSENT_REQUIRED",
-      "Legal re-consent is required before workout logging can continue.",
+      translateLegalText("legal.error.reconsent_required_workout", this.localization),
       { missing: (missingData as RequiredConsentGapRow[]) ?? [] }
     );
   }

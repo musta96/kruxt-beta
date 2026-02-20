@@ -1,6 +1,6 @@
 # Immediate Next Steps
 
-1. Re-run schema sync to apply latest Phase 8 (slice 6) migrations:
+1. Re-run schema sync to apply latest Phase 8 (slice 7) migrations:
    - `./scripts/bootstrap.sh`
    - (syncs `packages/db/supabase/migrations/*` + `packages/db/supabase/seeds/001_feature_flags.sql` and pushes linked DB)
 2. Verify smoke checks in target DB:

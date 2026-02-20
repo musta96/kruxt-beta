@@ -13,6 +13,7 @@ Phase 8 runtime now includes three compliance execution slices:
 - Delete/anonymize job queue with legal-hold guardrails and retry-safe fulfillment
 - Audit log hardening with append-only integrity chain and drift checks
 - Breach-response incident lifecycle + deadline/escalation notifier stubs
+- Localization baseline for legal copy with locale fallback + timestamp formatting
 
 ## Mobile entrypoints
 
@@ -72,6 +73,10 @@ Core methods:
 - `public.claim_incident_notification_jobs(integer)`
 - `public.complete_incident_notification_job(uuid, jsonb)`
 - `public.fail_incident_notification_job(uuid, text, integer, integer)`
+- `public.normalize_legal_locale(text)`
+- `public.legal_locale_fallback_chain(text)`
+- `public.resolve_legal_copy(text, text)`
+- `public.list_legal_copy_bundle(text, text)`
 
 ## Edge function behavior
 
@@ -92,6 +97,10 @@ Core methods:
   - runs provider-agnostic email/webhook stub notifiers
   - supports drill mode (`forceDrill`) to avoid live external notices
   - completes/retries notification jobs via SQL RPCs
+- `packages/types/src/legal-localization.ts`
+  - translation-key resolver for legal/compliance copy
+  - deterministic locale fallback chain (`requested -> en-US`)
+  - timezone-safe legal timestamp formatter
 
 ## DB migration hooks
 
@@ -110,3 +119,4 @@ Core methods:
 - `packages/db/supabase/migrations/202602190410_krux_beta_part4_s069.sql`
 - `packages/db/supabase/migrations/202602190411_krux_beta_part4_s070.sql`
 - `packages/db/supabase/migrations/202602190412_krux_beta_part4_s071.sql`
+- `packages/db/supabase/migrations/202602190413_krux_beta_part4_s072.sql`

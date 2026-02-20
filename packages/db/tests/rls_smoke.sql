@@ -28,6 +28,8 @@ begin
       ('security_incidents'),
       ('incident_actions'),
       ('incident_notification_jobs'),
+      ('legal_copy_keys'),
+      ('legal_copy_translations'),
       ('audit_logs'),
       ('push_notification_tokens')
   )
