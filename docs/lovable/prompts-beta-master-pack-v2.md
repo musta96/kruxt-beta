@@ -11,6 +11,10 @@ For deeper Phase 10 control-plane/security generation, use extension pack: `docs
 4. Never change backend contracts or SQL table names in UI generation.
 5. For each prompt, require explicit loading, empty, error, retry, and success states.
 6. Add accessibility baseline: Dynamic Type, AA contrast, keyboard focus order, screen-reader labels.
+7. This repository is a monorepo. Never scaffold a new root app.
+8. Never create root-level `src/`, `index.html`, `vite.config.*`, `tailwind.config.*`, `postcss.config.*`, `tsconfig.json`, or `package-lock.json`.
+9. Only create/update files inside `apps/mobile/**` for mobile prompts and `apps/admin/**` for admin prompts.
+10. Keep package manager `pnpm`; do not introduce npm lockfiles.
 
 ## Global System Prompt (Run Once First)
 
@@ -48,6 +52,12 @@ Create app shells:
 
 ```text
 Create module "OnboardingFlow" for KRUXT mobile app.
+
+Repo constraints (mandatory):
+- This is a monorepo with existing contracts.
+- Write only under `apps/mobile/**`.
+- Do not create or modify root app scaffolding files.
+- Do not add new package manager lockfiles.
 
 Flow steps:
 1) Welcome (brand statement + CTA "Log to claim")
