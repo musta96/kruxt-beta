@@ -11,3 +11,4 @@ export * from "./flows/phase6-integrations";
 export * from "./flows/phase6-integrations-ui";
 export * from "./flows/phase7-rank-trials";
 export * from "./flows/phase8-privacy-requests";
+export * from "./flows/phase10-support-center";

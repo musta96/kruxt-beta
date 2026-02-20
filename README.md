@@ -158,3 +158,36 @@ Operational features are controlled by flags in `public.feature_flags`.
 
 - Closed-beta rollout checklist and KPI gates: `docs/phase9-closed-beta-rollout.md`
 - Includes Pavia readiness criteria, weekly KPI tracking board, rollback playbook, and US+EU expansion gates
+
+## Phase 10 Foundations (Customization + Support + Monetization Controls)
+
+- Gym customization schema: `public.gym_brand_settings`, `public.gym_feature_settings`
+- Billing/invoicing adapter schema: `public.invoice_provider_connections`, `public.invoice_compliance_profiles`, `public.invoice_delivery_jobs`
+- Support + approval pipeline schema: `public.support_tickets`, `public.support_ticket_messages`, `public.support_automation_runs`
+- Monetization experiment schema: `public.consumer_plans`, `public.consumer_plan_prices`, `public.consumer_entitlements`, `public.pricing_experiments`, `public.pricing_experiment_variants`, `public.pricing_experiment_assignments`, `public.discount_campaigns`, `public.discount_redemptions`
+- Platform SaaS billing schema: `public.platform_plans`, `public.gym_platform_subscriptions`, `public.gym_platform_invoices`, `public.gym_platform_payment_transactions`, `public.gym_platform_refunds`
+- Gym RBAC/workforce/CRM schema: `public.gym_permission_catalog`, `public.gym_role_permissions`, `public.gym_user_permission_overrides`, `public.staff_shifts`, `public.staff_time_entries`, `public.gym_kpi_daily_snapshots`, `public.gym_crm_leads`, `public.gym_crm_lead_activities`
+- Platform control-plane governance schema: `public.platform_operator_accounts`, `public.gym_support_access_grants`, `public.gym_support_access_sessions`, `public.platform_kpi_daily_snapshots`, `public.platform_feature_overrides`, `public.user_data_sharing_preferences`, `public.data_partners`, `public.data_products`, `public.data_partner_access_grants`, `public.data_partner_exports`
+- Account security schema: `public.user_security_settings`, `public.user_trusted_devices`, `public.user_auth_events`
+- Add-on/partner/data-ops schema: `public.gym_addon_catalog`, `public.gym_addon_subscriptions`, `public.gym_advanced_analytics_views`, `public.gym_automation_playbooks`, `public.gym_automation_runs`, `public.partner_marketplace_apps`, `public.gym_partner_app_installs`, `public.partner_revenue_events`, `public.data_aggregation_jobs`, `public.data_anonymization_checks`, `public.data_release_approvals`
+- Support RPCs: `public.submit_support_ticket(...)`, `public.approve_support_automation_run(...)`
+- Migration: `packages/db/supabase/migrations/202602200001_krux_beta_part5_s001_customization_support.sql`
+- Migration: `packages/db/supabase/migrations/202602200002_krux_beta_part5_s002_monetization_experiments.sql`
+- Migration: `packages/db/supabase/migrations/202602200003_krux_beta_part5_s003_platform_billing.sql`
+- Migration: `packages/db/supabase/migrations/202602200004_krux_beta_part5_s004_gym_ops_rbac_workforce.sql`
+- Migration: `packages/db/supabase/migrations/202602200005_krux_beta_part5_s005_platform_control_plane_governance.sql`
+- Migration: `packages/db/supabase/migrations/202602200006_krux_beta_part5_s006_account_security_foundations.sql`
+- Migration: `packages/db/supabase/migrations/202602200007_krux_beta_part5_s007_addons_partner_dataops.sql`
+- Admin runtime: `apps/admin/src/services/customization-support-service.ts`, `apps/admin/src/flows/phase10-customization-support.ts`
+- Mobile runtime: `apps/mobile/src/services/support-service.ts`, `apps/mobile/src/flows/phase10-support-center.ts`
+- Usage notes: `docs/phase10-runtime.md`
+
+## Build References
+
+- Lovable master prompt pack: `docs/lovable/prompts-beta-master-pack-v2.md`
+- Business plan + competitor + monetization gap review: `docs/strategy/business-plan-gap-analysis-2026-02-20.md`
+- Pavia pilot distribution/device strategy: `docs/strategy/pavia-pilot-distribution-and-surface-strategy-2026-02-20.md`
+- Founder control-plane + governance strategy: `docs/strategy/platform-control-plane-and-governance-2026-02-20.md`
+- Revenue extensions foundation: `docs/strategy/revenue-extensions-foundation-2026-02-20.md`
+- 24/7 support/maintenance agent architecture: `docs/ops/maintenance-agent-architecture.md`
+- Change management workflow: `docs/ops/change-management-workflow.md`
