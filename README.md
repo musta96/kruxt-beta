@@ -43,8 +43,10 @@ Operational features are controlled by flags in `public.feature_flags`.
 ## Phase 2 Runtime
 
 - Mobile onboarding + guild hall flows: `apps/mobile/src/services`, `apps/mobile/src/flows`
+- UI onboarding controller for screen wiring + recoverable errors: `apps/mobile/src/flows/phase2-onboarding-ui.ts`
 - Admin staff ops services + flows: `apps/admin/src/services`, `apps/admin/src/flows`
 - Usage notes: `docs/phase2-runtime.md`
+- Screen wiring guide: `docs/phase2-mobile-onboarding-ui-wiring.md`
 
 ## Phase 3 Runtime
 

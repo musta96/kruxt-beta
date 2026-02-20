@@ -10,11 +10,14 @@ This repository now includes executable TypeScript service modules for:
 
 - `apps/mobile/src/services/phase2-onboarding-service.ts`
 - `apps/mobile/src/flows/phase2-onboarding.ts`
+- `apps/mobile/src/flows/phase2-onboarding-ui.ts`
 - `apps/mobile/src/flows/guild-hall.ts`
 
 Core methods:
 
 - `Phase2OnboardingService.run(...)`
+- `createPhase2OnboardingUiFlow(...).validate(...)`
+- `createPhase2OnboardingUiFlow(...).submit(...)`
 - `ProfileService.ensureProfile(...)`
 - `PolicyService.captureBaselineConsents(...)`
 - `GymService.createGymWithLeaderMembership(...)`
@@ -50,6 +53,11 @@ Supporting DB RPCs for strict-RLS admin reads:
 ## Wiring expectations
 
 - Mobile app should call onboarding flow immediately after auth submit.
+- Mobile onboarding screens should use `createPhase2OnboardingUiFlow` for:
+  - per-step validation (`auth/profile/consents/gym/review`)
+  - recoverable user-readable errors with step targeting
+  - end-to-end submit that returns `nextRoute = guild_hall`
 - Mobile app can load guild hall state after onboarding/auth via `createGuildHallFlow`.
 - Admin routes should enforce `requireGymStaff` before any management action.
 - All actions rely on existing RLS policies in the migration file.
+- Detailed screen wiring reference: `docs/phase2-mobile-onboarding-ui-wiring.md`.
