@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ConsentRecord,
+  LegalLocalizationOptions,
   PolicyVersion,
   PublishPolicyVersionInput,
   RequiredConsentGap,
   UpsertConsentInput
 } from "@kruxt/types";
+import { translateLegalText } from "@kruxt/types";
 
 import { KruxtAppError, throwIfError } from "./errors";
 
@@ -98,7 +100,10 @@ export interface BaselineConsentInput extends Partial<BaselinePolicyIds> {
 }
 
 export class PolicyService {
-  constructor(private readonly supabase: SupabaseClient) {}
+  constructor(
+    private readonly supabase: SupabaseClient,
+    private readonly localization: Pick<LegalLocalizationOptions, "locale"> = {}
+  ) {}
 
   private consentPolicyType(consentType: ConsentRecord["consentType"]): PolicyVersion["policyType"] {
     if (consentType === "terms") {
@@ -291,7 +296,7 @@ export class PolicyService {
     const gaps = await this.listRequiredConsentGaps(userId);
     throw new KruxtAppError(
       "RECONSENT_REQUIRED",
-      "Legal re-consent is required before this action can continue.",
+      translateLegalText("legal.error.reconsent_required_action", this.localization),
       { gaps }
     );
   }
@@ -326,7 +331,7 @@ export class PolicyService {
     if (!termsPolicy?.id || !privacyPolicy?.id || !healthDataPolicy?.id) {
       throw new KruxtAppError(
         "POLICY_BASELINE_MISSING",
-        "Missing active baseline policies for terms, privacy, or health data processing."
+        translateLegalText("legal.error.policy_baseline_missing", this.localization)
       );
     }
 
@@ -345,7 +350,7 @@ export class PolicyService {
     if (!acceptTerms || !acceptPrivacy || !acceptHealthData) {
       throw new KruxtAppError(
         "BASELINE_CONSENT_REQUIRED",
-        "Terms, privacy, and health-data processing consent are required to continue."
+        translateLegalText("legal.error.baseline_consent_required", this.localization)
       );
     }
 

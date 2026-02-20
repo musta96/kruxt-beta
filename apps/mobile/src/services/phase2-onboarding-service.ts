@@ -112,8 +112,10 @@ export class Phase2OnboardingService {
     const userEmail = currentUser.email ?? credentials.email;
 
     const profile = await this.profiles.ensureProfile(userId, userEmail, input.profile ?? {});
+    const policyLocale = input.profile?.locale ?? input.baselineConsents.locale ?? null;
+    const localizedPolicies = new PolicyService(this.supabase, { locale: policyLocale });
 
-    const consents = await this.policies.captureBaselineConsents(userId, {
+    const consents = await localizedPolicies.captureBaselineConsents(userId, {
       ...input.baselineConsents,
       locale: input.profile?.locale ?? input.baselineConsents.locale,
       source: "mobile"

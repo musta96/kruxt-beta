@@ -121,3 +121,25 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Escalation + notifier queue RPCs: `queue_incident_escalation_notifications`, `claim_incident_notification_jobs`, `complete_incident_notification_job`, `fail_incident_notification_job`
 - Edge notifier stub: `supabase/functions/incident_notifier` (provider-agnostic email/webhook interface with drill-safe mode)
 - Breach-response migration: `packages/db/supabase/migrations/202602190412_krux_beta_part4_s071.sql`
+
+## Phase 8 Runtime (Slice 7)
+
+- Legal localization registry tables: `public.legal_copy_keys`, `public.legal_copy_translations`
+- Locale fallback RPCs: `normalize_legal_locale`, `legal_locale_fallback_chain`, `resolve_legal_copy`, `list_legal_copy_bundle`
+- Shared app localization utility: `packages/types/src/legal-localization.ts`
+- Critical mobile/admin legal flows now use translation keys + localized legal timestamp formatting
+- Localization migration: `packages/db/supabase/migrations/202602190413_krux_beta_part4_s072.sql`
+
+## Phase 8 Runtime (Slice 8)
+
+- Admin compliance queue supports deterministic filters (`status`, `requestType`, `SLA badge`, `userQuery`)
+- SLA badges derived in flow layer: `breached`, `at_risk`, `on_track`, `no_due_date`
+- Active policy version visibility wired for staff compliance workflows
+- Privacy metrics RPC: `admin_get_privacy_ops_metrics` (`open`, `overdue`, `avg completion hours`, window outcomes)
+- Compliance operator runbook: `docs/compliance-ops-runbook.md` mapped to console actions
+- Compliance console hardening migration: `packages/db/supabase/migrations/202602190414_krux_beta_part4_s073.sql`
+
+## Phase 9 Rollout
+
+- Closed-beta rollout checklist and KPI gates: `docs/phase9-closed-beta-rollout.md`
+- Includes Pavia readiness criteria, weekly KPI tracking board, rollback playbook, and US+EU expansion gates

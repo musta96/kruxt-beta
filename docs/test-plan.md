@@ -60,14 +60,30 @@
 44. `queue_incident_escalation_notifications` creates drill/live jobs with auditable escalation actions.
 45. `incident_notifier` drill mode processes jobs without external sends while preserving completion metadata.
 46. `fail_incident_notification_job` retries with backoff and marks terminal failures deterministically.
+47. `normalize_legal_locale` + `legal_locale_fallback_chain` always produce deterministic fallback (`requested -> en-US`).
+48. `resolve_legal_copy` and `list_legal_copy_bundle` return localized legal strings with stable fallback rank.
+49. Legal checklists in mobile/admin Phase 8 flows are key-driven (no hardcoded legal copy in flow definitions).
+50. Legal timestamp formatting returns locale/timezone-correct output for EU and US timezone inputs.
+51. `admin_get_privacy_ops_metrics` returns deterministic open/overdue counters and bounded measurement window.
+52. Phase 8 compliance queue filters (`status/type/SLA/user`) return stable subsets for identical inputs.
+53. SLA badge derivation in admin flow is deterministic at boundary conditions (`breached`, `at_risk`, `on_track`, `no_due_date`).
+54. Compliance runbook mapping exists and matches admin queue actions (`load`, `transition`, `metrics`).
+55. Admin compliance view exposes active policy versions with effective dates for operator verification.
 
 ## Rank + Trials
 
-47. `join_challenge` allows visible, non-ended challenges only.
-48. `leave_challenge` rejects completed participants and only removes caller-owned rows.
-49. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
-50. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
-51. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+56. `join_challenge` allows visible, non-ended challenges only.
+57. `leave_challenge` rejects completed participants and only removes caller-owned rows.
+58. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
+59. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
+60. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+
+## Rollout Gates
+
+61. Pavia pilot readiness checklist is fully completed before invite activation.
+62. Weekly KPI board is updated on cadence with explicit gate outcome (`Pass`, `Conditional`, `Fail`).
+63. Incident rollback playbook includes ordered flag rollback actions and communication SLA.
+64. US+EU expansion criteria are tracked and require two consecutive passing weekly reviews.
 
 ## Performance targets for pilot
 

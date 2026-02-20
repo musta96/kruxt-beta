@@ -6,11 +6,14 @@ import type {
   GymRole,
   IncidentStatus,
   MembershipStatus,
+  PolicyVersion,
   PrivacyRequestStatus
 } from "@kruxt/types";
 
 import { KruxtAdminError, throwIfAdminError } from "./errors";
 import { StaffAccessService } from "./staff-access-service";
+
+type OpenPrivacyRequestStatus = Extract<PrivacyRequestStatus, "submitted" | "triaged" | "in_progress">;
 
 type MembershipRow = {
   id: string;
@@ -39,7 +42,7 @@ type OpenPrivacyRequestRow = {
   id: string;
   user_id: string;
   request_type: "access" | "export" | "delete" | "rectify" | "restrict_processing";
-  status: PrivacyRequestStatus;
+  status: OpenPrivacyRequestStatus;
   submitted_at: string;
   due_at: string | null;
   sla_breached_at: string | null;
@@ -53,6 +56,30 @@ type GymOpsSummaryRow = {
   upcoming_classes: number;
   pending_waitlist_entries: number;
   open_privacy_requests: number;
+};
+
+type PrivacyOpsMetricsRow = {
+  gym_id: string;
+  open_requests: number;
+  overdue_requests: number;
+  avg_completion_hours: number;
+  fulfilled_requests_window: number;
+  rejected_requests_window: number;
+  measured_window_days: number;
+};
+
+type PolicyVersionRow = {
+  id: string;
+  policy_type: PolicyVersion["policyType"];
+  version: string;
+  label: string | null;
+  document_url: string;
+  effective_at: string;
+  is_active: boolean;
+  published_at: string;
+  requires_reconsent: boolean;
+  change_summary: string | null;
+  supersedes_policy_version_id: string | null;
 };
 
 type WaitlistWithClassRow = {
@@ -113,7 +140,7 @@ export interface OpenPrivacyRequest {
   id: string;
   userId: string;
   type: OpenPrivacyRequestRow["request_type"];
-  status: PrivacyRequestStatus;
+  status: OpenPrivacyRequestStatus;
   submittedAt: string;
   dueAt?: string | null;
   slaBreachedAt?: string | null;
@@ -162,6 +189,16 @@ export interface SecurityIncidentOperatorItem {
   updatedAt: string;
 }
 
+export interface PrivacyOpsMetrics {
+  gymId: string;
+  openRequests: number;
+  overdueRequests: number;
+  avgCompletionHours: number;
+  fulfilledRequestsWindow: number;
+  rejectedRequestsWindow: number;
+  measuredWindowDays: number;
+}
+
 function mapMembership(row: MembershipRow): GymMembership {
   return {
     id: row.id,
@@ -197,6 +234,22 @@ function mapOpsSummary(row: GymOpsSummaryRow): GymOpsSummary {
     upcomingClasses: row.upcoming_classes,
     pendingWaitlistEntries: row.pending_waitlist_entries,
     openPrivacyRequests: row.open_privacy_requests
+  };
+}
+
+function mapPolicyVersion(row: PolicyVersionRow): PolicyVersion {
+  return {
+    id: row.id,
+    policyType: row.policy_type,
+    version: row.version,
+    label: row.label,
+    documentUrl: row.document_url,
+    effectiveAt: row.effective_at,
+    isActive: row.is_active,
+    publishedAt: row.published_at,
+    requiresReconsent: row.requires_reconsent,
+    changeSummary: row.change_summary,
+    supersedesPolicyVersionId: row.supersedes_policy_version_id
   };
 }
 
@@ -387,6 +440,57 @@ export class GymAdminService {
       slaBreachedAt: row.sla_breached_at as string | null,
       isOverdue: Boolean(row.is_overdue)
     }));
+  }
+
+  async getPrivacyOpsMetrics(gymId: string, windowDays = 30): Promise<PrivacyOpsMetrics> {
+    await this.access.requireGymStaff(gymId);
+    const boundedWindowDays = Math.max(1, Math.min(windowDays, 365));
+
+    const { data, error } = await this.supabase
+      .rpc("admin_get_privacy_ops_metrics", { p_gym_id: gymId, p_window_days: boundedWindowDays })
+      .maybeSingle();
+
+    throwIfAdminError(error, "ADMIN_PRIVACY_OPS_METRICS_FAILED", "Unable to load privacy ops metrics.");
+
+    if (!data) {
+      return {
+        gymId,
+        openRequests: 0,
+        overdueRequests: 0,
+        avgCompletionHours: 0,
+        fulfilledRequestsWindow: 0,
+        rejectedRequestsWindow: 0,
+        measuredWindowDays: boundedWindowDays
+      };
+    }
+
+    const row = data as PrivacyOpsMetricsRow;
+    return {
+      gymId: row.gym_id,
+      openRequests: Number(row.open_requests ?? 0),
+      overdueRequests: Number(row.overdue_requests ?? 0),
+      avgCompletionHours: Number(row.avg_completion_hours ?? 0),
+      fulfilledRequestsWindow: Number(row.fulfilled_requests_window ?? 0),
+      rejectedRequestsWindow: Number(row.rejected_requests_window ?? 0),
+      measuredWindowDays: Number(row.measured_window_days ?? boundedWindowDays)
+    };
+  }
+
+  async listActivePolicyVersions(gymId: string): Promise<PolicyVersion[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase
+      .from("policy_version_tracking")
+      .select(
+        "id,policy_type,version,label,document_url,effective_at,is_active,published_at,requires_reconsent,change_summary,supersedes_policy_version_id"
+      )
+      .eq("is_active", true)
+      .order("policy_type", { ascending: true })
+      .order("effective_at", { ascending: false });
+
+    throwIfAdminError(error, "ADMIN_POLICY_VERSIONS_LIST_FAILED", "Unable to load active policy versions.");
+
+    return ((data as PolicyVersionRow[]) ?? []).map(mapPolicyVersion);
   }
 
   async listSecurityIncidents(
