@@ -1,6 +1,7 @@
 # KRUXT Lovable Prompt Master Pack (Beta v2)
 
 Use prompts in strict order. Generate one module at a time, validate wiring, then commit.
+For deeper Phase 10 control-plane/security generation, use extension pack: `docs/lovable/prompts-phase10-detailed-pack-v3.md`.
 
 ## Operating Rules for Lovable Runs
 
