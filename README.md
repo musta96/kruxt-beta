@@ -106,3 +106,10 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Delete/anonymize RPCs: `has_active_legal_hold`, `apply_user_anonymization`, `queue_privacy_delete_jobs`, `claim_privacy_delete_jobs`, `complete_privacy_delete_job`, `fail_privacy_delete_job`
 - Privacy processor now executes export + delete pipelines in one run with retry-safe outcomes
 - Delete/anonymize migration: `packages/db/supabase/migrations/202602190410_krux_beta_part4_s069.sql`
+
+## Phase 8 Runtime (Slice 5)
+
+- Audit-log integrity chain: `public.audit_logs.integrity_seq`, `prev_entry_hash`, `entry_hash`
+- Integrity monitoring RPCs: `audit_log_integrity_drift`, `audit_log_integrity_summary`
+- Security event coverage trigger: `trg_event_outbox_audit_security_event` emits `security.event_outbox`
+- Audit hardening migration: `packages/db/supabase/migrations/202602190411_krux_beta_part4_s070.sql`

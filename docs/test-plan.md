@@ -50,14 +50,18 @@
 34. `apply_user_anonymization` is idempotent and removes/scrubs targeted rows without FK breakage.
 35. `complete_privacy_delete_job` marks request fulfilled and stores anonymization summary payload.
 36. `fail_privacy_delete_job` retries with backoff and rejects the request at final failure.
+37. Audit log rows are immutable and reject `update/delete` with append-only guardrails.
+38. `audit_log_integrity_drift` detects sequence/hash mismatches after forced tamper simulation.
+39. Security-relevant `event_outbox` inserts produce `security.event_outbox` audit entries.
+40. Staff/user direct inserts into `audit_logs` are denied; service pipeline inserts remain valid.
 
 ## Rank + Trials
 
-37. `join_challenge` allows visible, non-ended challenges only.
-38. `leave_challenge` rejects completed participants and only removes caller-owned rows.
-39. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
-40. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
-41. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+41. `join_challenge` allows visible, non-ended challenges only.
+42. `leave_challenge` rejects completed participants and only removes caller-owned rows.
+43. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
+44. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
+45. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
 
 ## Performance targets for pilot
 
