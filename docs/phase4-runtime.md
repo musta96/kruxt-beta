@@ -13,6 +13,7 @@ Phase 4 runtime now includes mobile service-layer logic for:
 - `apps/mobile/src/services/feed-service.ts`
 - `apps/mobile/src/services/notification-service.ts`
 - `apps/mobile/src/flows/phase4-social-feed.ts`
+- `apps/mobile/src/flows/phase4-proof-feed-ui.ts`
 
 Core methods:
 
@@ -25,6 +26,10 @@ Core methods:
 - `FeedService.listHomeFeed(...)`
 - `NotificationService.getPreferences(...)`
 - `NotificationService.registerPushToken(...)`
+- `createPhase4ProofFeedUiFlow().reactToWorkout(...)`
+- `createPhase4ProofFeedUiFlow().commentOnWorkout(...)`
+- `createPhase4ProofFeedUiFlow().blockActor(...)`
+- `createPhase4ProofFeedUiFlow().reportContent(...)`
 
 ## DB migration hooks
 
@@ -33,3 +38,11 @@ Core methods:
 - `packages/db/supabase/migrations/202602190361_krux_beta_part3_s020.sql`
 
 These add `public.push_notification_tokens` with strict self-owned RLS.
+
+## Wiring expectations
+
+- Proof Feed screens should use `createPhase4ProofFeedUiFlow` for:
+  - stateful feed loading with blocked-actor filtering
+  - reaction/comment mutations that return refreshed snapshots
+  - moderation actions (`block`, `report`) with persisted records
+- Runtime wiring details: `docs/phase4-proof-feed-ui-wiring.md`.

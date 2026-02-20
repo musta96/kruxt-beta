@@ -105,6 +105,13 @@
 77. Successful submit returns verification flags with `totalsUpdated=true`, `proofEventCreated=true`, `progressUpdated=true`.
 78. Missing post-submit signals return recoverable `WORKOUT_LOGGER_SIGNALS_INCOMPLETE` error.
 
+## Phase 4 Proof Feed UI
+
+79. `createPhase4ProofFeedUiFlow.load` filters blocked actor IDs from feed cards.
+80. `reactToWorkout` persists reaction state and returns refreshed snapshot.
+81. `commentOnWorkout` persists comment state and returns refreshed snapshot plus filtered thread.
+82. `reportContent` creates moderation record and includes it in refreshed `myReports`.
+
 ## Performance targets for pilot
 
 - Feed p95 load < 500ms for 50-card page.

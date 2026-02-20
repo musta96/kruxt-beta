@@ -59,7 +59,14 @@ export function mobileAppScaffold() {
     },
     phase4: {
       flow: "load ranked feed -> social interactions -> moderation safety -> notifications",
+      screenFlow: "proof feed cards -> react/comment -> block/report -> refreshed feed snapshot",
       checklist: [...phase4SocialFeedChecklist],
+      recoverableErrors: [
+        "SOCIAL_REACTION_CREATE_FAILED",
+        "SOCIAL_COMMENT_CREATE_FAILED",
+        "SOCIAL_REPORT_CREATE_FAILED",
+        "SOCIAL_BLOCK_CREATE_FAILED"
+      ],
       tables: [
         "feed_events",
         "social_connections",

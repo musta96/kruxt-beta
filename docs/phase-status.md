@@ -10,6 +10,7 @@
 - Phase 3 runtime: workout logging flow with proof-feed and progress verification
 - Phase 3 mobile UI wiring: WorkoutLogger controller with draft helpers, validation, and signal checks
 - Phase 4 runtime: social graph/feed ranking/notification service layer for mobile
+- Phase 4 mobile UI wiring: Proof Feed controller with interaction + moderation refresh loops
 - Phase 5 runtime: admin B2B ops service layer for classes, waitlist, waivers, contracts, check-ins, and billing telemetry
 - Phase 6 runtime: Apple/Garmin integration pipeline (mobile integration service + webhook ingest + sync dispatcher + cursor persistence)
 - Phase 6 monitoring runtime: admin integration health + sync failure monitor flow for gym staff

@@ -62,8 +62,10 @@ Operational features are controlled by flags in `public.feature_flags`.
 
 - Social/feed/notification services: `apps/mobile/src/services/social-service.ts`, `apps/mobile/src/services/feed-service.ts`, `apps/mobile/src/services/notification-service.ts`
 - Social feed flow: `apps/mobile/src/flows/phase4-social-feed.ts`
+- Proof Feed UI controller: `apps/mobile/src/flows/phase4-proof-feed-ui.ts`
 - Push token schema + RLS migration set starts at: `packages/db/supabase/migrations/202602190355_krux_beta_part3_s014.sql`
 - Usage notes: `docs/phase4-runtime.md`
+- Screen wiring guide: `docs/phase4-proof-feed-ui-wiring.md`
 
 ## Phase 5 Runtime
 
