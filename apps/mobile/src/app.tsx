@@ -78,9 +78,9 @@ export function mobileAppScaffold() {
       edgeFunctions: ["rank_recompute_weekly"]
     },
     phase8: {
-      flow: "submit privacy request -> triage/processing -> fulfillment timeline",
+      flow: "submit privacy request -> triage/processing -> export package/sign link -> fulfillment timeline",
       checklist: [...phase8PrivacyRequestsChecklist],
-      modules: ["PrivacyRequestCenter", "ReconsentGate"],
+      modules: ["PrivacyRequestCenter", "ReconsentGate", "ExportVault"],
       tables: ["privacy_requests", "consents", "policy_version_tracking", "audit_logs"],
       rpcEndpoints: [
         "submit_privacy_request",

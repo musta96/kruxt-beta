@@ -22,6 +22,7 @@ begin
       ('device_connections'),
       ('device_sync_cursors'),
       ('privacy_requests'),
+      ('privacy_export_jobs'),
       ('audit_logs'),
       ('push_notification_tokens')
   )

@@ -5,12 +5,14 @@ import { createMobileSupabaseClient, PrivacyRequestService } from "../services";
 export interface Phase8PrivacyRequestsSnapshot {
   openRequests: PrivacyRequest[];
   recentRequests: PrivacyRequest[];
+  downloadableExports: PrivacyRequest[];
   overdueOpenCount: number;
 }
 
 export const phase8PrivacyRequestsChecklist = [
   "Submit access/export/delete requests from profile settings",
   "Load request timeline with status and due date",
+  "Load downloadable export receipts with expiring links",
   "Highlight overdue open requests for support follow-up"
 ] as const;
 
@@ -21,9 +23,10 @@ export function createPhase8PrivacyRequestsFlow() {
   return {
     checklist: phase8PrivacyRequestsChecklist,
     load: async (userId: string): Promise<Phase8PrivacyRequestsSnapshot> => {
-      const [openRequests, recentRequests] = await Promise.all([
+      const [openRequests, recentRequests, downloadableExports] = await Promise.all([
         privacyRequests.listMine(userId, { openOnly: true, limit: 30 }),
-        privacyRequests.listMine(userId, { limit: 80 })
+        privacyRequests.listMine(userId, { limit: 80 }),
+        privacyRequests.listDownloadableExports(userId, 12)
       ]);
 
       const now = Date.now();
@@ -38,6 +41,7 @@ export function createPhase8PrivacyRequestsFlow() {
       return {
         openRequests,
         recentRequests,
+        downloadableExports,
         overdueOpenCount
       };
     },

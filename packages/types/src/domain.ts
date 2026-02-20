@@ -238,9 +238,32 @@ export interface PrivacyRequest {
   inProgressAt?: string | null;
   resolvedAt?: string | null;
   responseLocation?: string | null;
+  responseExpiresAt?: string | null;
+  responseContentType?: string | null;
+  responseBytes?: number | null;
   handledBy?: string | null;
   notes?: string | null;
   slaBreachedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PrivacyExportJob {
+  id: string;
+  privacyRequestId: string;
+  userId: string;
+  status: Extract<SyncJobStatus, "queued" | "running" | "succeeded" | "failed" | "retry_scheduled">;
+  storageBucket?: string | null;
+  storagePath?: string | null;
+  signedUrl?: string | null;
+  signedUrlExpiresAt?: string | null;
+  fileBytes?: number | null;
+  recordCount?: number | null;
+  retryCount: number;
+  nextRetryAt?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  errorMessage?: string | null;
   createdAt: string;
   updatedAt: string;
 }

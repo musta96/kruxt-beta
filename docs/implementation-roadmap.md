@@ -11,6 +11,7 @@
 - Phase 7 runtime scaffolded: challenge/trials service + rank ladder flow + hardened leaderboard recompute
 - Phase 8 runtime slice 1 scaffolded: privacy request mobile/admin flows + queue processor + status transition RPCs
 - Phase 8 runtime slice 2 scaffolded: immutable policy/consent registry and re-consent gates for protected actions
+- Phase 8 runtime slice 3 scaffolded: data export package queue + signed link delivery pipeline
 
 ## Ordered build sequence
 

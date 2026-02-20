@@ -40,14 +40,19 @@
 24. `record_user_consent` always writes audit + outbox events with policy bindings.
 25. `list_missing_required_consents` returns deterministic gaps for missing/revoked/reconsent-required states.
 26. `user_has_required_consents` blocks protected actions when re-consent is required.
+27. `queue_privacy_export_jobs` queues only open `access/export` requests and is idempotent under retries.
+28. `claim_privacy_export_jobs` respects retry schedule and does not double-claim rows under concurrency.
+29. Export payload excludes secret credentials (no encrypted device tokens present in output).
+30. `complete_privacy_export_job` writes expiring response link metadata and emits `privacy.export_ready`.
+31. `fail_privacy_export_job` schedules retries and hard-fails with request rejection at max retry count.
 
 ## Rank + Trials
 
-27. `join_challenge` allows visible, non-ended challenges only.
-28. `leave_challenge` rejects completed participants and only removes caller-owned rows.
-29. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
-30. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
-31. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
+32. `join_challenge` allows visible, non-ended challenges only.
+33. `leave_challenge` rejects completed participants and only removes caller-owned rows.
+34. `submit_challenge_progress` enforces per-type anti-cheat delta thresholds.
+35. `rebuild_leaderboard_scope` tie ordering is deterministic (`score desc`, stable user tie-break).
+36. `rank_recompute_weekly` returns deterministic failure diagnostics when one board rebuild fails.
 
 ## Performance targets for pilot
 

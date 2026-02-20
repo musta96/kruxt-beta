@@ -92,3 +92,10 @@ Operational features are controlled by flags in `public.feature_flags`.
 - Re-consent gate RPCs: `public.list_missing_required_consents(...)`, `public.user_has_required_consents(...)`
 - Workout logging gate wiring: `apps/mobile/src/services/workout-service.ts`
 - Policy/consent migration set starts at: `packages/db/supabase/migrations/202602190402_krux_beta_part4_s061.sql`
+
+## Phase 8 Runtime (Slice 3)
+
+- Export job queue table + delivery metadata: `public.privacy_export_jobs`
+- Export pipeline RPCs: `queue_privacy_export_jobs`, `claim_privacy_export_jobs`, `build_privacy_export_payload`, `complete_privacy_export_job`, `fail_privacy_export_job`
+- Privacy processor now generates signed export packages in `privacy-exports` bucket
+- Export migration set starts at: `packages/db/supabase/migrations/202602190407_krux_beta_part4_s066.sql`

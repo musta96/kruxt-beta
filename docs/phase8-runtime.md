@@ -1,6 +1,6 @@
 # Phase 8 Runtime Implementation
 
-Phase 8 runtime now includes two compliance execution slices:
+Phase 8 runtime now includes three compliance execution slices:
 
 - Mobile privacy-request center service + flow
 - Admin compliance ops flow for open request triage
@@ -9,6 +9,7 @@ Phase 8 runtime now includes two compliance execution slices:
 - Immutable policy registry publishing with audit/event emission
 - Immutable consent records captured through audited RPCs
 - Re-consent gate RPCs wired into protected workout logging flow
+- Export job queue + storage delivery with signed URL expiration
 
 ## Mobile entrypoints
 
@@ -20,6 +21,7 @@ Core methods:
 
 - `PrivacyRequestService.submit(...)`
 - `PrivacyRequestService.listMine(...)`
+- `PrivacyRequestService.listDownloadableExports(...)`
 - `PolicyService.upsertConsent(...)` (RPC-backed append-only write)
 - `PolicyService.listRequiredConsentGaps(...)`
 - `PolicyService.hasRequiredConsents(...)`
@@ -45,6 +47,11 @@ Core methods:
 - `public.record_user_consent(public.consent_type, ...)`
 - `public.list_missing_required_consents(uuid)`
 - `public.user_has_required_consents(uuid)`
+- `public.queue_privacy_export_jobs(integer)`
+- `public.claim_privacy_export_jobs(integer)`
+- `public.build_privacy_export_payload(uuid)`
+- `public.complete_privacy_export_job(...)`
+- `public.fail_privacy_export_job(...)`
 
 ## Edge function behavior
 
@@ -52,6 +59,9 @@ Core methods:
   - calls `process_privacy_request_queue`
   - triages `submitted -> triaged`
   - marks `sla_breached_at` for overdue open requests
+  - queues and claims export jobs
+  - uploads export JSON into `privacy-exports` bucket
+  - writes expiring signed links and marks requests fulfilled
 
 ## DB migration hooks
 
@@ -64,3 +74,6 @@ Core methods:
 - `packages/db/supabase/migrations/202602190404_krux_beta_part4_s063.sql`
 - `packages/db/supabase/migrations/202602190405_krux_beta_part4_s064.sql`
 - `packages/db/supabase/migrations/202602190406_krux_beta_part4_s065.sql`
+- `packages/db/supabase/migrations/202602190407_krux_beta_part4_s066.sql`
+- `packages/db/supabase/migrations/202602190408_krux_beta_part4_s067.sql`
+- `packages/db/supabase/migrations/202602190409_krux_beta_part4_s068.sql`

@@ -15,6 +15,9 @@ type PrivacyRequestRow = {
   in_progress_at: string | null;
   resolved_at: string | null;
   response_location: string | null;
+  response_expires_at: string | null;
+  response_content_type: string | null;
+  response_bytes: number | null;
   handled_by: string | null;
   notes: string | null;
   sla_breached_at: string | null;
@@ -35,6 +38,9 @@ function mapPrivacyRequest(row: PrivacyRequestRow): PrivacyRequest {
     inProgressAt: row.in_progress_at,
     resolvedAt: row.resolved_at,
     responseLocation: row.response_location,
+    responseExpiresAt: row.response_expires_at,
+    responseContentType: row.response_content_type,
+    responseBytes: row.response_bytes,
     handledBy: row.handled_by,
     notes: row.notes,
     slaBreachedAt: row.sla_breached_at,
@@ -62,7 +68,7 @@ export class PrivacyRequestService {
     const { data, error } = await this.supabase
       .from("privacy_requests")
       .select(
-        "id,user_id,request_type,status,reason,submitted_at,due_at,triaged_at,in_progress_at,resolved_at,response_location,handled_by,notes,sla_breached_at,created_at,updated_at"
+        "id,user_id,request_type,status,reason,submitted_at,due_at,triaged_at,in_progress_at,resolved_at,response_location,response_expires_at,response_content_type,response_bytes,handled_by,notes,sla_breached_at,created_at,updated_at"
       )
       .eq("id", requestId)
       .eq("user_id", userId)
@@ -101,7 +107,7 @@ export class PrivacyRequestService {
     let query = this.supabase
       .from("privacy_requests")
       .select(
-        "id,user_id,request_type,status,reason,submitted_at,due_at,triaged_at,in_progress_at,resolved_at,response_location,handled_by,notes,sla_breached_at,created_at,updated_at"
+        "id,user_id,request_type,status,reason,submitted_at,due_at,triaged_at,in_progress_at,resolved_at,response_location,response_expires_at,response_content_type,response_bytes,handled_by,notes,sla_breached_at,created_at,updated_at"
       )
       .eq("user_id", userId)
       .order("submitted_at", { ascending: false })
@@ -113,6 +119,26 @@ export class PrivacyRequestService {
 
     const { data, error } = await query;
     throwIfError(error, "PRIVACY_REQUEST_LIST_FAILED", "Unable to load privacy requests.");
+
+    return ((data as PrivacyRequestRow[]) ?? []).map(mapPrivacyRequest);
+  }
+
+  async listDownloadableExports(userId: string, limit = 20): Promise<PrivacyRequest[]> {
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+
+    const { data, error } = await this.supabase
+      .from("privacy_requests")
+      .select(
+        "id,user_id,request_type,status,reason,submitted_at,due_at,triaged_at,in_progress_at,resolved_at,response_location,response_expires_at,response_content_type,response_bytes,handled_by,notes,sla_breached_at,created_at,updated_at"
+      )
+      .eq("user_id", userId)
+      .in("request_type", ["access", "export"])
+      .eq("status", "fulfilled")
+      .not("response_location", "is", null)
+      .order("resolved_at", { ascending: false })
+      .limit(safeLimit);
+
+    throwIfError(error, "PRIVACY_EXPORT_LIST_FAILED", "Unable to load downloadable exports.");
 
     return ((data as PrivacyRequestRow[]) ?? []).map(mapPrivacyRequest);
   }
