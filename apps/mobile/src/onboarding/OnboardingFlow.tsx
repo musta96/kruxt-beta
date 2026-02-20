@@ -6,7 +6,7 @@ import { ProfileScreen } from "./screens/ProfileScreen";
 import { GymScreen } from "./screens/GymScreen";
 import { ConsentsScreen } from "./screens/ConsentsScreen";
 import { CompleteScreen } from "./screens/CompleteScreen";
-import type { OnboardingUiStep } from "./types";
+import type { OnboardingUiStep, OnboardingServices } from "./types";
 
 // ─── Inner orchestrator ────────────────────────────────────────────────────
 function OnboardingFlowInner({ onComplete }: { onComplete: () => void }) {
@@ -46,9 +46,32 @@ function OnboardingFlowInner({ onComplete }: { onComplete: () => void }) {
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────
-export function OnboardingFlow({ onComplete }: { onComplete: () => void }) {
+interface OnboardingFlowProps {
+  onComplete: () => void;
+  /** Inject service implementations. Falls back to preview stubs. */
+  services?: OnboardingServices;
+}
+
+/** Preview-safe stubs — no supabase, logs to console */
+const PREVIEW_SERVICES: OnboardingServices = {
+  searchGyms: async (query) => {
+    console.log("[preview] searchGyms:", query);
+    // Return mock results for preview
+    return [
+      { id: "preview-1", name: `${query} Fitness`, city: "Demo City", isPublic: true },
+      { id: "preview-2", name: `${query} Iron Guild`, city: "Demo Town", isPublic: false },
+    ];
+  },
+  submit: async (input) => {
+    console.log("[preview] onboarding submit:", input);
+    // Simulate network delay
+    await new Promise((r) => setTimeout(r, 1200));
+  },
+};
+
+export function OnboardingFlow({ onComplete, services }: OnboardingFlowProps) {
   return (
-    <OnboardingProvider>
+    <OnboardingProvider services={services ?? PREVIEW_SERVICES}>
       <OnboardingFlowInner onComplete={onComplete} />
     </OnboardingProvider>
   );

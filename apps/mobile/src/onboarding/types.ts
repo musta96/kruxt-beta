@@ -59,3 +59,25 @@ export interface OnboardingUiState {
 
 // ─── Field errors ──────────────────────────────────────────────────────────
 export type FieldErrors = Record<string, string>;
+
+// ─── Service contracts (injected, no direct supabase) ──────────────────────
+export interface GymSearchResult {
+  id: string;
+  name: string;
+  city: string | null;
+  isPublic: boolean;
+}
+
+export interface OnboardingSubmitInput {
+  auth: Partial<AuthDraft>;
+  profile: Partial<ProfileDraft>;
+  gym: GymDraft;
+  consents: ConsentsDraft;
+}
+
+export interface OnboardingServices {
+  /** Search gyms by name — delegates to GymService */
+  searchGyms: (query: string) => Promise<GymSearchResult[]>;
+  /** Atomic submit — delegates to Phase2OnboardingService.run() */
+  submit: (input: OnboardingSubmitInput) => Promise<void>;
+}
