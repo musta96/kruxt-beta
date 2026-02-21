@@ -13,6 +13,7 @@
 - Phase 4 mobile UI wiring: Proof Feed controller with interaction + moderation refresh loops
 - Phase 5 runtime: admin B2B ops service layer for classes, waitlist, waivers, contracts, check-ins, and billing telemetry
 - Phase 5 admin UI wiring: Ops Console controller with class/waitlist/check-in/acceptance mutation refresh loops
+- Phase 5 mobile UI wiring: Guild Hall split-view controller with member/staff contracts and confirm-gated staff controls
 - Phase 6 runtime: Apple/Garmin integration pipeline (mobile integration service + webhook ingest + sync dispatcher + cursor persistence)
 - Phase 6 mobile UI wiring: connector controller with provider activation, sync queueing, and mapping/idempotency validation
 - Phase 6 monitoring runtime: admin integration health + sync failure monitor flow for gym staff
