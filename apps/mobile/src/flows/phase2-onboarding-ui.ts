@@ -1,17 +1,21 @@
-import type { CreateGymInput, UpsertProfileInput } from "@kruxt/types";
+import type { CreateGymInput, Gym, PolicyVersion, UpsertProfileInput } from "@kruxt/types";
 import { translateLegalText } from "@kruxt/types";
 
 import {
   createMobileSupabaseClient,
+  GymService,
   KruxtAppError,
   Phase2OnboardingService,
+  PolicyService,
   type BaselineConsentInput,
   type Phase2OnboardingInput,
   type Phase2OnboardingResult
 } from "../services";
 import { phase2OnboardingChecklistKeys } from "./phase2-onboarding";
 
-export type OnboardingUiStep = "auth" | "profile" | "consents" | "gym" | "review";
+export type OnboardingUiStep = "welcome" | "auth" | "profile" | "gym" | "consents" | "review";
+
+export const onboardingUiStepOrder = ["welcome", "auth", "profile", "gym", "consents", "review"] as const;
 
 export interface OnboardingScreenSpec {
   step: OnboardingUiStep;
@@ -57,6 +61,37 @@ export interface OnboardingUiDraft {
   gym: OnboardingGymDraft;
 }
 
+export interface OnboardingUiPolicySnapshot {
+  activePolicies: PolicyVersion[];
+  termsPolicy: PolicyVersion | null;
+  privacyPolicy: PolicyVersion | null;
+  healthDataPolicy: PolicyVersion | null;
+}
+
+export interface OnboardingUiGymOption {
+  id: Gym["id"];
+  slug: Gym["slug"];
+  name: Gym["name"];
+  city: Gym["city"];
+  motto: Gym["motto"];
+  isPublic: Gym["isPublic"];
+}
+
+export interface OnboardingUiMicrocopy {
+  proofCounts: string;
+  consentGate: string;
+  profileGate: string;
+}
+
+export interface OnboardingUiLoadSnapshot {
+  stepOrder: readonly OnboardingUiStep[];
+  screens: readonly OnboardingScreenSpec[];
+  defaultDraft: OnboardingUiDraft;
+  policies: OnboardingUiPolicySnapshot;
+  gymSuggestions: OnboardingUiGymOption[];
+  microcopy: OnboardingUiMicrocopy;
+}
+
 export interface OnboardingFieldError {
   field: string;
   message: string;
@@ -81,9 +116,26 @@ export interface OnboardingUiFailure {
   error: OnboardingUiError;
 }
 
+export interface OnboardingUiLoadSuccess {
+  ok: true;
+  snapshot: OnboardingUiLoadSnapshot;
+}
+
+export interface OnboardingUiLoadFailure {
+  ok: false;
+  error: OnboardingUiError;
+}
+
+export type OnboardingUiLoadResult = OnboardingUiLoadSuccess | OnboardingUiLoadFailure;
 export type OnboardingUiSubmitResult = OnboardingUiSuccess | OnboardingUiFailure;
 
 const PHASE2_ONBOARDING_SCREEN_SPECS: readonly OnboardingScreenSpec[] = [
+  {
+    step: "welcome",
+    title: "Proof counts.",
+    subtitle: "Log to claim. Rank is earned weekly.",
+    primaryActionLabel: "Log to claim"
+  },
   {
     step: "auth",
     title: "Claim your profile",
@@ -97,16 +149,16 @@ const PHASE2_ONBOARDING_SCREEN_SPECS: readonly OnboardingScreenSpec[] = [
     primaryActionLabel: "Save profile"
   },
   {
-    step: "consents",
-    title: "Accept the rules",
-    subtitle: "Terms, privacy, and health-data consent are required.",
-    primaryActionLabel: "Accept and continue"
-  },
-  {
     step: "gym",
     title: "Join a guild",
     subtitle: "Create a gym or request access to an existing one.",
     primaryActionLabel: "Continue"
+  },
+  {
+    step: "consents",
+    title: "Accept the rules",
+    subtitle: "Terms, privacy, and health-data consent are required.",
+    primaryActionLabel: "Accept and continue"
   },
   {
     step: "review",
@@ -116,7 +168,40 @@ const PHASE2_ONBOARDING_SCREEN_SPECS: readonly OnboardingScreenSpec[] = [
   }
 ] as const;
 
+const PHASE2_ONBOARDING_MICROCOPY: OnboardingUiMicrocopy = {
+  proofCounts: "Proof counts.",
+  consentGate: "Rank requires consent to current policy.",
+  profileGate: "Guild access starts when profile is complete."
+};
+
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const usernamePattern = /^[a-z0-9_]{3,24}$/;
+
+function createDefaultDraft(): OnboardingUiDraft {
+  return {
+    auth: {
+      mode: "signup",
+      email: "",
+      password: ""
+    },
+    profile: {
+      username: "",
+      displayName: "",
+      preferredUnits: "metric"
+    },
+    consents: {
+      acceptTerms: false,
+      acceptPrivacy: false,
+      acceptHealthData: false,
+      marketingEmailOptIn: false,
+      pushNotificationsOptIn: true,
+      source: "mobile"
+    },
+    gym: {
+      mode: "skip"
+    }
+  };
+}
 
 function inferStepFromField(field: string): OnboardingUiStep {
   if (field.startsWith("auth.")) {
@@ -186,82 +271,110 @@ function toServiceInput(draft: OnboardingUiDraft): Phase2OnboardingInput {
 }
 
 function validateDraft(draft: OnboardingUiDraft): OnboardingFieldError[] {
+  const errors: OnboardingFieldError[] = [
+    ...validateStep("auth", draft),
+    ...validateStep("profile", draft),
+    ...validateStep("gym", draft),
+    ...validateStep("consents", draft)
+  ];
+  return errors;
+}
+
+export function validateStep(step: OnboardingUiStep, draft: OnboardingUiDraft): OnboardingFieldError[] {
   const errors: OnboardingFieldError[] = [];
 
-  if (!emailPattern.test(draft.auth.email.trim())) {
-    errors.push({
-      field: "auth.email",
-      message: "Enter a valid email address."
-    });
+  if (step === "welcome" || step === "review") {
+    return errors;
   }
 
-  const minPasswordLength = draft.auth.mode === "signup" ? 8 : 1;
-  if (draft.auth.password.length < minPasswordLength) {
-    errors.push({
-      field: "auth.password",
-      message:
-        draft.auth.mode === "signup"
-          ? "Password must be at least 8 characters."
-          : "Password is required."
-    });
-  }
-
-  if (!draft.profile.displayName.trim()) {
-    errors.push({
-      field: "profile.displayName",
-      message: "Display name is required."
-    });
-  }
-
-  if (!draft.profile.username.trim()) {
-    errors.push({
-      field: "profile.username",
-      message: "Username is required."
-    });
-  }
-
-  if (!draft.consents.acceptTerms) {
-    errors.push({
-      field: "consents.acceptTerms",
-      message: "You must accept terms to continue."
-    });
-  }
-
-  if (!draft.consents.acceptPrivacy) {
-    errors.push({
-      field: "consents.acceptPrivacy",
-      message: "You must accept privacy policy to continue."
-    });
-  }
-
-  if (!draft.consents.acceptHealthData) {
-    errors.push({
-      field: "consents.acceptHealthData",
-      message: "You must accept health-data processing to continue."
-    });
-  }
-
-  if (draft.gym.mode === "create") {
-    if (!draft.gym.createGym.name.trim()) {
+  if (step === "auth") {
+    if (!emailPattern.test(draft.auth.email.trim())) {
       errors.push({
-        field: "gym.create.name",
-        message: "Gym name is required."
+        field: "auth.email",
+        message: "Enter a valid email address."
       });
     }
 
-    if (!draft.gym.createGym.slug.trim()) {
+    const minPasswordLength = draft.auth.mode === "signup" ? 8 : 1;
+    if (draft.auth.password.length < minPasswordLength) {
       errors.push({
-        field: "gym.create.slug",
-        message: "Gym slug is required."
+        field: "auth.password",
+        message:
+          draft.auth.mode === "signup"
+            ? "Password must be at least 8 characters."
+            : "Password is required."
       });
     }
   }
 
-  if (draft.gym.mode === "join" && !draft.gym.gymId.trim()) {
-    errors.push({
-      field: "gym.join.gymId",
-      message: "Select a gym to request membership."
-    });
+  if (step === "profile") {
+    if (!draft.profile.displayName.trim()) {
+      errors.push({
+        field: "profile.displayName",
+        message: "Display name is required."
+      });
+    }
+
+    const username = draft.profile.username.trim();
+    if (!username) {
+      errors.push({
+        field: "profile.username",
+        message: "Username is required."
+      });
+    } else if (!usernamePattern.test(username)) {
+      errors.push({
+        field: "profile.username",
+        message: "Username: 3-24 chars, lowercase, numbers and underscores only."
+      });
+    }
+  }
+
+  if (step === "gym") {
+    if (draft.gym.mode === "create") {
+      if (!draft.gym.createGym.name.trim()) {
+        errors.push({
+          field: "gym.create.name",
+          message: "Gym name is required."
+        });
+      }
+
+      if (!draft.gym.createGym.slug.trim()) {
+        errors.push({
+          field: "gym.create.slug",
+          message: "Gym slug is required."
+        });
+      }
+    }
+
+    if (draft.gym.mode === "join" && !draft.gym.gymId.trim()) {
+      errors.push({
+        field: "gym.join.gymId",
+        message: "Select a gym to request membership."
+      });
+    }
+  }
+
+  if (step === "consents") {
+    if (!draft.consents.acceptTerms) {
+      errors.push({
+        field: "consents.acceptTerms",
+        message: PHASE2_ONBOARDING_MICROCOPY.consentGate
+      });
+    }
+
+    if (!draft.consents.acceptPrivacy) {
+      errors.push({
+        field: "consents.acceptPrivacy",
+        message: PHASE2_ONBOARDING_MICROCOPY.consentGate
+      });
+    }
+
+    if (!draft.consents.acceptHealthData) {
+      errors.push({
+        field: "consents.acceptHealthData",
+        message: PHASE2_ONBOARDING_MICROCOPY.consentGate
+      });
+    }
   }
 
   return errors;
@@ -294,6 +407,7 @@ function mapErrorToStep(code: string): OnboardingUiStep {
 
   if (
     [
+      "POLICIES_READ_FAILED",
       "BASELINE_CONSENT_REQUIRED",
       "CONSENT_RECORD_FAILED",
       "CONSENT_GAPS_READ_FAILED",
@@ -308,6 +422,7 @@ function mapErrorToStep(code: string): OnboardingUiStep {
 
   if (
     [
+      "GYM_LIST_FAILED",
       "GYM_CREATE_FAILED",
       "GYM_JOIN_FAILED",
       "GYM_SLUG_INVALID",
@@ -358,13 +473,13 @@ function mapErrorMessage(code: string, fallback: string): string {
   return fallback;
 }
 
-function mapRuntimeError(error: unknown): OnboardingUiError {
+function mapRuntimeError(error: unknown, fallbackStep: OnboardingUiStep = "review"): OnboardingUiError {
   const appError =
     error instanceof KruxtAppError
       ? error
       : new KruxtAppError("ONBOARDING_SUBMIT_FAILED", "Unable to complete onboarding.", error);
 
-  const step = mapErrorToStep(appError.code);
+  const step = appError.code === "ONBOARDING_LOAD_FAILED" ? fallbackStep : mapErrorToStep(appError.code);
   const message = mapErrorMessage(appError.code, appError.message);
   const recoverable = appError.code !== "POLICY_BASELINE_MISSING";
 
@@ -377,9 +492,37 @@ function mapRuntimeError(error: unknown): OnboardingUiError {
   };
 }
 
+function toGymOptions(gyms: Gym[]): OnboardingUiGymOption[] {
+  return [...gyms]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((gym) => ({
+      id: gym.id,
+      slug: gym.slug,
+      name: gym.name,
+      city: gym.city,
+      motto: gym.motto,
+      isPublic: gym.isPublic
+    }));
+}
+
+function resolvePolicySnapshot(policies: PolicyVersion[]): OnboardingUiPolicySnapshot {
+  const termsPolicy = policies.find((policy) => policy.policyType === "terms") ?? null;
+  const privacyPolicy = policies.find((policy) => policy.policyType === "privacy") ?? null;
+  const healthDataPolicy = policies.find((policy) => policy.policyType === "health_data") ?? null;
+
+  return {
+    activePolicies: policies,
+    termsPolicy,
+    privacyPolicy,
+    healthDataPolicy
+  };
+}
+
 export function createPhase2OnboardingUiFlow(options: { locale?: string | null } = {}) {
   const supabase = createMobileSupabaseClient();
   const onboarding = new Phase2OnboardingService(supabase);
+  const policies = new PolicyService(supabase, { locale: options.locale });
+  const gyms = new GymService(supabase);
   const checklist = phase2OnboardingChecklistKeys.map((key) =>
     translateLegalText(key, { locale: options.locale })
   );
@@ -387,7 +530,47 @@ export function createPhase2OnboardingUiFlow(options: { locale?: string | null }
   return {
     checklist,
     checklistKeys: phase2OnboardingChecklistKeys,
+    stepOrder: onboardingUiStepOrder,
     screens: [...PHASE2_ONBOARDING_SCREEN_SPECS],
+    microcopy: { ...PHASE2_ONBOARDING_MICROCOPY },
+    createDraft: (overrides: Partial<OnboardingUiDraft> = {}): OnboardingUiDraft => ({
+      ...createDefaultDraft(),
+      ...overrides,
+      auth: { ...createDefaultDraft().auth, ...overrides.auth },
+      profile: { ...createDefaultDraft().profile, ...overrides.profile },
+      consents: { ...createDefaultDraft().consents, ...overrides.consents },
+      gym: (overrides.gym ?? createDefaultDraft().gym) as OnboardingGymDraft
+    }),
+    load: async (): Promise<OnboardingUiLoadResult> => {
+      try {
+        const [activePolicies, visibleGyms] = await Promise.all([
+          policies.listActivePolicies(),
+          gyms.listVisibleGyms(24)
+        ]);
+
+        return {
+          ok: true,
+          snapshot: {
+            stepOrder: onboardingUiStepOrder,
+            screens: [...PHASE2_ONBOARDING_SCREEN_SPECS],
+            defaultDraft: createDefaultDraft(),
+            policies: resolvePolicySnapshot(activePolicies),
+            gymSuggestions: toGymOptions(visibleGyms),
+            microcopy: { ...PHASE2_ONBOARDING_MICROCOPY }
+          }
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: mapRuntimeError(
+            new KruxtAppError("ONBOARDING_LOAD_FAILED", "Unable to load onboarding context.", error),
+            "welcome"
+          )
+        };
+      }
+    },
+    validateStep: (step: OnboardingUiStep, draft: OnboardingUiDraft): OnboardingFieldError[] =>
+      validateStep(step, draft),
     validate: (draft: OnboardingUiDraft): OnboardingFieldError[] => validateDraft(draft),
     submit: async (draft: OnboardingUiDraft): Promise<OnboardingUiSubmitResult> => {
       const fieldErrors = validateDraft(draft);
