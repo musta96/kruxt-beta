@@ -11,6 +11,7 @@ Phase 5 runtime now includes an admin service layer for B2B daily operations:
 ## Admin entrypoints
 
 - `apps/admin/src/services/b2b-ops-service.ts`
+- `apps/admin/src/flows/phase5-members-console-ui.ts`
 - `apps/admin/src/flows/phase5-b2b-ops.ts`
 - `apps/admin/src/flows/phase5-ops-console-ui.ts`
 - `apps/admin/src/app/page.ts`
@@ -33,6 +34,11 @@ Core methods:
 
 UI controller methods:
 
+- `createPhase5MembersConsoleUiFlow.load(...)`
+- `createPhase5MembersConsoleUiFlow.assignRole(...)`
+- `createPhase5MembersConsoleUiFlow.setStatus(...)`
+- `createPhase5MembersConsoleUiFlow.bulkAssignRole(...)`
+- `createPhase5MembersConsoleUiFlow.bulkSetStatus(...)`
 - `createPhase5OpsConsoleUiFlow.load(...)`
 - `createPhase5OpsConsoleUiFlow.createClass(...)`
 - `createPhase5OpsConsoleUiFlow.upsertClassBooking(...)`

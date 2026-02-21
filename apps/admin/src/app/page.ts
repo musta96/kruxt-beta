@@ -1,6 +1,7 @@
 import { phase2StaffConsoleUiChecklist } from "../flows/phase2-staff-console-ui";
 import { phase6IntegrationMonitorChecklist } from "../flows/phase6-integration-monitor";
 import { phase5OpsConsoleUiChecklist } from "../flows/phase5-ops-console-ui";
+import { phase5MembersConsoleUiChecklist } from "../flows/phase5-members-console-ui";
 import { phase8ComplianceOpsChecklist } from "../flows/phase8-compliance-ops";
 import { phase10CustomizationSupportChecklist } from "../flows/phase10-customization-support";
 import { phase10PlatformControlPlaneChecklist } from "../flows/phase10-platform-control-plane";
@@ -33,7 +34,7 @@ export function adminHomePageScaffold() {
       ]
     },
     phase5: {
-      modules: [...phase5OpsConsoleUiChecklist],
+      modules: [...phase5MembersConsoleUiChecklist, ...phase5OpsConsoleUiChecklist],
       screenFlow:
         "class schedule -> bookings/waitlist -> check-in/access -> waiver/contract evidence -> refreshed snapshot",
       recoverableErrors: [
@@ -58,7 +59,13 @@ export function adminHomePageScaffold() {
         "B2BOpsService.listInvoices",
         "B2BOpsService.listPaymentTransactions",
         "B2BOpsService.listRefunds",
-        "B2BOpsService.listDunningEvents"
+        "B2BOpsService.listDunningEvents",
+        "createPhase5MembersConsoleUiFlow.load",
+        "createPhase5MembersConsoleUiFlow.assignRole",
+        "createPhase5MembersConsoleUiFlow.setStatus",
+        "createPhase5MembersConsoleUiFlow.bulkAssignRole",
+        "createPhase5MembersConsoleUiFlow.bulkSetStatus",
+        "GymAdminService.listGymMemberProfiles"
       ]
     },
     phase6: {

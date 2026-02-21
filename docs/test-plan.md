@@ -202,6 +202,14 @@
 147. `data_aggregation_jobs` and `data_anonymization_checks` are restricted to platform analytics/governance operators.
 148. `data_release_approvals` enforce one row per required approval type per export.
 
+## Phase 5 Members Console UI
+
+149. `createPhase5MembersConsoleUiFlow.load` returns searchable segmented rows with queue summary and column preset visibility.
+150. Role change actions (`assignRole`, `bulkAssignRole`) fail with `MEMBERS_CONSOLE_AUDIT_NOTE_REQUIRED` when audit note is missing.
+151. `setStatus` and `bulkSetStatus` support `past_due` by upserting member subscription status via `B2BOpsService`.
+152. Bulk actions return partial success metadata (`updatedMembershipIds`, `failedMembershipIds`) and refreshed snapshots.
+153. Selected profile side panel returns timeline entries from membership, check-in, subscription, and open privacy request signals.
+
 ## Performance targets for pilot
 
 - Feed p95 load < 500ms for 50-card page.

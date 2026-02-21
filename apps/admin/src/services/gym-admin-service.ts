@@ -26,6 +26,17 @@ type MembershipRow = {
   ends_at: string | null;
 };
 
+type ProfileRow = {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  locale: string | null;
+  preferred_units: "metric" | "imperial" | null;
+  created_at: string;
+};
+
 type ConsentRow = {
   id: string;
   user_id: string;
@@ -189,6 +200,17 @@ export interface SecurityIncidentOperatorItem {
   updatedAt: string;
 }
 
+export interface AdminMemberProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  locale?: string | null;
+  preferredUnits: "metric" | "imperial";
+  createdAt: string;
+}
+
 export interface PrivacyOpsMetrics {
   gymId: string;
   openRequests: number;
@@ -223,6 +245,19 @@ function mapConsent(row: ConsentRow): ConsentRecord {
     revokedAt: row.revoked_at,
     source: row.source,
     locale: row.locale
+  };
+}
+
+function mapProfile(row: ProfileRow): AdminMemberProfile {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    bio: row.bio,
+    locale: row.locale,
+    preferredUnits: row.preferred_units ?? "metric",
+    createdAt: row.created_at
   };
 }
 
@@ -272,6 +307,36 @@ export class GymAdminService {
     throwIfAdminError(error, "ADMIN_MEMBERSHIP_LIST_FAILED", "Unable to list gym memberships.");
 
     return (data as MembershipRow[]).map(mapMembership);
+  }
+
+  async listGymMemberProfiles(gymId: string, userIds?: string[]): Promise<AdminMemberProfile[]> {
+    await this.access.requireGymStaff(gymId);
+
+    let resolvedUserIds = (userIds ?? []).filter((value) => value.trim().length > 0);
+    if (resolvedUserIds.length === 0) {
+      const memberships = await this.listGymMemberships(gymId);
+      resolvedUserIds = Array.from(new Set(memberships.map((membership) => membership.userId)));
+    } else {
+      resolvedUserIds = Array.from(new Set(resolvedUserIds));
+    }
+
+    if (resolvedUserIds.length === 0) {
+      return [];
+    }
+
+    const { data, error } = await this.supabase
+      .from("profiles")
+      .select("id,username,display_name,avatar_url,bio,locale,preferred_units,created_at")
+      .in("id", resolvedUserIds);
+
+    throwIfAdminError(error, "ADMIN_MEMBER_PROFILES_READ_FAILED", "Unable to load member profiles.");
+
+    return ((data as ProfileRow[]) ?? []).map(mapProfile);
+  }
+
+  async getGymMemberProfile(gymId: string, userId: string): Promise<AdminMemberProfile | null> {
+    const profiles = await this.listGymMemberProfiles(gymId, [userId]);
+    return profiles[0] ?? null;
   }
 
   async listPendingMemberships(gymId: string): Promise<GymMembership[]> {
