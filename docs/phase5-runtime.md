@@ -8,12 +8,23 @@ Phase 5 runtime now includes an admin service layer for B2B daily operations:
 - Check-in and access log recording/monitoring
 - Billing telemetry (subscriptions, invoices, payments, refunds, dunning events)
 
+It now also includes a mobile Guild Hall split-view UI contract for Prompt 4:
+
+- Member view data: membership summary, upcoming classes, waitlist state, recent check-ins, waiver/contract status
+- Staff view data: operations board, class pressure, unresolved compliance tasks, check-in anomalies
+- Guardrails: member surface hides staff controls; staff controls are confirmation-gated
+
 ## Admin entrypoints
 
 - `apps/admin/src/services/b2b-ops-service.ts`
 - `apps/admin/src/flows/phase5-b2b-ops.ts`
 - `apps/admin/src/flows/phase5-ops-console-ui.ts`
 - `apps/admin/src/app/page.ts`
+
+## Mobile entrypoints
+
+- `apps/mobile/src/flows/phase5-guild-hall-ui.ts`
+- `apps/mobile/src/services/gym-service.ts`
 
 Core methods:
 

@@ -4,6 +4,7 @@ import { guildHallChecklist } from "./flows/guild-hall";
 import { phase2OnboardingChecklist } from "./flows/phase2-onboarding";
 import { phase3WorkoutLoggingChecklist } from "./flows/phase3-workout-logging";
 import { phase4SocialFeedChecklist } from "./flows/phase4-social-feed";
+import { phase5GuildHallUiChecklist } from "./flows/phase5-guild-hall-ui";
 import { phase6IntegrationsUiChecklist } from "./flows/phase6-integrations-ui";
 import { phase7RankTrialsChecklist } from "./flows/phase7-rank-trials";
 import { phase8PrivacyRequestsChecklist } from "./flows/phase8-privacy-requests";
@@ -80,6 +81,31 @@ export function mobileAppScaffold() {
         "push_notification_tokens"
       ],
       featureFlags: ["public_feed_boost_enabled"]
+    },
+    phase5: {
+      flow: "role-aware guild hall -> member status surface + staff operations board",
+      screenFlow:
+        "member status (membership/classes/waitlist/check-ins/compliance) -> conditional staff operations board",
+      checklist: [...phase5GuildHallUiChecklist],
+      modules: ["GuildHallMemberView", "GuildHallStaffView"],
+      tables: [
+        "gym_memberships",
+        "gym_membership_plans",
+        "gym_classes",
+        "class_bookings",
+        "class_waitlist",
+        "gym_checkins",
+        "access_logs",
+        "waivers",
+        "contracts",
+        "waiver_acceptances",
+        "contract_acceptances"
+      ],
+      uiSurface: ["createPhase5GuildHallUiFlow.load", "createPhase5GuildHallUiFlow.getStaffConfirmDialog"],
+      guardrails: [
+        "member surfaces never expose staff mutations",
+        "staff controls always require explicit confirm dialogs"
+      ]
     },
     phase6: {
       flow: "connect provider -> queue sync -> import activities -> persist cursor",
