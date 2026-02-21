@@ -2,6 +2,8 @@ import type {
   LogWorkoutAtomicInput,
   LogWorkoutExerciseInput,
   LogWorkoutSetInput,
+  RankTier,
+  WorkoutBlockType,
   WorkoutType,
   WorkoutVisibility
 } from "@kruxt/types";
@@ -16,6 +18,7 @@ import {
 import { phase3WorkoutLoggingChecklistKeys } from "./phase3-workout-logging";
 
 export type WorkoutLoggerUiStep = "metadata" | "exercise_blocks" | "sets" | "review";
+export const workoutLoggerUiStepOrder = ["metadata", "exercise_blocks", "sets", "review"] as const;
 
 export interface WorkoutLoggerSetDraft {
   clientId: string;
@@ -29,6 +32,8 @@ export interface WorkoutLoggerSetDraft {
 export interface WorkoutLoggerExerciseDraft {
   clientId: string;
   exerciseId: string;
+  blockType: WorkoutBlockType;
+  blockId?: string;
   notes?: string;
   targetReps?: string;
   targetWeightKg?: number;
@@ -51,9 +56,38 @@ export interface WorkoutLoggerDraft {
   exercises: WorkoutLoggerExerciseDraft[];
 }
 
+export interface WorkoutLoggerDraftRecoveryPayload {
+  version: 1;
+  savedAt: string;
+  draft: WorkoutLoggerDraft;
+}
+
 export interface WorkoutLoggerFieldError {
   field: string;
   message: string;
+}
+
+export interface WorkoutLoggerProfileProgressState {
+  xpTotal: number;
+  level: number;
+  rankTier: RankTier;
+  chainDays: number;
+}
+
+export interface WorkoutLoggerProgressDelta {
+  previous: WorkoutLoggerProfileProgressState | null;
+  current: WorkoutLoggerProfileProgressState;
+  xpDelta: number | null;
+  levelDelta: number | null;
+  chainDaysDelta: number | null;
+  rankChanged: boolean;
+}
+
+export interface WorkoutLoggerNextRoute {
+  name: "feed_detail";
+  params: {
+    workoutId: string;
+  };
 }
 
 export interface WorkoutLoggerSubmitVerification {
@@ -74,6 +108,8 @@ export interface WorkoutLoggerSubmitSuccess {
   ok: true;
   result: LogWorkoutAtomicResult;
   verification: WorkoutLoggerSubmitVerification;
+  progressDelta: WorkoutLoggerProgressDelta;
+  nextRoute: WorkoutLoggerNextRoute;
 }
 
 export interface WorkoutLoggerSubmitFailure {
@@ -81,6 +117,32 @@ export interface WorkoutLoggerSubmitFailure {
   error: WorkoutLoggerUiError;
 }
 
+export interface WorkoutLoggerUiMicrocopy {
+  primaryCta: string;
+  loadingCta: string;
+  chainRule: string;
+}
+
+export interface WorkoutLoggerUiLoadSnapshot {
+  stepOrder: readonly WorkoutLoggerUiStep[];
+  supportedBlockTypes: readonly WorkoutBlockType[];
+  defaultDraft: WorkoutLoggerDraft;
+  hasDraftRecovery: boolean;
+  hasOfflineQueuePlaceholder: boolean;
+  microcopy: WorkoutLoggerUiMicrocopy;
+}
+
+export interface WorkoutLoggerUiLoadSuccess {
+  ok: true;
+  snapshot: WorkoutLoggerUiLoadSnapshot;
+}
+
+export interface WorkoutLoggerUiLoadFailure {
+  ok: false;
+  error: WorkoutLoggerUiError;
+}
+
+export type WorkoutLoggerUiLoadResult = WorkoutLoggerUiLoadSuccess | WorkoutLoggerUiLoadFailure;
 export type WorkoutLoggerSubmitResult = WorkoutLoggerSubmitSuccess | WorkoutLoggerSubmitFailure;
 
 export const phase3WorkoutLoggerUiChecklist = [
@@ -107,6 +169,7 @@ function createEmptyExercise(): WorkoutLoggerExerciseDraft {
   return {
     clientId: createClientId("exercise"),
     exerciseId: "",
+    blockType: "straight_set",
     sets: [createEmptySet()]
   };
 }
@@ -115,6 +178,8 @@ function toAtomicInput(draft: WorkoutLoggerDraft): LogWorkoutAtomicInput {
   const exercises: LogWorkoutExerciseInput[] = draft.exercises.map((exercise, exerciseIndex) => ({
     exerciseId: exercise.exerciseId,
     orderIndex: exerciseIndex + 1,
+    blockId: exercise.blockId,
+    blockType: exercise.blockType,
     notes: exercise.notes,
     targetReps: exercise.targetReps,
     targetWeightKg: exercise.targetWeightKg,
@@ -265,9 +330,107 @@ function mapRuntimeError(error: unknown, locale?: string | null): WorkoutLoggerU
   };
 }
 
+type SetQuickAdjustField = "reps" | "weightKg" | "rpe" | "durationSeconds" | "distanceM";
+const SUPPORTED_BLOCK_TYPES: readonly WorkoutBlockType[] = [
+  "straight_set",
+  "superset",
+  "circuit",
+  "emom",
+  "amrap"
+] as const;
+
+const WORKOUT_LOGGER_MICROCOPY: WorkoutLoggerUiMicrocopy = {
+  primaryCta: "Post Proof",
+  loadingCta: "Claiming...",
+  chainRule: "Protect the chain."
+};
+
+function clampNumeric(value: number, min = 0, max = Number.MAX_SAFE_INTEGER): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function reorderArray<T>(items: T[], fromIndex: number, toIndex: number): T[] {
+  if (fromIndex === toIndex) {
+    return [...items];
+  }
+  const clone = [...items];
+  const [moved] = clone.splice(fromIndex, 1);
+  clone.splice(toIndex, 0, moved);
+  return clone;
+}
+
+function deepCloneDraft(draft: WorkoutLoggerDraft): WorkoutLoggerDraft {
+  return {
+    metadata: { ...draft.metadata },
+    exercises: draft.exercises.map((exercise) => ({
+      ...exercise,
+      sets: exercise.sets.map((set) => ({ ...set }))
+    }))
+  };
+}
+
+function createDefaultDraft(overrides: Partial<WorkoutLoggerDraft> = {}): WorkoutLoggerDraft {
+  return {
+    metadata: {
+      title: "Workout Session",
+      workoutType: "strength",
+      visibility: "public",
+      startedAt: new Date().toISOString(),
+      ...overrides.metadata
+    },
+    exercises: overrides.exercises ? [...overrides.exercises] : [createEmptyExercise()]
+  };
+}
+
+async function readProfileProgressState(supabase: ReturnType<typeof createMobileSupabaseClient>): Promise<WorkoutLoggerProfileProgressState | null> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) {
+    return null;
+  }
+
+  const { data: profileData, error: profileError } = await supabase
+    .from("profiles")
+    .select("xp_total,level,rank_tier,chain_days")
+    .eq("id", authData.user.id)
+    .maybeSingle();
+
+  if (profileError || !profileData) {
+    return null;
+  }
+
+  const profile = profileData as {
+    xp_total: number;
+    level: number;
+    rank_tier: RankTier;
+    chain_days: number;
+  };
+
+  return {
+    xpTotal: profile.xp_total,
+    level: profile.level,
+    rankTier: profile.rank_tier,
+    chainDays: profile.chain_days
+  };
+}
+
+function computeProgressDelta(
+  previous: WorkoutLoggerProfileProgressState | null,
+  current: WorkoutLoggerProfileProgressState
+): WorkoutLoggerProgressDelta {
+  return {
+    previous,
+    current,
+    xpDelta: previous ? current.xpTotal - previous.xpTotal : null,
+    levelDelta: previous ? current.level - previous.level : null,
+    chainDaysDelta: previous ? current.chainDays - previous.chainDays : null,
+    rankChanged: previous ? previous.rankTier !== current.rankTier : false
+  };
+}
+
 export function createPhase3WorkoutLoggerUiFlow(options: { locale?: string | null } = {}) {
   const supabase = createMobileSupabaseClient();
   const workouts = new WorkoutService(supabase, { locale: options.locale });
+  let isSubmitInFlight = false;
   const checklist = phase3WorkoutLoggingChecklistKeys.map((key) =>
     translateLegalText(key, { locale: options.locale })
   );
@@ -275,22 +438,66 @@ export function createPhase3WorkoutLoggerUiFlow(options: { locale?: string | nul
   return {
     checklist,
     checklistKeys: phase3WorkoutLoggingChecklistKeys,
-    createDraft: (overrides: Partial<WorkoutLoggerDraft> = {}): WorkoutLoggerDraft => ({
-      metadata: {
-        title: "Workout Session",
-        workoutType: "strength",
-        visibility: "public",
-        ...overrides.metadata
-      },
-      exercises: overrides.exercises ? [...overrides.exercises] : [createEmptyExercise()]
-    }),
+    stepOrder: workoutLoggerUiStepOrder,
+    supportedBlockTypes: SUPPORTED_BLOCK_TYPES,
+    microcopy: { ...WORKOUT_LOGGER_MICROCOPY },
+    load: async (): Promise<WorkoutLoggerUiLoadResult> => {
+      try {
+        return {
+          ok: true,
+          snapshot: {
+            stepOrder: workoutLoggerUiStepOrder,
+            supportedBlockTypes: SUPPORTED_BLOCK_TYPES,
+            defaultDraft: createDefaultDraft(),
+            hasDraftRecovery: true,
+            hasOfflineQueuePlaceholder: true,
+            microcopy: { ...WORKOUT_LOGGER_MICROCOPY }
+          }
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: mapRuntimeError(
+            new KruxtAppError("WORKOUT_LOGGER_LOAD_FAILED", "Unable to load workout logger context.", error),
+            options.locale
+          )
+        };
+      }
+    },
+    createDraft: (overrides: Partial<WorkoutLoggerDraft> = {}): WorkoutLoggerDraft =>
+      createDefaultDraft(overrides),
     addExercise: (draft: WorkoutLoggerDraft): WorkoutLoggerDraft => ({
       ...draft,
       exercises: [...draft.exercises, createEmptyExercise()]
     }),
+    moveExercise: (
+      draft: WorkoutLoggerDraft,
+      exerciseIndex: number,
+      direction: "up" | "down"
+    ): WorkoutLoggerDraft => {
+      const toIndex = direction === "up" ? exerciseIndex - 1 : exerciseIndex + 1;
+      if (toIndex < 0 || toIndex >= draft.exercises.length) {
+        return draft;
+      }
+
+      return {
+        ...draft,
+        exercises: reorderArray(draft.exercises, exerciseIndex, toIndex)
+      };
+    },
     removeExercise: (draft: WorkoutLoggerDraft, exerciseIndex: number): WorkoutLoggerDraft => ({
       ...draft,
       exercises: draft.exercises.filter((_, index) => index !== exerciseIndex)
+    }),
+    setExerciseBlockType: (
+      draft: WorkoutLoggerDraft,
+      exerciseIndex: number,
+      blockType: WorkoutBlockType
+    ): WorkoutLoggerDraft => ({
+      ...draft,
+      exercises: draft.exercises.map((exercise, index) =>
+        index === exerciseIndex ? { ...exercise, blockType } : exercise
+      )
     }),
     addSet: (draft: WorkoutLoggerDraft, exerciseIndex: number): WorkoutLoggerDraft => ({
       ...draft,
@@ -302,6 +509,89 @@ export function createPhase3WorkoutLoggerUiFlow(options: { locale?: string | nul
         return {
           ...exercise,
           sets: [...exercise.sets, createEmptySet()]
+        };
+      })
+    }),
+    duplicateSet: (
+      draft: WorkoutLoggerDraft,
+      exerciseIndex: number,
+      setIndex: number
+    ): WorkoutLoggerDraft => ({
+      ...draft,
+      exercises: draft.exercises.map((exercise, index) => {
+        if (index !== exerciseIndex) {
+          return exercise;
+        }
+
+        const sourceSet = exercise.sets[setIndex];
+        if (!sourceSet) {
+          return exercise;
+        }
+
+        const clonedSet: WorkoutLoggerSetDraft = {
+          ...sourceSet,
+          clientId: createClientId("set")
+        };
+        const sets = [...exercise.sets];
+        sets.splice(setIndex + 1, 0, clonedSet);
+        return {
+          ...exercise,
+          sets
+        };
+      })
+    }),
+    moveSet: (
+      draft: WorkoutLoggerDraft,
+      exerciseIndex: number,
+      setIndex: number,
+      direction: "up" | "down"
+    ): WorkoutLoggerDraft => ({
+      ...draft,
+      exercises: draft.exercises.map((exercise, index) => {
+        if (index !== exerciseIndex) {
+          return exercise;
+        }
+
+        const toIndex = direction === "up" ? setIndex - 1 : setIndex + 1;
+        if (toIndex < 0 || toIndex >= exercise.sets.length) {
+          return exercise;
+        }
+
+        return {
+          ...exercise,
+          sets: reorderArray(exercise.sets, setIndex, toIndex)
+        };
+      })
+    }),
+    quickAdjustSet: (
+      draft: WorkoutLoggerDraft,
+      exerciseIndex: number,
+      setIndex: number,
+      field: SetQuickAdjustField,
+      delta: number
+    ): WorkoutLoggerDraft => ({
+      ...draft,
+      exercises: draft.exercises.map((exercise, index) => {
+        if (index !== exerciseIndex) {
+          return exercise;
+        }
+
+        return {
+          ...exercise,
+          sets: exercise.sets.map((set, currentIndex) => {
+            if (currentIndex !== setIndex) {
+              return set;
+            }
+
+            const currentValue = set[field] ?? 0;
+            const nextValue = currentValue + delta;
+            const min = field === "rpe" ? 1 : 0;
+            const max = field === "rpe" ? 10 : Number.MAX_SAFE_INTEGER;
+            return {
+              ...set,
+              [field]: clampNumeric(nextValue, min, max)
+            };
+          })
         };
       })
     }),
@@ -322,8 +612,50 @@ export function createPhase3WorkoutLoggerUiFlow(options: { locale?: string | nul
         };
       })
     }),
+    toRecoveryPayload: (draft: WorkoutLoggerDraft): WorkoutLoggerDraftRecoveryPayload => ({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      draft: deepCloneDraft(draft)
+    }),
+    fromRecoveryPayload: (payload: WorkoutLoggerDraftRecoveryPayload | null | undefined): WorkoutLoggerDraft => {
+      if (!payload || payload.version !== 1) {
+        return createDefaultDraft();
+      }
+
+      const cloned = deepCloneDraft(payload.draft);
+      return createDefaultDraft({
+        metadata: cloned.metadata,
+        exercises: cloned.exercises
+      });
+    },
+    queueOfflinePlaceholder: (
+      draft: WorkoutLoggerDraft,
+      reason = "offline"
+    ): { queueId: string; status: "queued_offline"; reason: string; draft: WorkoutLoggerDraftRecoveryPayload } => ({
+      queueId: createClientId("offline_workout"),
+      status: "queued_offline",
+      reason,
+      draft: {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        draft: deepCloneDraft(draft)
+      }
+    }),
     validate: (draft: WorkoutLoggerDraft): WorkoutLoggerFieldError[] => validateDraft(draft),
     submit: async (draft: WorkoutLoggerDraft): Promise<WorkoutLoggerSubmitResult> => {
+      if (isSubmitInFlight) {
+        return {
+          ok: false,
+          error: {
+            code: "WORKOUT_LOGGER_SUBMIT_IN_PROGRESS",
+            step: "review",
+            message: "Workout submission is already in progress.",
+            recoverable: true,
+            fieldErrors: []
+          }
+        };
+      }
+
       const fieldErrors = validateDraft(draft);
       if (fieldErrors.length > 0) {
         return {
@@ -339,6 +671,8 @@ export function createPhase3WorkoutLoggerUiFlow(options: { locale?: string | nul
       }
 
       try {
+        isSubmitInFlight = true;
+        const previousProgress = await readProfileProgressState(supabase);
         const result = await workouts.logWorkoutAtomic(toAtomicInput(draft));
         const verification: WorkoutLoggerSubmitVerification = {
           totalsUpdated: result.workout.totalSets > 0,
@@ -360,16 +694,32 @@ export function createPhase3WorkoutLoggerUiFlow(options: { locale?: string | nul
           };
         }
 
+        const currentProgress: WorkoutLoggerProfileProgressState = {
+          xpTotal: result.progress.xpTotal,
+          level: result.progress.level,
+          rankTier: result.progress.rankTier,
+          chainDays: result.progress.chainDays
+        };
+
         return {
           ok: true,
           result,
-          verification
+          verification,
+          progressDelta: computeProgressDelta(previousProgress, currentProgress),
+          nextRoute: {
+            name: "feed_detail",
+            params: {
+              workoutId: result.workoutId
+            }
+          }
         };
       } catch (error) {
         return {
           ok: false,
           error: mapRuntimeError(error, options.locale)
         };
+      } finally {
+        isSubmitInFlight = false;
       }
     }
   };
