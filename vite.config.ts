@@ -10,10 +10,9 @@ export default defineConfig(({ mode }) => ({
   ].filter(Boolean),
   resolve: {
     alias: {
-      // Host scaffold alias
       "@": path.resolve(__dirname, "./src"),
-      // KRUXT monorepo apps – host scaffold only; business logic lives here
       "@mobile": path.resolve(__dirname, "./apps/mobile/src"),
+      "@kruxt/types": path.resolve(__dirname, "./packages/types/src/index.ts"),
     },
   },
   server: { port: 8080, host: "::" },

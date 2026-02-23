@@ -121,7 +121,7 @@ export function ProfileScreen() {
                 { value: "imperial" as UnitSystem, label: "Imperial (lb / mi)" },
               ]}
               value={unitSystem}
-              onChange={setUnitSystem}
+              onChange={(v) => setUnitSystem(v as UnitSystem)}
               ariaLabel="Unit system"
             />
           </div>

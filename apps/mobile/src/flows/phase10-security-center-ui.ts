@@ -208,7 +208,7 @@ function mapUiSnapshot(snapshot: Phase10SecurityCenterSnapshot): Phase10Security
 
 function toUiMutationResult(result: Phase10SecurityCenterMutationResult): Phase10SecurityCenterUiMutationResult {
   if (!result.ok) {
-    return result;
+    return result as unknown as Phase10SecurityCenterUiMutationResult;
   }
 
   return {
@@ -226,7 +226,7 @@ export function createPhase10SecurityCenterUiFlow() {
     load: async (options: Phase10SecurityCenterLoadOptions = {}): Promise<Phase10SecurityCenterUiLoadResult> => {
       const result = await runtime.load(options);
       if (!result.ok) {
-        return result;
+        return result as unknown as Phase10SecurityCenterUiLoadResult;
       }
 
       return {

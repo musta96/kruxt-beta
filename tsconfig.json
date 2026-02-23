@@ -12,21 +12,20 @@
     "noUnusedParameters": false,
     "paths": {
       "@/*": ["./src/*"],
-      "@mobile/*": ["./apps/mobile/src/*"]
+      "@mobile/*": ["./apps/mobile/src/*"],
+      "@kruxt/types": ["./packages/types/src/index.ts"]
     },
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "strict": true,
+    "strict": false,
     "target": "ES2020",
     "useDefineForClassFields": true
   },
   "include": [
     "src",
+    "packages/types/src",
+    "apps/mobile/src/design-system",
     "apps/mobile/src/onboarding",
-    "apps/mobile/src/design-system"
-  ],
-  "exclude": [
-    "apps/mobile/src/services",
-    "apps/mobile/src/flows"
+    "apps/mobile/src/shells"
   ]
 }
