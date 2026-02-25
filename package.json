@@ -7,7 +7,7 @@
   "scripts": {
     "build": "turbo run build",
     "build:dev": "npx --yes vite build --mode development",
-    "dev": "turbo run dev --parallel",
+    "dev": "vite --host :: --port 8080",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
