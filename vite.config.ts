@@ -3,10 +3,10 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ command, mode }) => ({
   plugins: [
     react(),
-    mode === "development" && componentTagger(),
+    command === "serve" && mode === "development" && componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {
