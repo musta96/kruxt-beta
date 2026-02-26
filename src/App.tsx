@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { BrowserRouter, Routes, Route, NavLink, Outlet, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { OnboardingFlow } from "@mobile/onboarding";
+import { createOnboardingRuntimeServices } from "@mobile/onboarding/runtime-services";
 
 // ─── Placeholder screen ──────────────────────────────────────────
 function PlaceholderScreen({ title }: { title: string }) {
@@ -338,12 +340,24 @@ function DesignShowcase() {
   );
 }
 
+function OnboardingEntry() {
+  const navigate = useNavigate();
+  const services = React.useMemo(() => createOnboardingRuntimeServices(), []);
+  return (
+    <OnboardingFlow
+      onComplete={() => navigate("/feed")}
+      services={services}
+    />
+  );
+}
+
 // ─── App Router ──────────────────────────────────────────────────
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<DesignShowcase />} />
+        <Route path="/" element={<OnboardingEntry />} />
+        <Route path="/showcase" element={<DesignShowcase />} />
         <Route element={<MobileShell />}>
           <Route path="/feed" element={<PlaceholderScreen title="Proof Feed" />} />
           <Route path="/log" element={<PlaceholderScreen title="Log" />} />
