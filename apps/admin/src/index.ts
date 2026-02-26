@@ -10,3 +10,5 @@ export * from "./flows/phase10-customization-support";
 export * from "./flows/phase10-platform-control-plane";
 export * from "./flows/phase10-platform-control-plane-ui";
 export * from "./ops-console";
+export * from "./admin-settings";
+export * from "./staff-console";

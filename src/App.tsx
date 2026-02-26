@@ -8,6 +8,9 @@ import { ProofFeedFlow } from "@mobile/proof-feed";
 import { createProofFeedRuntimeServices } from "@mobile/proof-feed/runtime-services";
 import { OpsConsoleFlow } from "@admin/ops-console";
 import { createOpsConsoleRuntimeServices } from "@admin/ops-console/runtime-services";
+import { AdminSettingsFlow } from "@admin/admin-settings";
+import { StaffConsoleFlow } from "@admin/staff-console";
+import { createStaffConsoleRuntimeServices } from "@admin/staff-console/runtime-services";
 
 // ─── Placeholder screen ──────────────────────────────────────────
 function PlaceholderScreen({ title }: { title: string }) {
@@ -400,11 +403,23 @@ function ProofFeedEntry() {
   return <ProofFeedFlow services={services} />;
 }
 
-const DEFAULT_ADMIN_GYM_ID = "3306f501-3f50-4a30-8552-b47bf9cce199";
+const DEFAULT_ADMIN_GYM_ID =
+  (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_DEFAULT_GYM_ID ||
+  "3306f501-3f50-4a30-8552-b47bf9cce199";
 
 function OpsConsoleEntry({ defaultTab = "classes" }: { defaultTab?: "classes" | "waitlist" | "checkin" | "waiver" }) {
   const services = React.useMemo(() => createOpsConsoleRuntimeServices(), []);
   return <OpsConsoleFlow services={services} gymId={DEFAULT_ADMIN_GYM_ID} defaultTab={defaultTab} />;
+}
+
+function AdminSettingsEntry() {
+  const services = React.useMemo(() => createOpsConsoleRuntimeServices(), []);
+  return <AdminSettingsFlow services={services} gymId={DEFAULT_ADMIN_GYM_ID} />;
+}
+
+function StaffConsoleEntry() {
+  const services = React.useMemo(() => createStaffConsoleRuntimeServices(), []);
+  return <StaffConsoleFlow services={services} gymId={DEFAULT_ADMIN_GYM_ID} />;
 }
 
 export default function App() {
@@ -422,7 +437,7 @@ export default function App() {
         </Route>
         <Route element={<AdminShell />}>
           <Route path="/admin" element={<PlaceholderScreen title="Overview" />} />
-          <Route path="/admin/members" element={<PlaceholderScreen title="Members" />} />
+          <Route path="/admin/members" element={<StaffConsoleEntry />} />
           <Route path="/admin/classes" element={<OpsConsoleEntry defaultTab="classes" />} />
           <Route path="/admin/checkins" element={<OpsConsoleEntry defaultTab="checkin" />} />
           <Route path="/admin/waivers" element={<OpsConsoleEntry defaultTab="waiver" />} />
@@ -430,7 +445,7 @@ export default function App() {
           <Route path="/admin/integrations" element={<PlaceholderScreen title="Integrations" />} />
           <Route path="/admin/compliance" element={<PlaceholderScreen title="Compliance" />} />
           <Route path="/admin/support" element={<PlaceholderScreen title="Support" />} />
-          <Route path="/admin/settings" element={<PlaceholderScreen title="Settings" />} />
+          <Route path="/admin/settings" element={<AdminSettingsEntry />} />
         </Route>
       </Routes>
     </BrowserRouter>

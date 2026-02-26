@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useReducer, useState } from "react";
+import { Link } from "react-router-dom";
 import type { AccessEventType, AccessResult } from "@kruxt/types";
 import type {
   ClassSchedulingOptions,
@@ -71,23 +72,41 @@ interface CreateClassDraft {
   templateId: string;
   customTitle: string;
   coachUserId: string;
-  startsAtLocal: string;
+  startDate: string;
+  startTime: string;
   durationMinutes: number;
   capacity: number;
+  recurrence: "none" | "weekly";
+  weekdays: number[];
+  recurrenceEndDate: string;
   notes: string;
 }
 
-function toDatetimeLocalValue(date: Date): string {
+function toDateValue(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function defaultStartLocal(): string {
+function toTimeValue(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function addDays(base: Date, days: number): Date {
+  const next = new Date(base.getTime());
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function defaultStartDateTime(): { startDate: string; startTime: string } {
   const date = new Date();
   date.setSeconds(0, 0);
   date.setMinutes(0);
   date.setHours(date.getHours() + 1);
-  return toDatetimeLocalValue(date);
+  return {
+    startDate: toDateValue(date),
+    startTime: toTimeValue(date)
+  };
 }
 
 function parseClassMeta(description: string | null | undefined): { location?: string; course?: string; notes?: string } {
@@ -112,15 +131,20 @@ function parseClassMeta(description: string | null | undefined): { location?: st
 function buildInitialCreateDraft(options: ClassSchedulingOptions): CreateClassDraft {
   const firstTemplate = options.templates[0];
   const location = firstTemplate?.location ?? options.locations[0] ?? "Main Floor";
+  const { startDate, startTime } = defaultStartDateTime();
 
   return {
     location,
     templateId: firstTemplate?.id ?? "",
     customTitle: firstTemplate?.name ?? "",
     coachUserId: "",
-    startsAtLocal: defaultStartLocal(),
+    startDate,
+    startTime,
     durationMinutes: firstTemplate?.defaultDurationMinutes ?? 60,
     capacity: firstTemplate?.defaultCapacity ?? 20,
+    recurrence: "none",
+    weekdays: [],
+    recurrenceEndDate: startDate,
     notes: ""
   };
 }
@@ -136,6 +160,46 @@ function pickTemplate(
     if (exact) return exact;
   }
   return sameLocation[0] ?? options.templates[0];
+}
+
+function parseStartDateTime(startDate: string, startTime: string): Date | null {
+  if (!startDate || !startTime) return null;
+  const date = new Date(`${startDate}T${startTime}`);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+function dayKeyFromDateValue(dateValue: string): number | null {
+  if (!dateValue) return null;
+  const date = new Date(`${dateValue}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.getDay();
+}
+
+function buildRecurringStarts(
+  firstStart: Date,
+  weekdays: number[],
+  endDateIso: string
+): Date[] {
+  const endDate = new Date(`${endDateIso}T23:59`);
+  if (Number.isNaN(endDate.getTime())) return [firstStart];
+  if (endDate.getTime() < firstStart.getTime()) return [firstStart];
+
+  const weekdaySet = new Set(weekdays);
+  if (weekdaySet.size === 0) return [firstStart];
+
+  const occurrences: Date[] = [];
+  const cursor = new Date(firstStart.getTime());
+
+  while (cursor.getTime() <= endDate.getTime() && occurrences.length < 120) {
+    if (cursor.getTime() >= firstStart.getTime() && weekdaySet.has(cursor.getDay())) {
+      occurrences.push(new Date(cursor.getTime()));
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  if (occurrences.length === 0) return [firstStart];
+  return occurrences;
 }
 
 /* ── Props ──────────────────────────────────────────────────────── */
@@ -313,6 +377,15 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
   const selectedTemplate =
     templatesForLocation.find((item) => item.id === draft.templateId) ??
     pickTemplate(options, draft.location, draft.templateId);
+  const quickDateOptions = useMemo(() => {
+    const now = new Date();
+    return [
+      { label: "Today", value: toDateValue(now) },
+      { label: "Tomorrow", value: toDateValue(addDays(now, 1)) },
+      { label: "In 7 days", value: toDateValue(addDays(now, 7)) }
+    ];
+  }, []);
+  const quickTimeOptions = ["06:30", "08:00", "12:30", "18:00", "19:30"];
 
   const openCreateForm = () => {
     setDraft(buildInitialCreateDraft(options));
@@ -341,7 +414,7 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
       setFormError("Class title is required.");
       return;
     }
-    if (!draft.startsAtLocal.trim()) {
+    if (!draft.startDate.trim() || !draft.startTime.trim()) {
       setFormError("Start date and time are required.");
       return;
     }
@@ -354,30 +427,53 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
       return;
     }
 
-    const startsAtDate = new Date(draft.startsAtLocal);
-    if (Number.isNaN(startsAtDate.getTime())) {
+    const startsAtDate = parseStartDateTime(draft.startDate, draft.startTime);
+    if (!startsAtDate) {
       setFormError("Start date/time is invalid.");
       return;
     }
 
-    const endsAtDate = new Date(startsAtDate.getTime() + draft.durationMinutes * 60_000);
-    const descriptionLines = [
-      `location: ${draft.location}`,
-      `course: ${selectedTemplate.name}`,
-      draft.notes.trim() ? `notes: ${draft.notes.trim()}` : null
-    ].filter(Boolean) as string[];
+    if (draft.recurrence === "weekly" && draft.weekdays.length === 0) {
+      setFormError("Select at least one weekday for recurring classes.");
+      return;
+    }
 
-    await runAction("create_class", () =>
-      services.createClass(gymId, {
-        title: draft.customTitle.trim(),
-        coachUserId: draft.coachUserId || undefined,
-        capacity: draft.capacity,
-        status: "scheduled",
-        startsAt: startsAtDate.toISOString(),
-        endsAt: endsAtDate.toISOString(),
-        description: descriptionLines.join("\n")
-      })
-    );
+    const starts =
+      draft.recurrence === "weekly"
+        ? buildRecurringStarts(startsAtDate, draft.weekdays, draft.recurrenceEndDate || draft.startDate)
+        : [startsAtDate];
+
+    await runAction("create_class", async () => {
+      let lastResult: Awaited<ReturnType<typeof services.createClass>> | null = null;
+      for (const startAt of starts) {
+        const endAt = new Date(startAt.getTime() + draft.durationMinutes * 60_000);
+        const descriptionLines = [
+          `location: ${draft.location}`,
+          `course: ${selectedTemplate.name}`,
+          draft.recurrence === "weekly" ? "recurrence: weekly" : null,
+          draft.notes.trim() ? `notes: ${draft.notes.trim()}` : null
+        ].filter(Boolean) as string[];
+
+        const result = await services.createClass(gymId, {
+          title: draft.customTitle.trim(),
+          coachUserId: draft.coachUserId || undefined,
+          capacity: draft.capacity,
+          status: "scheduled",
+          startsAt: startAt.toISOString(),
+          endsAt: endAt.toISOString(),
+          description: descriptionLines.join("\n")
+        });
+
+        if (!result.ok) return result;
+        lastResult = result;
+      }
+
+      if (lastResult) return lastResult;
+      return {
+        ok: false as const,
+        error: makeRuntimeUiError("No class occurrences were generated.")
+      };
+    });
     setShowCreateForm(false);
   };
 
@@ -393,11 +489,16 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
       <div className="panel overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h3 className="text-sm font-display font-bold text-foreground">Classes</h3>
-          <ActionButton
-            label="+ Schedule Class"
-            pending={pending === "create_class"}
-            onClick={openCreateForm}
-          />
+          <div className="flex items-center gap-2">
+            <Link to="/admin/settings" className="btn-ghost w-auto">
+              Manage Catalog
+            </Link>
+            <ActionButton
+              label="+ Schedule Class"
+              pending={pending === "create_class"}
+              onClick={openCreateForm}
+            />
+          </div>
         </div>
 
         {showCreateForm && (
@@ -474,15 +575,78 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Starts</label>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</label>
                 <input
                   className="input-field"
-                  type="datetime-local"
-                  value={draft.startsAtLocal}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, startsAtLocal: event.target.value }))}
+                  type="date"
+                  value={draft.startDate}
+                  onChange={(event) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      startDate: event.target.value,
+                      recurrenceEndDate: prev.recurrenceEndDate || event.target.value,
+                      weekdays:
+                        prev.recurrence === "weekly" && prev.weekdays.length === 0
+                          ? (() => {
+                              const key = dayKeyFromDateValue(event.target.value);
+                              return key === null ? prev.weekdays : [key];
+                            })()
+                          : prev.weekdays
+                    }))
+                  }
                 />
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {quickDateOptions.map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      className={`btn-compact ${draft.startDate === item.value ? "ring-2 ring-primary" : ""}`}
+                      onClick={() =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          startDate: item.value,
+                          recurrenceEndDate: prev.recurrenceEndDate || item.value,
+                          weekdays:
+                            prev.recurrence === "weekly" && prev.weekdays.length === 0
+                              ? (() => {
+                                  const key = dayKeyFromDateValue(item.value);
+                                  return key === null ? prev.weekdays : [key];
+                                })()
+                              : prev.weekdays
+                        }))
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Time</label>
+                <input
+                  className="input-field"
+                  type="time"
+                  step={900}
+                  value={draft.startTime}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, startTime: event.target.value }))}
+                />
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {quickTimeOptions.map((timeValue) => (
+                    <button
+                      key={timeValue}
+                      type="button"
+                      className={`btn-compact ${draft.startTime === timeValue ? "ring-2 ring-primary" : ""}`}
+                      onClick={() => setDraft((prev) => ({ ...prev, startTime: timeValue }))}
+                    >
+                      {timeValue}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Duration (min)</label>
                 <input
@@ -496,9 +660,24 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
                   }
                 />
               </div>
+              <div className="md:col-span-3">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Quick Duration</label>
+                <div className="flex gap-2 mt-1">
+                  {[45, 55, 60, 75].map((minutes) => (
+                    <button
+                      key={minutes}
+                      type="button"
+                      className={`btn-compact ${draft.durationMinutes === minutes ? "ring-2 ring-primary" : ""}`}
+                      onClick={() => setDraft((prev) => ({ ...prev, durationMinutes: minutes }))}
+                    >
+                      {minutes}m
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Capacity</label>
                 <input
@@ -509,7 +688,91 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
                   onChange={(event) => setDraft((prev) => ({ ...prev, capacity: Number(event.target.value) || 0 }))}
                 />
               </div>
-              <div className="md:col-span-3 flex flex-col gap-1">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recurrence</label>
+                <select
+                  className="input-field"
+                  value={draft.recurrence}
+                  onChange={(event) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      recurrence: event.target.value as CreateClassDraft["recurrence"],
+                      weekdays:
+                        event.target.value === "weekly" && prev.weekdays.length === 0
+                          ? (() => {
+                              const key = dayKeyFromDateValue(prev.startDate);
+                              return key === null ? prev.weekdays : [key];
+                            })()
+                          : prev.weekdays
+                    }))
+                  }
+                >
+                  <option value="none">One-time</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </div>
+              {draft.recurrence === "weekly" && (
+                <div className="md:col-span-3 flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Repeat Until</label>
+                  <input
+                    className="input-field"
+                    type="date"
+                    value={draft.recurrenceEndDate}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, recurrenceEndDate: event.target.value }))}
+                  />
+                </div>
+              )}
+              {draft.recurrence === "none" && (
+                <div className="md:col-span-3 flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Notes (optional)</label>
+                  <input
+                    className="input-field"
+                    value={draft.notes}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, notes: event.target.value }))}
+                    placeholder="Room setup, equipment, visibility notes..."
+                  />
+                </div>
+              )}
+            </div>
+
+            {draft.recurrence === "weekly" && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Weekdays</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: 1, label: "Mon" },
+                    { key: 2, label: "Tue" },
+                    { key: 3, label: "Wed" },
+                    { key: 4, label: "Thu" },
+                    { key: 5, label: "Fri" },
+                    { key: 6, label: "Sat" },
+                    { key: 0, label: "Sun" }
+                  ].map((day) => {
+                    const active = draft.weekdays.includes(day.key);
+                    return (
+                      <button
+                        key={day.key}
+                        type="button"
+                        className={`btn-compact ${active ? "ring-2 ring-primary bg-primary/15 text-primary" : ""}`}
+                        onClick={() =>
+                          setDraft((prev) => ({
+                            ...prev,
+                            weekdays: active
+                              ? prev.weekdays.filter((item) => item !== day.key)
+                              : [...prev.weekdays, day.key].sort()
+                          }))
+                        }
+                      >
+                        {day.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {draft.recurrence === "weekly" && (
+              <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Notes (optional)</label>
                 <input
                   className="input-field"
@@ -518,7 +781,7 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
                   placeholder="Room setup, equipment, visibility notes..."
                 />
               </div>
-            </div>
+            )}
 
             {formError && (
               <div className="text-destructive text-xs font-medium">{formError}</div>

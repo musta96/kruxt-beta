@@ -20,6 +20,7 @@ import { createAdminSupabaseClient } from "../services";
 export interface OpsConsoleServices {
   load(gymId: string, options?: Phase5B2BOpsLoadOptions): Promise<Phase5OpsLoadResult>;
   listClassSchedulingOptions(gymId: string): Promise<ClassSchedulingOptions>;
+  saveClassSchedulingOptions(gymId: string, input: ClassSchedulingCatalogInput): Promise<SaveClassSchedulingOptionsResult>;
   createClass(gymId: string, input: CreateGymClassInput): Promise<Phase5OpsMutationResult>;
   updateClass(gymId: string, classId: string, input: UpdateGymClassInput): Promise<Phase5OpsMutationResult>;
   setClassStatus(gymId: string, classId: string, status: GymClass["status"]): Promise<Phase5OpsMutationResult>;
@@ -49,6 +50,17 @@ export interface ClassSchedulingOptions {
   locations: string[];
   templates: ClassTemplateOption[];
   coaches: CoachOption[];
+}
+
+export interface ClassSchedulingCatalogInput {
+  locations: string[];
+  templates: ClassTemplateOption[];
+}
+
+export interface SaveClassSchedulingOptionsResult {
+  ok: boolean;
+  options?: ClassSchedulingOptions;
+  error?: { message: string };
 }
 
 type GymMembershipStaffRow = {
@@ -121,6 +133,13 @@ const GYM_TEMPLATE_OVERRIDES: Record<string, ClassTemplateOption[]> = {
   "3306f501-3f50-4a30-8552-b47bf9cce199": BZONE_CLASS_TEMPLATES
 };
 
+const CATALOG_STORAGE_PREFIX = "kruxt_admin_class_catalog_v1:";
+
+type StoredCatalog = {
+  locations: string[];
+  templates: ClassTemplateOption[];
+};
+
 function createEmptySnapshot(): Phase5B2BOpsSnapshot {
   return {
     membershipPlans: [],
@@ -178,6 +197,50 @@ function deriveLocations(templates: ClassTemplateOption[]): string[] {
   return Array.from(unique);
 }
 
+function normalizeCatalog(input: ClassSchedulingCatalogInput): StoredCatalog {
+  const rawLocations = input.locations.map((item) => item.trim()).filter(Boolean);
+  const locationSet = new Set<string>(rawLocations);
+  const templates: ClassTemplateOption[] = [];
+
+  for (const item of input.templates) {
+    const location = item.location.trim();
+    const name = item.name.trim();
+    if (!location || !name) continue;
+    locationSet.add(location);
+    templates.push({
+      id: item.id || createPreviewId("template"),
+      name,
+      location,
+      defaultCapacity: Math.max(1, Math.floor(item.defaultCapacity || 1)),
+      defaultDurationMinutes: Math.max(15, Math.floor(item.defaultDurationMinutes || 60))
+    });
+  }
+
+  const locations = Array.from(locationSet);
+  return { locations, templates };
+}
+
+function readCatalogFromStorage(gymId: string): StoredCatalog | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(`${CATALOG_STORAGE_PREFIX}${gymId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredCatalog;
+    return normalizeCatalog(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function writeCatalogToStorage(gymId: string, catalog: StoredCatalog): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(`${CATALOG_STORAGE_PREFIX}${gymId}`, JSON.stringify(catalog));
+  } catch {
+    // noop
+  }
+}
+
 const fallbackFailedMutation = async (
   message: string
 ): Promise<Phase5OpsMutationResult> => ({
@@ -194,6 +257,7 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
   let flow: ReturnType<typeof import("../flows/phase5-ops-console-ui").createPhase5OpsConsoleUiFlow> | null = null;
   let failed = false;
   let adminSupabase: ReturnType<typeof createAdminSupabaseClient> | null = null;
+  const catalogByGym = new Map<string, StoredCatalog>();
 
   let previewGymId = "preview-gym-id";
   let previewClasses: Phase5B2BOpsSnapshot["classes"] = [];
@@ -235,6 +299,25 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
       updatedAt: previewSeedTs
     }
   ];
+
+  const getCatalogForGym = (gymId: string): StoredCatalog => {
+    const cached = catalogByGym.get(gymId);
+    if (cached) return cached;
+
+    const fromStorage = readCatalogFromStorage(gymId);
+    if (fromStorage) {
+      catalogByGym.set(gymId, fromStorage);
+      return fromStorage;
+    }
+
+    const templates = getTemplatesForGym(gymId);
+    const defaultCatalog: StoredCatalog = {
+      templates,
+      locations: deriveLocations(templates)
+    };
+    catalogByGym.set(gymId, defaultCatalog);
+    return defaultCatalog;
+  };
 
   const ensurePreviewGymId = (gymId: string) => {
     if (!gymId || gymId === previewGymId) return;
@@ -330,11 +413,10 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackLoad(gymId, options)
       ),
     listClassSchedulingOptions: async (gymId) => {
-      const templates = getTemplatesForGym(gymId);
-      const locations = deriveLocations(templates);
+      const catalog = getCatalogForGym(gymId);
       const fallback: ClassSchedulingOptions = {
-        locations,
-        templates,
+        locations: [...catalog.locations],
+        templates: [...catalog.templates],
         coaches: []
       };
 
@@ -397,6 +479,27 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
       } catch (error) {
         console.warn("[ops-console-runtime] listClassSchedulingOptions failed:", error);
         return fallback;
+      }
+    },
+    saveClassSchedulingOptions: async (gymId, input) => {
+      try {
+        const normalized = normalizeCatalog(input);
+        catalogByGym.set(gymId, normalized);
+        writeCatalogToStorage(gymId, normalized);
+        const options = {
+          locations: [...normalized.locations],
+          templates: [...normalized.templates],
+          coaches: [] as CoachOption[]
+        };
+
+        return { ok: true, options };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to save class catalog.";
+        console.warn("[ops-console-runtime] saveClassSchedulingOptions failed:", error);
+        return {
+          ok: false,
+          error: { message }
+        };
       }
     },
     createClass: (gymId, input) =>
