@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useReducer, useState } from "react";
 import type { AccessEventType, AccessResult } from "@kruxt/types";
-import type { OpsConsoleServices } from "./runtime-services";
+import type {
+  ClassSchedulingOptions,
+  ClassTemplateOption,
+  CoachOption,
+  OpsConsoleServices
+} from "./runtime-services";
 import type { Phase5B2BOpsSnapshot } from "../flows/phase5-b2b-ops";
 import type { Phase5OpsUiError } from "../flows/phase5-ops-console-ui";
 
@@ -59,6 +64,78 @@ function makeRuntimeUiError(
     message,
     recoverable: true
   };
+}
+
+interface CreateClassDraft {
+  location: string;
+  templateId: string;
+  customTitle: string;
+  coachUserId: string;
+  startsAtLocal: string;
+  durationMinutes: number;
+  capacity: number;
+  notes: string;
+}
+
+function toDatetimeLocalValue(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function defaultStartLocal(): string {
+  const date = new Date();
+  date.setSeconds(0, 0);
+  date.setMinutes(0);
+  date.setHours(date.getHours() + 1);
+  return toDatetimeLocalValue(date);
+}
+
+function parseClassMeta(description: string | null | undefined): { location?: string; course?: string; notes?: string } {
+  if (!description) return {};
+  const lines = description.split("\n").map((line) => line.trim());
+  const output: { location?: string; course?: string; notes?: string } = {};
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    if (lower.startsWith("location:")) {
+      output.location = line.slice("location:".length).trim();
+    } else if (lower.startsWith("course:")) {
+      output.course = line.slice("course:".length).trim();
+    } else if (lower.startsWith("notes:")) {
+      output.notes = line.slice("notes:".length).trim();
+    }
+  }
+
+  return output;
+}
+
+function buildInitialCreateDraft(options: ClassSchedulingOptions): CreateClassDraft {
+  const firstTemplate = options.templates[0];
+  const location = firstTemplate?.location ?? options.locations[0] ?? "Main Floor";
+
+  return {
+    location,
+    templateId: firstTemplate?.id ?? "",
+    customTitle: firstTemplate?.name ?? "",
+    coachUserId: "",
+    startsAtLocal: defaultStartLocal(),
+    durationMinutes: firstTemplate?.defaultDurationMinutes ?? 60,
+    capacity: firstTemplate?.defaultCapacity ?? 20,
+    notes: ""
+  };
+}
+
+function pickTemplate(
+  options: ClassSchedulingOptions,
+  location: string,
+  templateId?: string
+): ClassTemplateOption | undefined {
+  const sameLocation = options.templates.filter((item) => item.location === location);
+  if (templateId) {
+    const exact = sameLocation.find((item) => item.id === templateId);
+    if (exact) return exact;
+  }
+  return sameLocation[0] ?? options.templates[0];
 }
 
 /* ── Props ──────────────────────────────────────────────────────── */
@@ -192,6 +269,117 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
   const classes = snapshot.classes;
   const bookings = snapshot.selectedClassBookings;
   const selectedId = snapshot.selectedClassId;
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [options, setOptions] = useState<ClassSchedulingOptions>({
+    locations: ["Main Floor"],
+    templates: [],
+    coaches: []
+  });
+  const [draft, setDraft] = useState<CreateClassDraft>(() => buildInitialCreateDraft({
+    locations: ["Main Floor"],
+    templates: [],
+    coaches: []
+  }));
+
+  useEffect(() => {
+    let active = true;
+
+    const loadOptions = async () => {
+      try {
+        const data = await services.listClassSchedulingOptions(gymId);
+        if (!active) return;
+        setOptions(data);
+        if (!showCreateForm) {
+          setDraft(buildInitialCreateDraft(data));
+        }
+      } catch (error) {
+        if (!active) return;
+        console.warn("[ops-console] unable to load scheduling options:", error);
+      }
+    };
+
+    void loadOptions();
+    return () => {
+      active = false;
+    };
+  }, [gymId, services, showCreateForm]);
+
+  const coachNameById = new Map<string, string>(
+    options.coaches.map((coach: CoachOption) => [coach.userId, coach.displayName])
+  );
+
+  const templatesForLocation = options.templates.filter((item) => item.location === draft.location);
+  const selectedTemplate =
+    templatesForLocation.find((item) => item.id === draft.templateId) ??
+    pickTemplate(options, draft.location, draft.templateId);
+
+  const openCreateForm = () => {
+    setDraft(buildInitialCreateDraft(options));
+    setFormError(null);
+    setShowCreateForm(true);
+  };
+
+  const applyTemplateDefaults = (template: ClassTemplateOption | undefined) => {
+    if (!template) return;
+    setDraft((prev) => ({
+      ...prev,
+      templateId: template.id,
+      customTitle: template.name,
+      capacity: template.defaultCapacity,
+      durationMinutes: template.defaultDurationMinutes
+    }));
+  };
+
+  const handleCreateClass = async () => {
+    setFormError(null);
+    if (!selectedTemplate) {
+      setFormError("Select a class template.");
+      return;
+    }
+    if (!draft.customTitle.trim()) {
+      setFormError("Class title is required.");
+      return;
+    }
+    if (!draft.startsAtLocal.trim()) {
+      setFormError("Start date and time are required.");
+      return;
+    }
+    if (draft.durationMinutes < 15) {
+      setFormError("Duration must be at least 15 minutes.");
+      return;
+    }
+    if (draft.capacity < 1) {
+      setFormError("Capacity must be at least 1.");
+      return;
+    }
+
+    const startsAtDate = new Date(draft.startsAtLocal);
+    if (Number.isNaN(startsAtDate.getTime())) {
+      setFormError("Start date/time is invalid.");
+      return;
+    }
+
+    const endsAtDate = new Date(startsAtDate.getTime() + draft.durationMinutes * 60_000);
+    const descriptionLines = [
+      `location: ${draft.location}`,
+      `course: ${selectedTemplate.name}`,
+      draft.notes.trim() ? `notes: ${draft.notes.trim()}` : null
+    ].filter(Boolean) as string[];
+
+    await runAction("create_class", () =>
+      services.createClass(gymId, {
+        title: draft.customTitle.trim(),
+        coachUserId: draft.coachUserId || undefined,
+        capacity: draft.capacity,
+        status: "scheduled",
+        startsAt: startsAtDate.toISOString(),
+        endsAt: endsAtDate.toISOString(),
+        description: descriptionLines.join("\n")
+      })
+    );
+    setShowCreateForm(false);
+  };
 
   return (
     <div className="space-y-4">
@@ -206,30 +394,175 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h3 className="text-sm font-display font-bold text-foreground">Classes</h3>
           <ActionButton
-            label="+ New Class"
+            label="+ Schedule Class"
             pending={pending === "create_class"}
-            onClick={() => runAction("create_class", () =>
-              services.createClass(gymId, {
-                title: "New Class",
-                capacity: 20,
-                startsAt: new Date(Date.now() + 86400000).toISOString(),
-                endsAt: new Date(Date.now() + 86400000 + 3600000).toISOString(),
-              })
-            )}
+            onClick={openCreateForm}
           />
         </div>
+
+        {showCreateForm && (
+          <div className="p-4 border-b border-border bg-muted/20 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Location</label>
+                <select
+                  className="input-field"
+                  value={draft.location}
+                  onChange={(event) => {
+                    const location = event.target.value;
+                    const template = pickTemplate(options, location);
+                    setDraft((prev) => ({
+                      ...prev,
+                      location,
+                      templateId: template?.id ?? "",
+                      customTitle: template?.name ?? prev.customTitle,
+                      capacity: template?.defaultCapacity ?? prev.capacity,
+                      durationMinutes: template?.defaultDurationMinutes ?? prev.durationMinutes
+                    }));
+                  }}
+                >
+                  {options.locations.map((location) => (
+                    <option key={location} value={location}>{location}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Course</label>
+                <select
+                  className="input-field"
+                  value={selectedTemplate?.id ?? ""}
+                  onChange={(event) => {
+                    const template = options.templates.find((item) => item.id === event.target.value);
+                    applyTemplateDefaults(template);
+                  }}
+                >
+                  {templatesForLocation.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Coach</label>
+                <select
+                  className="input-field"
+                  value={draft.coachUserId}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, coachUserId: event.target.value }))}
+                >
+                  <option value="">Unassigned</option>
+                  {options.coaches.map((coach) => (
+                    <option key={coach.userId} value={coach.userId}>
+                      {coach.displayName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+              <div className="flex flex-col gap-1 md:col-span-2">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Class title</label>
+                <input
+                  className="input-field"
+                  value={draft.customTitle}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, customTitle: event.target.value }))}
+                  placeholder="Pilates Reformer"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Starts</label>
+                <input
+                  className="input-field"
+                  type="datetime-local"
+                  value={draft.startsAtLocal}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, startsAtLocal: event.target.value }))}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Duration (min)</label>
+                <input
+                  className="input-field"
+                  type="number"
+                  min={15}
+                  step={5}
+                  value={draft.durationMinutes}
+                  onChange={(event) =>
+                    setDraft((prev) => ({ ...prev, durationMinutes: Number(event.target.value) || 0 }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Capacity</label>
+                <input
+                  className="input-field"
+                  type="number"
+                  min={1}
+                  value={draft.capacity}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, capacity: Number(event.target.value) || 0 }))}
+                />
+              </div>
+              <div className="md:col-span-3 flex flex-col gap-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Notes (optional)</label>
+                <input
+                  className="input-field"
+                  value={draft.notes}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, notes: event.target.value }))}
+                  placeholder="Room setup, equipment, visibility notes..."
+                />
+              </div>
+            </div>
+
+            {formError && (
+              <div className="text-destructive text-xs font-medium">{formError}</div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                className="btn-ghost w-auto"
+                onClick={() => {
+                  setShowCreateForm(false);
+                  setFormError(null);
+                }}
+              >
+                Cancel
+              </button>
+              <ActionButton
+                label="Confirm & Schedule"
+                pending={pending === "create_class"}
+                onClick={() => {
+                  void handleCreateClass();
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         <table className="data-table">
           <thead>
             <tr>
-              <th>Title</th><th>Status</th><th>Capacity</th><th>Starts</th><th>Actions</th>
+              <th>Title</th><th>Location</th><th>Coach</th><th>Status</th><th>Capacity</th><th>Starts</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {classes.length === 0 ? (
-              <tr><td colSpan={5} className="text-center text-muted-foreground text-sm py-6">No classes found</td></tr>
+              <tr><td colSpan={7} className="text-center text-muted-foreground text-sm py-6">No classes found</td></tr>
             ) : classes.map((c) => (
               <tr key={c.id} className={c.id === selectedId ? "bg-muted/30" : ""}>
                 <td className="font-medium">{c.title}</td>
+                <td className="text-xs text-muted-foreground">
+                  {parseClassMeta(c.description).location ?? "—"}
+                </td>
+                <td className="text-xs text-muted-foreground">
+                  {c.coachUserId ? coachNameById.get(c.coachUserId) ?? `${c.coachUserId.slice(0, 8)}...` : "Unassigned"}
+                </td>
                 <td><StatusBadge status={c.status} /></td>
                 <td className="font-mono tabular-nums">{c.capacity}</td>
                 <td className="text-xs text-muted-foreground">{new Date(c.startsAt).toLocaleString()}</td>

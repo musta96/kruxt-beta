@@ -15,9 +15,11 @@ import type {
   UpdateGymClassInput,
   UpsertClassBookingInput
 } from "@kruxt/types";
+import { createAdminSupabaseClient } from "../services";
 
 export interface OpsConsoleServices {
   load(gymId: string, options?: Phase5B2BOpsLoadOptions): Promise<Phase5OpsLoadResult>;
+  listClassSchedulingOptions(gymId: string): Promise<ClassSchedulingOptions>;
   createClass(gymId: string, input: CreateGymClassInput): Promise<Phase5OpsMutationResult>;
   updateClass(gymId: string, classId: string, input: UpdateGymClassInput): Promise<Phase5OpsMutationResult>;
   setClassStatus(gymId: string, classId: string, status: GymClass["status"]): Promise<Phase5OpsMutationResult>;
@@ -29,6 +31,95 @@ export interface OpsConsoleServices {
   recordWaiverAcceptance(gymId: string, waiverId: string, input: AdminRecordAcceptanceInput): Promise<Phase5OpsMutationResult>;
   recordContractAcceptance(gymId: string, contractId: string, input: AdminRecordAcceptanceInput): Promise<Phase5OpsMutationResult>;
 }
+
+export interface CoachOption {
+  userId: string;
+  displayName: string;
+}
+
+export interface ClassTemplateOption {
+  id: string;
+  name: string;
+  location: string;
+  defaultCapacity: number;
+  defaultDurationMinutes: number;
+}
+
+export interface ClassSchedulingOptions {
+  locations: string[];
+  templates: ClassTemplateOption[];
+  coaches: CoachOption[];
+}
+
+type GymMembershipStaffRow = {
+  user_id: string;
+  role: "leader" | "officer" | "coach";
+};
+
+type ProfileRow = {
+  id: string;
+  display_name: string | null;
+  username: string | null;
+};
+
+const DEFAULT_CLASS_TEMPLATES: ClassTemplateOption[] = [
+  {
+    id: "functional_training",
+    name: "Functional Training",
+    location: "Main Floor",
+    defaultCapacity: 20,
+    defaultDurationMinutes: 60
+  },
+  {
+    id: "hyrox",
+    name: "Hyrox",
+    location: "Main Floor",
+    defaultCapacity: 24,
+    defaultDurationMinutes: 60
+  }
+];
+
+const BZONE_CLASS_TEMPLATES: ClassTemplateOption[] = [
+  {
+    id: "pilates_reformer_wz",
+    name: "Pilates Reformer",
+    location: "Wellness Zone",
+    defaultCapacity: 8,
+    defaultDurationMinutes: 55
+  },
+  {
+    id: "pilates_bodyweight_bz",
+    name: "Pilates Bodyweight",
+    location: "BZone",
+    defaultCapacity: 30,
+    defaultDurationMinutes: 55
+  },
+  {
+    id: "spartan_training_bz",
+    name: "Spartan Training",
+    location: "BZone",
+    defaultCapacity: 20,
+    defaultDurationMinutes: 60
+  },
+  {
+    id: "hyrox_bz",
+    name: "Hyrox",
+    location: "BZone",
+    defaultCapacity: 18,
+    defaultDurationMinutes: 60
+  },
+  {
+    id: "functional_training_bz",
+    name: "Functional Training",
+    location: "BZone",
+    defaultCapacity: 20,
+    defaultDurationMinutes: 60
+  }
+];
+
+const GYM_TEMPLATE_OVERRIDES: Record<string, ClassTemplateOption[]> = {
+  "3306f501-3f50-4a30-8552-b47bf9cce199": BZONE_CLASS_TEMPLATES
+};
 
 function createEmptySnapshot(): Phase5B2BOpsSnapshot {
   return {
@@ -75,6 +166,18 @@ function cloneSnapshot(snapshot: Phase5B2BOpsSnapshot): Phase5B2BOpsSnapshot {
   };
 }
 
+function getTemplatesForGym(gymId: string): ClassTemplateOption[] {
+  return GYM_TEMPLATE_OVERRIDES[gymId] ?? DEFAULT_CLASS_TEMPLATES;
+}
+
+function deriveLocations(templates: ClassTemplateOption[]): string[] {
+  const unique = new Set<string>();
+  for (const item of templates) {
+    unique.add(item.location);
+  }
+  return Array.from(unique);
+}
+
 const fallbackFailedMutation = async (
   message: string
 ): Promise<Phase5OpsMutationResult> => ({
@@ -90,6 +193,7 @@ const fallbackFailedMutation = async (
 export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
   let flow: ReturnType<typeof import("../flows/phase5-ops-console-ui").createPhase5OpsConsoleUiFlow> | null = null;
   let failed = false;
+  let adminSupabase: ReturnType<typeof createAdminSupabaseClient> | null = null;
 
   let previewGymId = "preview-gym-id";
   let previewClasses: Phase5B2BOpsSnapshot["classes"] = [];
@@ -175,6 +279,12 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
     };
   };
 
+  const getAdminSupabase = () => {
+    if (adminSupabase) return adminSupabase;
+    adminSupabase = createAdminSupabaseClient();
+    return adminSupabase;
+  };
+
   const fallbackLoad = async (
     gymId: string,
     options?: Phase5B2BOpsLoadOptions
@@ -219,6 +329,76 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackLoad(gymId, options),
         () => fallbackLoad(gymId, options)
       ),
+    listClassSchedulingOptions: async (gymId) => {
+      const templates = getTemplatesForGym(gymId);
+      const locations = deriveLocations(templates);
+      const fallback: ClassSchedulingOptions = {
+        locations,
+        templates,
+        coaches: []
+      };
+
+      const f = await getFlow();
+      if (!f) return fallback;
+
+      try {
+        const supabase = getAdminSupabase();
+        const { data: memberships, error: membershipError } = await supabase
+          .from("gym_memberships")
+          .select("user_id,role")
+          .eq("gym_id", gymId)
+          .in("membership_status", ["trial", "active"])
+          .in("role", ["leader", "officer", "coach"]);
+
+        if (membershipError) {
+          console.warn("[ops-console-runtime] unable to load coaches:", membershipError);
+          return fallback;
+        }
+
+        const uniqueUserIds = Array.from(
+          new Set(((memberships as GymMembershipStaffRow[]) ?? []).map((item) => item.user_id))
+        );
+
+        if (uniqueUserIds.length === 0) return fallback;
+
+        const { data: profiles, error: profileError } = await supabase
+          .from("profiles")
+          .select("id,display_name,username")
+          .in("id", uniqueUserIds);
+
+        if (profileError) {
+          console.warn("[ops-console-runtime] unable to load coach profiles:", profileError);
+          return fallback;
+        }
+
+        const profileMap = new Map<string, ProfileRow>();
+        for (const profile of (profiles as ProfileRow[]) ?? []) {
+          profileMap.set(profile.id, profile);
+        }
+
+        const coaches = uniqueUserIds.map((userId) => {
+          const profile = profileMap.get(userId);
+          const displayName =
+            profile?.display_name ??
+            (profile?.username ? `@${profile.username}` : `${userId.slice(0, 8)}...`);
+
+          return {
+            userId,
+            displayName
+          };
+        });
+
+        coaches.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+        return {
+          ...fallback,
+          coaches
+        };
+      } catch (error) {
+        console.warn("[ops-console-runtime] listClassSchedulingOptions failed:", error);
+        return fallback;
+      }
+    },
     createClass: (gymId, input) =>
       wrap(
         (f) => f.createClass(gymId, input),
