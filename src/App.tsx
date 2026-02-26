@@ -400,7 +400,7 @@ function ProofFeedEntry() {
   return <ProofFeedFlow services={services} />;
 }
 
-const DEFAULT_ADMIN_GYM_ID = "preview-gym-id";
+const DEFAULT_ADMIN_GYM_ID = "3306f501-3f50-4a30-8552-b47bf9cce199";
 
 function OpsConsoleEntry({ defaultTab = "classes" }: { defaultTab?: "classes" | "waitlist" | "checkin" | "waiver" }) {
   const services = React.useMemo(() => createOpsConsoleRuntimeServices(), []);
