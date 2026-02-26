@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { BrowserRouter, Routes, Route, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { OnboardingFlow } from "@mobile/onboarding";
 import { createOnboardingRuntimeServices } from "@mobile/onboarding/runtime-services";
+import { WorkoutLoggerFlow } from "@mobile/workout-logger";
+import { createWorkoutLoggerRuntimeServices } from "@mobile/workout-logger/runtime-services";
 
 // ─── Placeholder screen ──────────────────────────────────────────
 function PlaceholderScreen({ title }: { title: string }) {
@@ -352,6 +354,18 @@ function OnboardingEntry() {
 }
 
 // ─── App Router ──────────────────────────────────────────────────
+function WorkoutLoggerEntry() {
+  const navigate = useNavigate();
+  const services = React.useMemo(() => createWorkoutLoggerRuntimeServices(), []);
+  return (
+    <WorkoutLoggerFlow
+      services={services}
+      onComplete={(workoutId) => navigate(`/feed?workout=${workoutId}`)}
+      onCancel={() => navigate("/feed")}
+    />
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -360,7 +374,7 @@ export default function App() {
         <Route path="/showcase" element={<DesignShowcase />} />
         <Route element={<MobileShell />}>
           <Route path="/feed" element={<PlaceholderScreen title="Proof Feed" />} />
-          <Route path="/log" element={<PlaceholderScreen title="Log" />} />
+          <Route path="/log" element={<WorkoutLoggerEntry />} />
           <Route path="/guild" element={<PlaceholderScreen title="Guild Hall" />} />
           <Route path="/rank" element={<PlaceholderScreen title="Rank Ladder" />} />
           <Route path="/profile" element={<PlaceholderScreen title="Profile" />} />
