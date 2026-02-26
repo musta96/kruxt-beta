@@ -11,6 +11,11 @@ import { createOpsConsoleRuntimeServices } from "@admin/ops-console/runtime-serv
 import { AdminSettingsFlow } from "@admin/admin-settings";
 import { StaffConsoleFlow } from "@admin/staff-console";
 import { createStaffConsoleRuntimeServices } from "@admin/staff-console/runtime-services";
+import {
+  FounderConsoleFlow,
+  createFounderConsoleRuntimeServices,
+  type FounderConsoleServices
+} from "@admin/founder-console";
 
 // ─── Placeholder screen ──────────────────────────────────────────
 function PlaceholderScreen({ title }: { title: string }) {
@@ -62,6 +67,7 @@ function MobileShell() {
 // ─── Admin Shell ─────────────────────────────────────────────────
 const adminNav = [
   { to: "/admin", label: "Overview", end: true },
+  { to: "/admin/gyms", label: "Gyms" },
   { to: "/admin/members", label: "Members" },
   { to: "/admin/classes", label: "Classes" },
   { to: "/admin/checkins", label: "Check-ins" },
@@ -73,9 +79,40 @@ const adminNav = [
   { to: "/admin/settings", label: "Settings" },
 ];
 
-function AdminShell() {
+function AdminShell({
+  selectedGymId,
+  onSelectGym,
+  founderServices
+}: {
+  selectedGymId: string;
+  onSelectGym: (gymId: string) => void;
+  founderServices: FounderConsoleServices;
+}) {
   const [collapsed, setCollapsed] = useState(false);
+  const [gymOptions, setGymOptions] = useState<Array<{ id: string; name: string }>>([]);
   const location = useLocation();
+
+  React.useEffect(() => {
+    let active = true;
+    const loadGyms = async () => {
+      try {
+        const gyms = await founderServices.listGyms();
+        if (!active) return;
+        setGymOptions(gyms.map((gym) => ({ id: gym.id, name: gym.name })));
+        if (gyms.length > 0 && !gyms.some((gym) => gym.id === selectedGymId)) {
+          onSelectGym(gyms[0].id);
+        }
+      } catch {
+        if (!active) return;
+        setGymOptions([]);
+      }
+    };
+    void loadGyms();
+    return () => {
+      active = false;
+    };
+  }, [founderServices, onSelectGym, selectedGymId]);
+
   return (
     <div className="flex min-h-screen bg-background">
       <aside className={`flex flex-col border-r border-border bg-card transition-all duration-200 ${collapsed ? "w-16" : "w-60"}`}>
@@ -85,6 +122,28 @@ function AdminShell() {
           </div>
           {!collapsed && <span className="font-display font-bold text-foreground text-lg tracking-tight">KRUXT</span>}
         </div>
+        {!collapsed && (
+          <div className="px-3 py-3 border-b border-border space-y-2">
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Active Gym
+            </label>
+            <select
+              className="input-field"
+              value={selectedGymId}
+              onChange={(event) => onSelectGym(event.target.value)}
+            >
+              {gymOptions.length === 0 && (
+                <option value={selectedGymId}>{selectedGymId.slice(0, 8)}...</option>
+              )}
+              {gymOptions.map((gym) => (
+                <option key={gym.id} value={gym.id}>{gym.name}</option>
+              ))}
+            </select>
+            <NavLink to="/admin/gyms" className="text-xs text-primary underline underline-offset-2">
+              Manage gyms
+            </NavLink>
+          </div>
+        )}
         <nav className="flex-1 overflow-y-auto py-4">
           <ul className="flex flex-col gap-0.5 px-2">
             {adminNav.map((item) => {
@@ -406,23 +465,73 @@ function ProofFeedEntry() {
 const DEFAULT_ADMIN_GYM_ID =
   (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_DEFAULT_GYM_ID ||
   "3306f501-3f50-4a30-8552-b47bf9cce199";
+const ADMIN_GYM_STORAGE_KEY = "kruxt_admin_selected_gym_id";
 
-function OpsConsoleEntry({ defaultTab = "classes" }: { defaultTab?: "classes" | "waitlist" | "checkin" | "waiver" }) {
-  const services = React.useMemo(() => createOpsConsoleRuntimeServices(), []);
-  return <OpsConsoleFlow services={services} gymId={DEFAULT_ADMIN_GYM_ID} defaultTab={defaultTab} />;
+function readInitialAdminGymId(): string {
+  if (typeof window === "undefined") return DEFAULT_ADMIN_GYM_ID;
+  try {
+    const stored = window.localStorage.getItem(ADMIN_GYM_STORAGE_KEY);
+    return stored?.trim() ? stored : DEFAULT_ADMIN_GYM_ID;
+  } catch {
+    return DEFAULT_ADMIN_GYM_ID;
+  }
 }
 
-function AdminSettingsEntry() {
+function OpsConsoleEntry({
+  gymId,
+  defaultTab = "classes"
+}: {
+  gymId: string;
+  defaultTab?: "classes" | "waitlist" | "checkin" | "waiver";
+}) {
   const services = React.useMemo(() => createOpsConsoleRuntimeServices(), []);
-  return <AdminSettingsFlow services={services} gymId={DEFAULT_ADMIN_GYM_ID} />;
+  return <OpsConsoleFlow services={services} gymId={gymId} defaultTab={defaultTab} />;
 }
 
-function StaffConsoleEntry() {
+function AdminSettingsEntry({ gymId }: { gymId: string }) {
+  const services = React.useMemo(() => createOpsConsoleRuntimeServices(), []);
+  return <AdminSettingsFlow services={services} gymId={gymId} />;
+}
+
+function StaffConsoleEntry({ gymId }: { gymId: string }) {
   const services = React.useMemo(() => createStaffConsoleRuntimeServices(), []);
-  return <StaffConsoleFlow services={services} gymId={DEFAULT_ADMIN_GYM_ID} />;
+  return <StaffConsoleFlow services={services} gymId={gymId} />;
+}
+
+function FounderConsoleEntry({
+  gymId,
+  onGymChange,
+  services
+}: {
+  gymId: string;
+  onGymChange: (gymId: string) => void;
+  services: FounderConsoleServices;
+}) {
+  return (
+    <FounderConsoleFlow
+      services={services}
+      selectedGymId={gymId}
+      onSelectGym={onGymChange}
+    />
+  );
 }
 
 export default function App() {
+  const founderServices = React.useMemo(() => createFounderConsoleRuntimeServices(), []);
+  const [adminGymId, setAdminGymId] = useState<string>(() => readInitialAdminGymId());
+  const handleGymChange = React.useCallback((gymId: string) => {
+    setAdminGymId(gymId);
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(ADMIN_GYM_STORAGE_KEY, adminGymId);
+    } catch {
+      // noop
+    }
+  }, [adminGymId]);
+
   return (
     <BrowserRouter>
       <Routes>
@@ -435,17 +544,35 @@ export default function App() {
           <Route path="/rank" element={<PlaceholderScreen title="Rank Ladder" />} />
           <Route path="/profile" element={<PlaceholderScreen title="Profile" />} />
         </Route>
-        <Route element={<AdminShell />}>
+        <Route
+          element={
+            <AdminShell
+              selectedGymId={adminGymId}
+              onSelectGym={handleGymChange}
+              founderServices={founderServices}
+            />
+          }
+        >
           <Route path="/admin" element={<PlaceholderScreen title="Overview" />} />
-          <Route path="/admin/members" element={<StaffConsoleEntry />} />
-          <Route path="/admin/classes" element={<OpsConsoleEntry defaultTab="classes" />} />
-          <Route path="/admin/checkins" element={<OpsConsoleEntry defaultTab="checkin" />} />
-          <Route path="/admin/waivers" element={<OpsConsoleEntry defaultTab="waiver" />} />
+          <Route
+            path="/admin/gyms"
+            element={
+              <FounderConsoleEntry
+                gymId={adminGymId}
+                onGymChange={handleGymChange}
+                services={founderServices}
+              />
+            }
+          />
+          <Route path="/admin/members" element={<StaffConsoleEntry gymId={adminGymId} />} />
+          <Route path="/admin/classes" element={<OpsConsoleEntry gymId={adminGymId} defaultTab="classes" />} />
+          <Route path="/admin/checkins" element={<OpsConsoleEntry gymId={adminGymId} defaultTab="checkin" />} />
+          <Route path="/admin/waivers" element={<OpsConsoleEntry gymId={adminGymId} defaultTab="waiver" />} />
           <Route path="/admin/billing" element={<PlaceholderScreen title="Billing" />} />
           <Route path="/admin/integrations" element={<PlaceholderScreen title="Integrations" />} />
           <Route path="/admin/compliance" element={<PlaceholderScreen title="Compliance" />} />
           <Route path="/admin/support" element={<PlaceholderScreen title="Support" />} />
-          <Route path="/admin/settings" element={<AdminSettingsEntry />} />
+          <Route path="/admin/settings" element={<AdminSettingsEntry gymId={adminGymId} />} />
         </Route>
       </Routes>
     </BrowserRouter>

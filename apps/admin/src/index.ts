@@ -12,3 +12,4 @@ export * from "./flows/phase10-platform-control-plane-ui";
 export * from "./ops-console";
 export * from "./admin-settings";
 export * from "./staff-console";
+export * from "./founder-console";
