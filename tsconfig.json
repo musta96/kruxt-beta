@@ -13,6 +13,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@mobile/*": ["./apps/mobile/src/*"],
+      "@admin/*": ["./apps/admin/src/*"],
       "@kruxt/types": ["./packages/types/src/index.ts"]
     },
     "resolveJsonModule": true,
@@ -24,6 +25,7 @@
   "include": [
     "src",
     "packages/types/src",
+    "apps/admin/src",
     "apps/mobile/src/design-system",
     "apps/mobile/src/onboarding",
     "apps/mobile/src/shells"

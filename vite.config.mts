@@ -12,6 +12,7 @@ export default defineConfig(({ command, mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@mobile": path.resolve(__dirname, "./apps/mobile/src"),
+      "@admin": path.resolve(__dirname, "./apps/admin/src"),
       "@kruxt/types": path.resolve(__dirname, "./packages/types/src/index.ts"),
     },
   },
