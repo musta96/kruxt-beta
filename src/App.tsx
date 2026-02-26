@@ -372,7 +372,29 @@ function WorkoutLoggerEntry() {
 }
 
 function ProofFeedEntry() {
-  const services = React.useMemo(() => createProofFeedRuntimeServices(), []);
+  const services = React.useMemo(() => {
+    try {
+      return createProofFeedRuntimeServices();
+    } catch (error) {
+      console.warn("[proof-feed-entry] Falling back to preview services:", error);
+      return {
+        load: async () => ({
+          ok: true as const,
+          snapshot: {
+            feed: [],
+            hiddenBlockedActorCount: 0,
+            blockedUsers: [],
+            myReports: []
+          }
+        }),
+        loadThread: async () => [],
+        react: async () => ({ ok: true }),
+        comment: async () => ({ ok: true }),
+        block: async () => ({ ok: true }),
+        report: async () => ({ ok: true })
+      };
+    }
+  }, []);
   return <ProofFeedFlow services={services} />;
 }
 
