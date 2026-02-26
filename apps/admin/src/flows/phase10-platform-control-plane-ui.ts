@@ -193,8 +193,8 @@ function mapUiSnapshot(snapshot: Phase10PlatformControlPlaneSnapshot): Phase10Pl
 function toUiMutationResult(
   result: Phase10PlatformControlPlaneMutationResult
 ): Phase10PlatformControlPlaneUiMutationResult {
-  if (!result.ok) {
-    return result;
+  if (result.ok === false) {
+    return { ok: false, error: result.error };
   }
 
   return {
@@ -211,8 +211,8 @@ export function createPhase10PlatformControlPlaneUiFlow() {
     checklist: [...phase10PlatformControlPlaneUiChecklist],
     load: async (options: Phase10PlatformControlPlaneLoadOptions = {}): Promise<Phase10PlatformControlPlaneUiLoadResult> => {
       const result = await runtime.load(options);
-      if (!result.ok) {
-        return result;
+      if (result.ok === false) {
+        return { ok: false, error: result.error };
       }
 
       return {

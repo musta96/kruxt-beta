@@ -28,6 +28,8 @@
     "apps/admin/src",
     "apps/mobile/src/design-system",
     "apps/mobile/src/onboarding",
+    "apps/mobile/src/workout-logger",
+    "apps/mobile/src/proof-feed",
     "apps/mobile/src/shells"
   ]
 }

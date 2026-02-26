@@ -6,6 +6,8 @@ import { WorkoutLoggerFlow } from "@mobile/workout-logger";
 import { createWorkoutLoggerRuntimeServices } from "@mobile/workout-logger/runtime-services";
 import { ProofFeedFlow } from "@mobile/proof-feed";
 import { createProofFeedRuntimeServices } from "@mobile/proof-feed/runtime-services";
+import { OpsConsoleFlow } from "@admin/ops-console";
+import { createOpsConsoleRuntimeServices } from "@admin/ops-console/runtime-services";
 
 // ─── Placeholder screen ──────────────────────────────────────────
 function PlaceholderScreen({ title }: { title: string }) {
@@ -398,6 +400,11 @@ function ProofFeedEntry() {
   return <ProofFeedFlow services={services} />;
 }
 
+function OpsConsoleEntry({ defaultTab = "classes" }: { defaultTab?: "classes" | "waitlist" | "checkin" | "waiver" }) {
+  const services = React.useMemo(() => createOpsConsoleRuntimeServices(), []);
+  return <OpsConsoleFlow services={services} defaultTab={defaultTab} />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -414,9 +421,9 @@ export default function App() {
         <Route element={<AdminShell />}>
           <Route path="/admin" element={<PlaceholderScreen title="Overview" />} />
           <Route path="/admin/members" element={<PlaceholderScreen title="Members" />} />
-          <Route path="/admin/classes" element={<PlaceholderScreen title="Classes" />} />
-          <Route path="/admin/checkins" element={<PlaceholderScreen title="Check-ins" />} />
-          <Route path="/admin/waivers" element={<PlaceholderScreen title="Waivers" />} />
+          <Route path="/admin/classes" element={<OpsConsoleEntry defaultTab="classes" />} />
+          <Route path="/admin/checkins" element={<OpsConsoleEntry defaultTab="checkin" />} />
+          <Route path="/admin/waivers" element={<OpsConsoleEntry defaultTab="waiver" />} />
           <Route path="/admin/billing" element={<PlaceholderScreen title="Billing" />} />
           <Route path="/admin/integrations" element={<PlaceholderScreen title="Integrations" />} />
           <Route path="/admin/compliance" element={<PlaceholderScreen title="Compliance" />} />
