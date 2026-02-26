@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type {
   Phase2StaffConsoleSnapshot,
   StaffMembershipItem
@@ -21,6 +21,20 @@ export function StaffConsoleFlow({ services, gymId }: StaffConsoleFlowProps) {
   const [loading, setLoading] = useState(true);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [profileQuery, setProfileQuery] = useState("");
+  const [profileOptions, setProfileOptions] = useState<
+    Array<{ userId: string; displayName: string; username: string; label: string }>
+  >([]);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [addDraft, setAddDraft] = useState<{
+    userId: string;
+    role: GymRole;
+    membershipStatus: MembershipStatus;
+  }>({
+    userId: "",
+    role: "member",
+    membershipStatus: "active"
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,6 +53,39 @@ export function StaffConsoleFlow({ services, gymId }: StaffConsoleFlowProps) {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    let active = true;
+    const trimmed = profileQuery.trim();
+
+    if (trimmed.length < 2) {
+      setProfileOptions([]);
+      setProfileLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    const timeout = window.setTimeout(async () => {
+      setProfileLoading(true);
+      const result = await services.searchProfiles(gymId, trimmed);
+      if (!active) return;
+
+      if (result.ok) {
+        setProfileOptions(result.profiles);
+      } else {
+        setProfileOptions([]);
+        setError(result.error.message);
+      }
+
+      setProfileLoading(false);
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [gymId, profileQuery, services]);
+
   const run = useCallback(
     async (key: string, action: () => Promise<{ ok: boolean; error?: { message: string }; snapshot?: Phase2StaffConsoleSnapshot }>) => {
       setPendingKey(key);
@@ -47,9 +94,11 @@ export function StaffConsoleFlow({ services, gymId }: StaffConsoleFlowProps) {
         const result = await action();
         if (!result.ok) {
           setError(result.error?.message ?? "Unable to complete staff action.");
+          return false;
         } else if (result.snapshot) {
           setSnapshot(result.snapshot);
         }
+        return true;
       } finally {
         setPendingKey(null);
       }
@@ -57,10 +106,36 @@ export function StaffConsoleFlow({ services, gymId }: StaffConsoleFlowProps) {
     []
   );
 
-  const staffCount = useMemo(() => {
+  const staffCount = React.useMemo(() => {
     if (!snapshot) return 0;
     return snapshot.memberships.filter((item) => ["leader", "officer", "coach"].includes(item.role)).length;
   }, [snapshot]);
+
+  const handleAddMembership = useCallback(async () => {
+    const userId = addDraft.userId.trim();
+    if (!userId) {
+      setError("User UUID is required.");
+      return;
+    }
+
+    const completed = await run(`add_${userId}`, () =>
+      services.addMembership(gymId, {
+        userId,
+        role: addDraft.role,
+        membershipStatus: addDraft.membershipStatus
+      })
+    );
+
+    if (!completed) return;
+
+    setAddDraft({
+      userId: "",
+      role: "member",
+      membershipStatus: "active"
+    });
+    setProfileQuery("");
+    setProfileOptions([]);
+  }, [addDraft.membershipStatus, addDraft.role, addDraft.userId, gymId, run, services]);
 
   const renderActions = (membership: StaffMembershipItem) => (
     <div className="flex gap-2">
@@ -132,6 +207,86 @@ export function StaffConsoleFlow({ services, gymId }: StaffConsoleFlowProps) {
 
       {snapshot && (
         <>
+          <div className="panel p-5 space-y-3">
+            <h2 className="text-sm font-display font-bold text-foreground">Add Member / Staff</h2>
+            <p className="text-xs text-muted-foreground">
+              Pick an existing profile (or paste UUID), set role/status, then create or update membership.
+            </p>
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-2">
+              <input
+                className="input-field"
+                placeholder="Search profiles by name or username"
+                value={profileQuery}
+                onChange={(event) => setProfileQuery(event.target.value)}
+              />
+              <input
+                className="input-field"
+                placeholder="User UUID"
+                value={addDraft.userId}
+                onChange={(event) =>
+                  setAddDraft((previous) => ({ ...previous, userId: event.target.value }))
+                }
+              />
+              <select
+                className="input-field"
+                value={addDraft.role}
+                onChange={(event) =>
+                  setAddDraft((previous) => ({
+                    ...previous,
+                    role: event.target.value as GymRole
+                  }))
+                }
+              >
+                {ROLE_OPTIONS.map((role) => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </select>
+              <select
+                className="input-field"
+                value={addDraft.membershipStatus}
+                onChange={(event) =>
+                  setAddDraft((previous) => ({
+                    ...previous,
+                    membershipStatus: event.target.value as MembershipStatus
+                  }))
+                }
+              >
+                {STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-2">
+                {profileLoading && (
+                  <span className="text-xs text-muted-foreground">Searching profiles...</span>
+                )}
+                {!profileLoading && profileOptions.slice(0, 8).map((profile) => (
+                  <button
+                    key={profile.userId}
+                    type="button"
+                    className="btn-compact"
+                    onClick={() => {
+                      setAddDraft((previous) => ({ ...previous, userId: profile.userId }));
+                    }}
+                  >
+                    Use {profile.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="btn-primary w-auto"
+                disabled={pendingKey?.startsWith("add_")}
+                onClick={() => {
+                  void handleAddMembership();
+                }}
+              >
+                {pendingKey?.startsWith("add_") ? "Saving..." : "Add / Update"}
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <StatCard label="Total Memberships" value={snapshot.memberships.length} />
             <StatCard label="Pending" value={snapshot.pendingMemberships.length} />

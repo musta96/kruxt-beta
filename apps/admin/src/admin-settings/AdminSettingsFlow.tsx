@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import type {
   ClassSchedulingCatalogInput,
   ClassTemplateOption,
@@ -53,7 +53,7 @@ export function AdminSettingsFlow({ services, gymId }: AdminSettingsFlowProps) {
     };
   }, [gymId, services]);
 
-  const availableLocations = useMemo(
+  const availableLocations = React.useMemo(
     () => locations.filter((item) => item.trim().length > 0),
     [locations]
   );

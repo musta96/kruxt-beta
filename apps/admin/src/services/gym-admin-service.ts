@@ -26,6 +26,12 @@ type MembershipRow = {
   ends_at: string | null;
 };
 
+type ProfileRow = {
+  id: string;
+  display_name: string;
+  username: string;
+};
+
 type ConsentRow = {
   id: string;
   user_id: string;
@@ -199,6 +205,13 @@ export interface PrivacyOpsMetrics {
   measuredWindowDays: number;
 }
 
+export interface StaffProfileOption {
+  userId: string;
+  displayName: string;
+  username: string;
+  label: string;
+}
+
 function mapMembership(row: MembershipRow): GymMembership {
   return {
     id: row.id,
@@ -327,6 +340,73 @@ export class GymAdminService {
 
   async approveMembership(gymId: string, membershipId: string): Promise<GymMembership> {
     return this.updateMembershipStatus(gymId, membershipId, "active");
+  }
+
+  async addOrUpdateMembership(
+    gymId: string,
+    input: {
+      userId: string;
+      role: GymRole;
+      membershipStatus: MembershipStatus;
+      membershipPlanId?: string | null;
+      startedAt?: string | null;
+      endsAt?: string | null;
+    }
+  ): Promise<GymMembership> {
+    await this.access.requireGymStaff(gymId);
+
+    const userId = input.userId.trim();
+    if (!userId) {
+      throw new KruxtAdminError("ADMIN_MEMBERSHIP_USER_REQUIRED", "User id is required.");
+    }
+
+    const { data, error } = await this.supabase
+      .from("gym_memberships")
+      .upsert(
+        {
+          gym_id: gymId,
+          user_id: userId,
+          role: input.role,
+          membership_status: input.membershipStatus,
+          membership_plan_id: input.membershipPlanId ?? null,
+          started_at: input.startedAt ?? null,
+          ends_at: input.endsAt ?? null
+        },
+        { onConflict: "gym_id,user_id" }
+      )
+      .select("*")
+      .single();
+
+    throwIfAdminError(error, "ADMIN_MEMBERSHIP_UPSERT_FAILED", "Unable to add or update membership.");
+
+    return mapMembership(data as MembershipRow);
+  }
+
+  async searchProfiles(gymId: string, search: string, limit = 20): Promise<StaffProfileOption[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const boundedLimit = Math.min(Math.max(limit, 1), 50);
+    const needle = search.trim().replace(/[^a-zA-Z0-9@._\-\s]/g, " ");
+
+    let query = this.supabase
+      .from("profiles")
+      .select("id,display_name,username")
+      .order("updated_at", { ascending: false })
+      .limit(boundedLimit);
+
+    if (needle.length > 0) {
+      query = query.or(`display_name.ilike.%${needle}%,username.ilike.%${needle}%`);
+    }
+
+    const { data, error } = await query;
+    throwIfAdminError(error, "ADMIN_PROFILE_SEARCH_FAILED", "Unable to search member profiles.");
+
+    return ((data as ProfileRow[]) ?? []).map((profile) => ({
+      userId: profile.id,
+      displayName: profile.display_name,
+      username: profile.username,
+      label: `${profile.display_name} (@${profile.username})`
+    }));
   }
 
   async getGymOpsSummary(gymId: string): Promise<GymOpsSummary> {

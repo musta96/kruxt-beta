@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { SubscriptionStatus } from "@kruxt/types";
 
 import type {
@@ -119,7 +119,7 @@ export function FounderConsoleFlow({ services, selectedGymId, onSelectGym }: Fou
     };
   }, [ownerSearch, services]);
 
-  const gymStats = useMemo(() => {
+  const gymStats = React.useMemo(() => {
     return {
       total: gyms.length,
       trialing: gyms.filter((gym) => gym.subscriptionStatus === "trialing").length,

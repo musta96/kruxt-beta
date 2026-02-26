@@ -7,7 +7,8 @@ import {
   type GymClassScheduleItem,
   type OpenPrivacyRequest,
   type PendingWaitlistEntry,
-  type PrivacyOpsMetrics
+  type PrivacyOpsMetrics,
+  type StaffProfileOption
 } from "../services";
 import { phase2StaffOpsChecklist } from "./phase2-staff-ops";
 
@@ -16,6 +17,7 @@ export type StaffConsoleUiStep =
   | "queue"
   | "membership_status"
   | "role_assignment"
+  | "member_add"
   | "snapshot_refresh";
 
 export interface StaffMembershipItem extends GymMembership {
@@ -54,9 +56,23 @@ export interface StaffConsoleLoadFailure {
 
 export type StaffConsoleLoadResult = StaffConsoleLoadSuccess | StaffConsoleLoadFailure;
 
+export interface StaffConsoleProfileSearchSuccess {
+  ok: true;
+  profiles: StaffProfileOption[];
+}
+
+export interface StaffConsoleProfileSearchFailure {
+  ok: false;
+  error: StaffConsoleUiError;
+}
+
+export type StaffConsoleProfileSearchResult =
+  | StaffConsoleProfileSearchSuccess
+  | StaffConsoleProfileSearchFailure;
+
 export interface StaffConsoleMutationSuccess {
   ok: true;
-  action: "approve" | "reject" | "set_status" | "assign_role";
+  action: "approve" | "reject" | "set_status" | "assign_role" | "add_member";
   updatedMembership: GymMembership;
   snapshot: Phase2StaffConsoleSnapshot;
 }
@@ -75,6 +91,7 @@ export const phase2StaffConsoleUiChecklist = [
   ...phase2StaffOpsChecklist,
   "Approve or reject pending memberships",
   "Assign gym roles (leader/officer/coach/member)",
+  "Add staff/member by profile id",
   "Refresh console snapshot after every membership mutation"
 ] as const;
 
@@ -131,6 +148,10 @@ function mapErrorStep(code: string): StaffConsoleUiStep {
     return "role_assignment";
   }
 
+  if (["ADMIN_MEMBERSHIP_UPSERT_FAILED", "ADMIN_MEMBERSHIP_USER_REQUIRED", "ADMIN_PROFILE_SEARCH_FAILED"].includes(code)) {
+    return "member_add";
+  }
+
   return "snapshot_refresh";
 }
 
@@ -149,6 +170,18 @@ function mapErrorMessage(code: string, fallback: string): string {
 
   if (code === "ADMIN_ROLE_ASSIGN_FAILED") {
     return "Role assignment failed. Refresh and retry.";
+  }
+
+  if (code === "ADMIN_MEMBERSHIP_UPSERT_FAILED") {
+    return "Unable to add this member. Confirm the user has a profile and retry.";
+  }
+
+  if (code === "ADMIN_MEMBERSHIP_USER_REQUIRED") {
+    return "User id is required to add membership.";
+  }
+
+  if (code === "ADMIN_PROFILE_SEARCH_FAILED") {
+    return "Unable to search profiles right now.";
   }
 
   return fallback;
@@ -233,6 +266,22 @@ export function createPhase2StaffConsoleUiFlow() {
         };
       }
     },
+    searchProfiles: async (
+      gymId: string,
+      search: string
+    ): Promise<StaffConsoleProfileSearchResult> => {
+      try {
+        return {
+          ok: true,
+          profiles: await admin.searchProfiles(gymId, search, 20)
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: mapUiError(error)
+        };
+      }
+    },
     approvePendingMembership: async (gymId: string, membershipId: string): Promise<StaffConsoleMutationResult> =>
       runMutation(gymId, "approve", () => admin.approveMembership(gymId, membershipId)),
     rejectPendingMembership: async (gymId: string, membershipId: string): Promise<StaffConsoleMutationResult> =>
@@ -248,6 +297,21 @@ export function createPhase2StaffConsoleUiFlow() {
       membershipId: string,
       role: GymRole
     ): Promise<StaffConsoleMutationResult> =>
-      runMutation(gymId, "assign_role", () => admin.assignMembershipRole(gymId, membershipId, role))
+      runMutation(gymId, "assign_role", () => admin.assignMembershipRole(gymId, membershipId, role)),
+    addMembership: async (
+      gymId: string,
+      input: {
+        userId: string;
+        role: GymRole;
+        membershipStatus: MembershipStatus;
+      }
+    ): Promise<StaffConsoleMutationResult> =>
+      runMutation(gymId, "add_member", () =>
+        admin.addOrUpdateMembership(gymId, {
+          userId: input.userId,
+          role: input.role,
+          membershipStatus: input.membershipStatus
+        })
+      )
   };
 }

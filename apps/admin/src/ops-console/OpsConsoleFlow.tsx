@@ -377,7 +377,7 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
   const selectedTemplate =
     templatesForLocation.find((item) => item.id === draft.templateId) ??
     pickTemplate(options, draft.location, draft.templateId);
-  const quickDateOptions = useMemo(() => {
+  const quickDateOptions = React.useMemo(() => {
     const now = new Date();
     return [
       { label: "Today", value: toDateValue(now) },

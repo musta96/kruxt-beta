@@ -134,10 +134,15 @@ const GYM_TEMPLATE_OVERRIDES: Record<string, ClassTemplateOption[]> = {
 };
 
 const CATALOG_STORAGE_PREFIX = "kruxt_admin_class_catalog_v1:";
+const CLASS_CATALOG_FEATURE_KEY = "ops.class_scheduling_catalog";
 
 type StoredCatalog = {
   locations: string[];
   templates: ClassTemplateOption[];
+};
+
+type GymFeatureSettingCatalogRow = {
+  config: unknown;
 };
 
 function createEmptySnapshot(): Phase5B2BOpsSnapshot {
@@ -239,6 +244,81 @@ function writeCatalogToStorage(gymId: string, catalog: StoredCatalog): void {
   } catch {
     // noop
   }
+}
+
+function isMissingSupabaseConfigError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.message.includes("Missing Supabase admin config");
+}
+
+async function readCatalogFromSupabase(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  gymId: string
+): Promise<StoredCatalog | null> {
+  const { data, error } = await supabase
+    .from("gym_feature_settings")
+    .select("config")
+    .eq("gym_id", gymId)
+    .eq("feature_key", CLASS_CATALOG_FEATURE_KEY)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || "Unable to read class scheduling catalog.");
+  }
+
+  if (!data) return null;
+  const row = data as GymFeatureSettingCatalogRow;
+
+  if (!row.config || typeof row.config !== "object" || Array.isArray(row.config)) {
+    return null;
+  }
+
+  const config = row.config as Partial<StoredCatalog>;
+  return normalizeCatalog({
+    locations: Array.isArray(config.locations) ? config.locations : [],
+    templates: Array.isArray(config.templates)
+      ? (config.templates as ClassTemplateOption[])
+      : []
+  });
+}
+
+async function writeCatalogToSupabase(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  gymId: string,
+  catalog: StoredCatalog
+): Promise<StoredCatalog> {
+  const payload = {
+    gym_id: gymId,
+    feature_key: CLASS_CATALOG_FEATURE_KEY,
+    enabled: true,
+    rollout_percentage: 100,
+    config: catalog,
+    note: "Class scheduling catalog managed from admin settings"
+  };
+
+  const { data, error } = await supabase
+    .from("gym_feature_settings")
+    .upsert(payload, { onConflict: "gym_id,feature_key" })
+    .select("config")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || "Unable to save class scheduling catalog.");
+  }
+
+  if (!data) return catalog;
+  const row = data as GymFeatureSettingCatalogRow;
+  if (!row.config || typeof row.config !== "object" || Array.isArray(row.config)) {
+    return catalog;
+  }
+
+  const saved = row.config as Partial<StoredCatalog>;
+  return normalizeCatalog({
+    locations: Array.isArray(saved.locations) ? saved.locations : catalog.locations,
+    templates: Array.isArray(saved.templates)
+      ? (saved.templates as ClassTemplateOption[])
+      : catalog.templates
+  });
 }
 
 const fallbackFailedMutation = async (
@@ -413,18 +493,23 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackLoad(gymId, options)
       ),
     listClassSchedulingOptions: async (gymId) => {
-      const catalog = getCatalogForGym(gymId);
-      const fallback: ClassSchedulingOptions = {
+      let catalog = getCatalogForGym(gymId);
+      const buildOptions = (coaches: CoachOption[]): ClassSchedulingOptions => ({
         locations: [...catalog.locations],
         templates: [...catalog.templates],
-        coaches: []
-      };
-
-      const f = await getFlow();
-      if (!f) return fallback;
+        coaches
+      });
+      const fallback = buildOptions([]);
 
       try {
         const supabase = getAdminSupabase();
+        const storedCatalog = await readCatalogFromSupabase(supabase, gymId);
+        if (storedCatalog) {
+          catalog = storedCatalog;
+          catalogByGym.set(gymId, storedCatalog);
+          writeCatalogToStorage(gymId, storedCatalog);
+        }
+
         const { data: memberships, error: membershipError } = await supabase
           .from("gym_memberships")
           .select("user_id,role")
@@ -434,14 +519,14 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
 
         if (membershipError) {
           console.warn("[ops-console-runtime] unable to load coaches:", membershipError);
-          return fallback;
+          return buildOptions([]);
         }
 
         const uniqueUserIds = Array.from(
           new Set(((memberships as GymMembershipStaffRow[]) ?? []).map((item) => item.user_id))
         );
 
-        if (uniqueUserIds.length === 0) return fallback;
+        if (uniqueUserIds.length === 0) return buildOptions([]);
 
         const { data: profiles, error: profileError } = await supabase
           .from("profiles")
@@ -450,7 +535,7 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
 
         if (profileError) {
           console.warn("[ops-console-runtime] unable to load coach profiles:", profileError);
-          return fallback;
+          return buildOptions([]);
         }
 
         const profileMap = new Map<string, ProfileRow>();
@@ -472,13 +557,10 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
 
         coaches.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-        return {
-          ...fallback,
-          coaches
-        };
+        return buildOptions(coaches);
       } catch (error) {
         console.warn("[ops-console-runtime] listClassSchedulingOptions failed:", error);
-        return fallback;
+        return buildOptions([]);
       }
     },
     saveClassSchedulingOptions: async (gymId, input) => {
@@ -486,9 +568,23 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         const normalized = normalizeCatalog(input);
         catalogByGym.set(gymId, normalized);
         writeCatalogToStorage(gymId, normalized);
+
+        let persisted = normalized;
+        try {
+          const supabase = getAdminSupabase();
+          persisted = await writeCatalogToSupabase(supabase, gymId, normalized);
+          catalogByGym.set(gymId, persisted);
+          writeCatalogToStorage(gymId, persisted);
+        } catch (persistError) {
+          if (!isMissingSupabaseConfigError(persistError)) {
+            throw persistError;
+          }
+          console.warn("[ops-console-runtime] Supabase unavailable, saved catalog locally only.");
+        }
+
         const options = {
-          locations: [...normalized.locations],
-          templates: [...normalized.templates],
+          locations: [...persisted.locations],
+          templates: [...persisted.templates],
           coaches: [] as CoachOption[]
         };
 

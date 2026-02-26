@@ -1,10 +1,12 @@
 import type {
   StaffConsoleLoadResult,
-  StaffConsoleMutationResult
+  StaffConsoleMutationResult,
+  StaffConsoleProfileSearchResult
 } from "../flows/phase2-staff-console-ui";
 
 export interface StaffConsoleServices {
   load(gymId: string): Promise<StaffConsoleLoadResult>;
+  searchProfiles(gymId: string, search: string): Promise<StaffConsoleProfileSearchResult>;
   approvePendingMembership(gymId: string, membershipId: string): Promise<StaffConsoleMutationResult>;
   rejectPendingMembership(gymId: string, membershipId: string): Promise<StaffConsoleMutationResult>;
   setMembershipStatus(
@@ -16,6 +18,14 @@ export interface StaffConsoleServices {
     gymId: string,
     membershipId: string,
     role: "leader" | "officer" | "coach" | "member"
+  ): Promise<StaffConsoleMutationResult>;
+  addMembership(
+    gymId: string,
+    input: {
+      userId: string;
+      role: "leader" | "officer" | "coach" | "member";
+      membershipStatus: "pending" | "trial" | "active" | "paused" | "cancelled";
+    }
   ): Promise<StaffConsoleMutationResult>;
 }
 
@@ -69,6 +79,11 @@ export function createStaffConsoleRuntimeServices(): StaffConsoleServices {
     }
   });
 
+  const fallbackProfileSearch = async (): Promise<StaffConsoleProfileSearchResult> => ({
+    ok: true,
+    profiles: []
+  });
+
   return {
     load: async (gymId) => {
       const f = await getFlow();
@@ -78,6 +93,16 @@ export function createStaffConsoleRuntimeServices(): StaffConsoleServices {
       } catch (error) {
         console.warn("[staff-console-runtime] load failed:", error);
         return fallbackLoad();
+      }
+    },
+    searchProfiles: async (gymId, search) => {
+      const f = await getFlow();
+      if (!f) return fallbackProfileSearch();
+      try {
+        return await f.searchProfiles(gymId, search);
+      } catch (error) {
+        console.warn("[staff-console-runtime] search profiles failed:", error);
+        return fallbackProfileSearch();
       }
     },
     approvePendingMembership: async (gymId, membershipId) => {
@@ -118,6 +143,16 @@ export function createStaffConsoleRuntimeServices(): StaffConsoleServices {
       } catch (error) {
         console.warn("[staff-console-runtime] assign role failed:", error);
         return fallbackMutation("Unable to assign role.");
+      }
+    },
+    addMembership: async (gymId, input) => {
+      const f = await getFlow();
+      if (!f) return fallbackMutation("Staff actions are unavailable in preview mode.");
+      try {
+        return await f.addMembership(gymId, input);
+      } catch (error) {
+        console.warn("[staff-console-runtime] add member failed:", error);
+        return fallbackMutation("Unable to add member.");
       }
     }
   };
