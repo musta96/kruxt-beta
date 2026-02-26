@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useReducer, useRef } from "react";
+import React, { useCallback, useEffect, useReducer, useState } from "react";
+import type { AccessEventType, AccessResult } from "@kruxt/types";
 import type { OpsConsoleServices } from "./runtime-services";
 import type { Phase5B2BOpsSnapshot } from "../flows/phase5-b2b-ops";
 import type { Phase5OpsUiError } from "../flows/phase5-ops-console-ui";
@@ -52,22 +53,22 @@ const INIT: State = { loading: true, snapshot: null, error: null, actionPending:
 
 export interface OpsConsoleFlowProps {
   services: OpsConsoleServices;
+  gymId: string;
   defaultTab?: TabKey;
 }
 
 /* ── Component ──────────────────────────────────────────────────── */
 
-export function OpsConsoleFlow({ services, defaultTab = "classes" }: OpsConsoleFlowProps) {
+export function OpsConsoleFlow({ services, gymId, defaultTab = "classes" }: OpsConsoleFlowProps) {
   const [state, dispatch] = useReducer(reducer, INIT);
   const [tab, setTab] = React.useState<TabKey>(defaultTab);
-  const gymIdRef = useRef("preview-gym-id");
 
   const load = useCallback(async () => {
     dispatch({ type: "load_start" });
-    const result = await services.load(gymIdRef.current);
+    const result = await services.load(gymId);
     if (result.ok === false) dispatch({ type: "load_fail", error: result.error });
     else dispatch({ type: "load_ok", snapshot: result.snapshot });
-  }, [services]);
+  }, [gymId, services]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -128,10 +129,10 @@ export function OpsConsoleFlow({ services, defaultTab = "classes" }: OpsConsoleF
           </div>
         ) : (
           <>
-            {tab === "classes" && <ClassManagementTab snapshot={snap} services={services} gymId={gymIdRef.current} pending={state.actionPending} runAction={runAction} />}
-            {tab === "waitlist" && <WaitlistTab snapshot={snap} services={services} gymId={gymIdRef.current} pending={state.actionPending} runAction={runAction} />}
-            {tab === "checkin" && <CheckinAccessTab snapshot={snap} services={services} gymId={gymIdRef.current} pending={state.actionPending} runAction={runAction} />}
-            {tab === "waiver" && <WaiverContractTab snapshot={snap} services={services} gymId={gymIdRef.current} pending={state.actionPending} runAction={runAction} />}
+            {tab === "classes" && <ClassManagementTab snapshot={snap} services={services} gymId={gymId} pending={state.actionPending} runAction={runAction} />}
+            {tab === "waitlist" && <WaitlistTab snapshot={snap} services={services} gymId={gymId} pending={state.actionPending} runAction={runAction} />}
+            {tab === "checkin" && <CheckinAccessTab snapshot={snap} services={services} gymId={gymId} pending={state.actionPending} runAction={runAction} />}
+            {tab === "waiver" && <WaiverContractTab snapshot={snap} services={services} gymId={gymId} pending={state.actionPending} runAction={runAction} />}
           </>
         )}
       </div>
@@ -281,17 +282,32 @@ function WaitlistTab({ snapshot, services, gymId, pending, runAction }: TabProps
         </div>
         <table className="data-table">
           <thead>
-            <tr><th>#</th><th>User</th><th>Status</th><th>Joined</th></tr>
+            <tr><th>#</th><th>User</th><th>Status</th><th>Joined</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {waitlist.length === 0 ? (
-              <tr><td colSpan={4} className="text-center text-muted-foreground text-sm py-6">Waitlist empty</td></tr>
+              <tr><td colSpan={5} className="text-center text-muted-foreground text-sm py-6">Waitlist empty</td></tr>
             ) : waitlist.map((w) => (
               <tr key={w.id}>
                 <td className="font-mono tabular-nums">{w.position}</td>
                 <td className="font-mono text-xs">{w.userId.slice(0, 8)}…</td>
                 <td><StatusBadge status={w.status} /></td>
                 <td className="text-xs text-muted-foreground">{new Date(w.createdAt).toLocaleString()}</td>
+                <td>
+                  {selectedId && w.status === "pending" && (
+                    <ActionButton
+                      label="Cancel"
+                      small
+                      pending={pending === `waitlist_cancel_${w.id}`}
+                      onClick={() =>
+                        runAction(
+                          `waitlist_cancel_${w.id}`,
+                          () => services.updateWaitlistEntry(gymId, w.id, { status: "cancelled" }, selectedId)
+                        )
+                      }
+                    />
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -303,9 +319,12 @@ function WaitlistTab({ snapshot, services, gymId, pending, runAction }: TabProps
 
 /* ── Check-in & Access ───────────────────────────────────────────── */
 
-function CheckinAccessTab({ snapshot }: TabProps) {
+function CheckinAccessTab({ snapshot, services, gymId, pending, runAction }: TabProps) {
   const checkins = snapshot.recentCheckins;
   const accessLogs = snapshot.recentAccessLogs;
+  const [userId, setUserId] = useState("");
+  const [eventType, setEventType] = useState<AccessEventType>("frontdesk_checkin");
+  const [result, setResult] = useState<AccessResult>("allowed");
 
   return (
     <div className="space-y-4">
@@ -314,6 +333,52 @@ function CheckinAccessTab({ snapshot }: TabProps) {
         <StatCard label="Access Logs" value={accessLogs.length} />
         <StatCard label="Allowed" value={accessLogs.filter(a => a.result === "allowed").length} />
         <StatCard label="Denied" value={accessLogs.filter(a => a.result === "denied").length} />
+      </div>
+
+      <div className="panel p-4 space-y-3">
+        <h3 className="text-sm font-display font-bold text-foreground">Record Check-in</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <input
+            className="input-field"
+            value={userId}
+            onChange={(event) => setUserId(event.target.value)}
+            placeholder="user UUID"
+          />
+          <select
+            className="input-field"
+            value={eventType}
+            onChange={(event) => setEventType(event.target.value as AccessEventType)}
+          >
+            <option value="frontdesk_checkin">frontdesk_checkin</option>
+            <option value="door_checkin">door_checkin</option>
+            <option value="door_denied">door_denied</option>
+            <option value="manual_override">manual_override</option>
+          </select>
+          <select
+            className="input-field"
+            value={result}
+            onChange={(event) => setResult(event.target.value as AccessResult)}
+          >
+            <option value="allowed">allowed</option>
+            <option value="denied">denied</option>
+            <option value="override_allowed">override_allowed</option>
+          </select>
+          <ActionButton
+            label="Record"
+            pending={pending === "record_checkin_access"}
+            onClick={() =>
+              userId.trim() &&
+              runAction("record_checkin_access", () =>
+                services.recordCheckinAndAccessLog(gymId, {
+                  userId: userId.trim(),
+                  eventType,
+                  result,
+                  sourceChannel: "admin_panel"
+                })
+              )
+            }
+          />
+        </div>
       </div>
 
       <div className="panel overflow-hidden">
@@ -367,9 +432,12 @@ function CheckinAccessTab({ snapshot }: TabProps) {
 
 /* ── Waiver & Contract ───────────────────────────────────────────── */
 
-function WaiverContractTab({ snapshot }: TabProps) {
+function WaiverContractTab({ snapshot, services, gymId, pending, runAction }: TabProps) {
   const waivers = snapshot.waivers;
   const contracts = snapshot.contracts;
+  const [userId, setUserId] = useState("");
+  const activeWaiver = waivers.find((item) => item.isActive);
+  const activeContract = contracts.find((item) => item.isActive);
 
   return (
     <div className="space-y-4">
@@ -378,6 +446,46 @@ function WaiverContractTab({ snapshot }: TabProps) {
         <StatCard label="Active Waivers" value={waivers.filter(w => w.isActive).length} />
         <StatCard label="Contracts" value={contracts.length} />
         <StatCard label="Active Contracts" value={contracts.filter(c => c.isActive).length} />
+      </div>
+
+      <div className="panel p-4 space-y-3">
+        <h3 className="text-sm font-display font-bold text-foreground">Record Acceptance Evidence</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <input
+            className="input-field"
+            value={userId}
+            onChange={(event) => setUserId(event.target.value)}
+            placeholder="user UUID"
+          />
+          <ActionButton
+            label="Accept Waiver"
+            pending={pending === "record_waiver_acceptance"}
+            onClick={() =>
+              activeWaiver &&
+              userId.trim() &&
+              runAction("record_waiver_acceptance", () =>
+                services.recordWaiverAcceptance(gymId, activeWaiver.id, {
+                  userId: userId.trim(),
+                  signatureData: { source: "admin_console" }
+                })
+              )
+            }
+          />
+          <ActionButton
+            label="Accept Contract"
+            pending={pending === "record_contract_acceptance"}
+            onClick={() =>
+              activeContract &&
+              userId.trim() &&
+              runAction("record_contract_acceptance", () =>
+                services.recordContractAcceptance(gymId, activeContract.id, {
+                  userId: userId.trim(),
+                  signatureData: { source: "admin_console" }
+                })
+              )
+            }
+          />
+        </div>
       </div>
 
       <div className="panel overflow-hidden">

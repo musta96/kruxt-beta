@@ -402,7 +402,14 @@ function ProofFeedEntry() {
 
 function OpsConsoleEntry({ defaultTab = "classes" }: { defaultTab?: "classes" | "waitlist" | "checkin" | "waiver" }) {
   const services = React.useMemo(() => createOpsConsoleRuntimeServices(), []);
-  return <OpsConsoleFlow services={services} defaultTab={defaultTab} />;
+  const location = useLocation();
+  const gymIdFromQuery = new URLSearchParams(location.search).get("gymId");
+  const gymIdFromEnv =
+    typeof import.meta !== "undefined"
+      ? ((import.meta as { env?: Record<string, string | undefined> }).env?.VITE_DEFAULT_GYM_ID ?? undefined)
+      : undefined;
+  const gymId = gymIdFromQuery ?? gymIdFromEnv ?? "preview-gym-id";
+  return <OpsConsoleFlow services={services} gymId={gymId} defaultTab={defaultTab} />;
 }
 
 export default function App() {

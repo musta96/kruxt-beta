@@ -51,10 +51,24 @@ const fallbackLoad = async (): Promise<Phase5OpsLoadResult> => ({
   snapshot: EMPTY_SNAPSHOT
 });
 
-const fallbackMutation = async (action: Phase5OpsMutationSuccess["action"]): Promise<Phase5OpsMutationResult> => ({
+const fallbackUnavailableMutation = async (
+  action: Phase5OpsMutationSuccess["action"]
+): Promise<Phase5OpsMutationResult> => ({
   ok: true,
   action,
   snapshot: EMPTY_SNAPSHOT
+});
+
+const fallbackFailedMutation = async (
+  message: string
+): Promise<Phase5OpsMutationResult> => ({
+  ok: false,
+  error: {
+    code: "ADMIN_OPS_RUNTIME_ACTION_FAILED",
+    step: "class_management",
+    message,
+    recoverable: true
+  }
 });
 
 export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
@@ -77,28 +91,79 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
 
   const wrap = async <T>(
     fn: (f: NonNullable<typeof flow>) => Promise<T>,
-    fallback: () => Promise<T>
+    fallbackUnavailable: () => Promise<T>,
+    fallbackFailed: () => Promise<T>
   ): Promise<T> => {
     const f = await getFlow();
-    if (!f) return fallback();
+    if (!f) return fallbackUnavailable();
     try { return await fn(f); }
     catch (error) {
       console.warn("[ops-console-runtime] action failed:", error);
-      return fallback();
+      return fallbackFailed();
     }
   };
 
   return {
     load: (gymId, options) => wrap(f => f.load(gymId, options), fallbackLoad),
-    createClass: (gymId, input) => wrap(f => f.createClass(gymId, input), () => fallbackMutation("create_class")),
-    updateClass: (gymId, classId, input) => wrap(f => f.updateClass(gymId, classId, input), () => fallbackMutation("update_class")),
-    setClassStatus: (gymId, classId, status) => wrap(f => f.setClassStatus(gymId, classId, status), () => fallbackMutation("set_class_status")),
-    upsertClassBooking: (gymId, input) => wrap(f => f.upsertClassBooking(gymId, input), () => fallbackMutation("upsert_booking")),
-    updateClassBookingStatus: (gymId, bookingId, status, classIdForRefresh) => wrap(f => f.updateClassBookingStatus(gymId, bookingId, status, classIdForRefresh), () => fallbackMutation("update_booking_status")),
-    updateWaitlistEntry: (gymId, waitlistEntryId, input, classIdForRefresh) => wrap(f => f.updateWaitlistEntry(gymId, waitlistEntryId, input, classIdForRefresh), () => fallbackMutation("update_waitlist")),
-    promoteWaitlistMember: (gymId, classId) => wrap(f => f.promoteWaitlistMember(gymId, classId), () => fallbackMutation("promote_waitlist")),
-    recordCheckinAndAccessLog: (gymId, input, accessLogOverride) => wrap(f => f.recordCheckinAndAccessLog(gymId, input, accessLogOverride), () => fallbackMutation("record_checkin_access")),
-    recordWaiverAcceptance: (gymId, waiverId, input) => wrap(f => f.recordWaiverAcceptance(gymId, waiverId, input), () => fallbackMutation("record_waiver_acceptance")),
-    recordContractAcceptance: (gymId, contractId, input) => wrap(f => f.recordContractAcceptance(gymId, contractId, input), () => fallbackMutation("record_contract_acceptance"))
+    createClass: (gymId, input) =>
+      wrap(
+        (f) => f.createClass(gymId, input),
+        () => fallbackUnavailableMutation("create_class"),
+        () => fallbackFailedMutation("Unable to create class.")
+      ),
+    updateClass: (gymId, classId, input) =>
+      wrap(
+        (f) => f.updateClass(gymId, classId, input),
+        () => fallbackUnavailableMutation("update_class"),
+        () => fallbackFailedMutation("Unable to update class.")
+      ),
+    setClassStatus: (gymId, classId, status) =>
+      wrap(
+        (f) => f.setClassStatus(gymId, classId, status),
+        () => fallbackUnavailableMutation("set_class_status"),
+        () => fallbackFailedMutation("Unable to set class status.")
+      ),
+    upsertClassBooking: (gymId, input) =>
+      wrap(
+        (f) => f.upsertClassBooking(gymId, input),
+        () => fallbackUnavailableMutation("upsert_booking"),
+        () => fallbackFailedMutation("Unable to upsert booking.")
+      ),
+    updateClassBookingStatus: (gymId, bookingId, status, classIdForRefresh) =>
+      wrap(
+        (f) => f.updateClassBookingStatus(gymId, bookingId, status, classIdForRefresh),
+        () => fallbackUnavailableMutation("update_booking_status"),
+        () => fallbackFailedMutation("Unable to update booking status.")
+      ),
+    updateWaitlistEntry: (gymId, waitlistEntryId, input, classIdForRefresh) =>
+      wrap(
+        (f) => f.updateWaitlistEntry(gymId, waitlistEntryId, input, classIdForRefresh),
+        () => fallbackUnavailableMutation("update_waitlist"),
+        () => fallbackFailedMutation("Unable to update waitlist entry.")
+      ),
+    promoteWaitlistMember: (gymId, classId) =>
+      wrap(
+        (f) => f.promoteWaitlistMember(gymId, classId),
+        () => fallbackUnavailableMutation("promote_waitlist"),
+        () => fallbackFailedMutation("Unable to promote waitlist member.")
+      ),
+    recordCheckinAndAccessLog: (gymId, input, accessLogOverride) =>
+      wrap(
+        (f) => f.recordCheckinAndAccessLog(gymId, input, accessLogOverride),
+        () => fallbackUnavailableMutation("record_checkin_access"),
+        () => fallbackFailedMutation("Unable to record check-in.")
+      ),
+    recordWaiverAcceptance: (gymId, waiverId, input) =>
+      wrap(
+        (f) => f.recordWaiverAcceptance(gymId, waiverId, input),
+        () => fallbackUnavailableMutation("record_waiver_acceptance"),
+        () => fallbackFailedMutation("Unable to record waiver acceptance.")
+      ),
+    recordContractAcceptance: (gymId, contractId, input) =>
+      wrap(
+        (f) => f.recordContractAcceptance(gymId, contractId, input),
+        () => fallbackUnavailableMutation("record_contract_acceptance"),
+        () => fallbackFailedMutation("Unable to record contract acceptance.")
+      )
   };
 }
