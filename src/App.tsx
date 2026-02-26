@@ -400,16 +400,11 @@ function ProofFeedEntry() {
   return <ProofFeedFlow services={services} />;
 }
 
+const DEFAULT_ADMIN_GYM_ID = "preview-gym-id";
+
 function OpsConsoleEntry({ defaultTab = "classes" }: { defaultTab?: "classes" | "waitlist" | "checkin" | "waiver" }) {
   const services = React.useMemo(() => createOpsConsoleRuntimeServices(), []);
-  const location = useLocation();
-  const gymIdFromQuery = new URLSearchParams(location.search).get("gymId");
-  const gymIdFromEnv =
-    typeof import.meta !== "undefined"
-      ? ((import.meta as { env?: Record<string, string | undefined> }).env?.VITE_DEFAULT_GYM_ID ?? undefined)
-      : undefined;
-  const gymId = gymIdFromQuery ?? gymIdFromEnv ?? "preview-gym-id";
-  return <OpsConsoleFlow services={services} gymId={gymId} defaultTab={defaultTab} />;
+  return <OpsConsoleFlow services={services} gymId={DEFAULT_ADMIN_GYM_ID} defaultTab={defaultTab} />;
 }
 
 export default function App() {
