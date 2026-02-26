@@ -70,10 +70,17 @@ export interface WorkoutLoggerSubmitResult {
   xpDelta: XpDelta;
 }
 
+export interface ExerciseOption {
+  id: string;
+  name: string;
+}
+
 // ─── Service contract (injected) ───────────────────────────────────────────
 export interface WorkoutLoggerServices {
   /** Load chain/rank context for header */
   loadContext: () => Promise<ChainContext>;
+  /** Search exercise catalog for valid exercise UUIDs */
+  searchExercises: (query: string) => Promise<ExerciseOption[]>;
   /** Submit draft through createPhase3WorkoutLoggerUiFlow */
   submit: (draft: WorkoutDraft) => Promise<WorkoutLoggerSubmitResult>;
 }

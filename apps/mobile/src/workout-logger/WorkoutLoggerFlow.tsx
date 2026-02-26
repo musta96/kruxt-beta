@@ -6,6 +6,7 @@ import type {
   ChainContext,
   XpDelta,
   FieldErrors,
+  ExerciseOption
 } from "./types";
 import {
   createEmptyDraft,
@@ -82,7 +83,10 @@ export function WorkoutLoggerFlow({ services, onComplete, onCancel }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [xpResult, setXpResult] = useState<XpDelta | null>(null);
   const [completedWorkoutId, setCompletedWorkoutId] = useState<string | null>(null);
+  const [exerciseOptions, setExerciseOptions] = useState<Record<string, ExerciseOption[]>>({});
+  const [exerciseSearchLoading, setExerciseSearchLoading] = useState<Record<string, boolean>>({});
   const submitGuard = useRef(false);
+  const exerciseSearchTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // Load chain/rank context
   useEffect(() => {
@@ -93,6 +97,61 @@ export function WorkoutLoggerFlow({ services, onComplete, onCancel }: Props) {
   useEffect(() => {
     if (!completedWorkoutId) saveDraft(draft);
   }, [draft, completedWorkoutId]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(exerciseSearchTimers.current).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  const handleExerciseInputChange = useCallback(
+    (exerciseClientId: string, exerciseIndex: number, value: string) => {
+      setDraft((prev) =>
+        updateExercise(prev, exerciseIndex, {
+          exerciseName: value,
+          exerciseId: ""
+        })
+      );
+
+      const q = value.trim();
+      if (exerciseSearchTimers.current[exerciseClientId]) {
+        clearTimeout(exerciseSearchTimers.current[exerciseClientId]);
+      }
+
+      if (q.length < 2) {
+        setExerciseOptions((prev) => ({ ...prev, [exerciseClientId]: [] }));
+        setExerciseSearchLoading((prev) => ({ ...prev, [exerciseClientId]: false }));
+        return;
+      }
+
+      setExerciseSearchLoading((prev) => ({ ...prev, [exerciseClientId]: true }));
+      exerciseSearchTimers.current[exerciseClientId] = setTimeout(async () => {
+        try {
+          const results = await services.searchExercises(q);
+          setExerciseOptions((prev) => ({ ...prev, [exerciseClientId]: results }));
+        } catch {
+          setExerciseOptions((prev) => ({ ...prev, [exerciseClientId]: [] }));
+        } finally {
+          setExerciseSearchLoading((prev) => ({ ...prev, [exerciseClientId]: false }));
+        }
+      }, 220);
+    },
+    [services]
+  );
+
+  const handleSelectExercise = useCallback(
+    (exerciseClientId: string, exerciseIndex: number, option: ExerciseOption) => {
+      setDraft((prev) =>
+        updateExercise(prev, exerciseIndex, {
+          exerciseId: option.id,
+          exerciseName: option.name
+        })
+      );
+      setExerciseOptions((prev) => ({ ...prev, [exerciseClientId]: [] }));
+      setExerciseSearchLoading((prev) => ({ ...prev, [exerciseClientId]: false }));
+    },
+    []
+  );
 
   const handleSubmit = useCallback(async () => {
     if (submitGuard.current) return;
@@ -325,18 +384,29 @@ export function WorkoutLoggerFlow({ services, onComplete, onCancel }: Props) {
                       errors[`exercises.${exIdx}.exerciseId`] ? "border-destructive" : ""
                     }`}
                     value={ex.exerciseName}
-                    onChange={(e) =>
-                      setDraft(
-                        updateExercise(draft, exIdx, {
-                          exerciseName: e.target.value,
-                          exerciseId: e.target.value.trim() ? `manual_${e.target.value.trim().toLowerCase().replace(/\s+/g, "_")}` : "",
-                        })
-                      )
-                    }
-                    placeholder="Exercise name"
+                    onChange={(e) => handleExerciseInputChange(ex.clientId, exIdx, e.target.value)}
+                    placeholder="Search exercise catalog"
+                    autoComplete="off"
                   />
                   {errors[`exercises.${exIdx}.exerciseId`] && (
                     <span className="field-error">{errors[`exercises.${exIdx}.exerciseId`]}</span>
+                  )}
+                  {((exerciseOptions[ex.clientId] ?? []).length > 0 || exerciseSearchLoading[ex.clientId]) && (
+                    <div className="mt-1 panel p-1.5 space-y-1 max-h-40 overflow-y-auto">
+                      {exerciseSearchLoading[ex.clientId] && (
+                        <div className="text-xs text-muted-foreground px-2 py-1">Searching exercises...</div>
+                      )}
+                      {(exerciseOptions[ex.clientId] ?? []).map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => handleSelectExercise(ex.clientId, exIdx, option)}
+                          className="w-full text-left px-2 py-1.5 rounded-md text-sm text-foreground hover:bg-secondary transition-colors"
+                        >
+                          {option.name}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <button

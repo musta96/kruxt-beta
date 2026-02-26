@@ -1,4 +1,10 @@
-import type { WorkoutLoggerServices, WorkoutDraft, WorkoutLoggerSubmitResult, ChainContext } from "./types";
+import type {
+  WorkoutLoggerServices,
+  WorkoutDraft,
+  WorkoutLoggerSubmitResult,
+  ChainContext,
+  ExerciseOption
+} from "./types";
 import { createMobileSupabaseClient } from "../services/supabase-client";
 import { createPhase3WorkoutLoggerUiFlow } from "../flows/phase3-workout-logger-ui";
 import type { WorkoutLoggerDraft } from "../flows/phase3-workout-logger-ui";
@@ -22,10 +28,27 @@ export function createWorkoutLoggerRuntimeServices(): WorkoutLoggerServices {
 
         return {
           chainDays: data?.chain_days ?? 0,
-          rankTier: data?.rank_tier ?? "bronze",
+          rankTier: data?.rank_tier ?? "initiate",
           level: data?.level ?? 1,
           xpTotal: data?.xp_total ?? 0,
         };
+      },
+      searchExercises: async (query: string): Promise<ExerciseOption[]> => {
+        const q = query.trim();
+        if (q.length < 2) return [];
+
+        const { data, error } = await supabase
+          .from("exercises")
+          .select("id,name")
+          .ilike("name", `%${q}%`)
+          .order("name", { ascending: true })
+          .limit(12);
+
+        if (error) throw error;
+        return ((data ?? []) as Array<{ id: string; name: string }>).map((row) => ({
+          id: row.id,
+          name: row.name
+        }));
       },
 
       submit: async (draft: WorkoutDraft): Promise<WorkoutLoggerSubmitResult> => {
@@ -101,7 +124,18 @@ export function createWorkoutLoggerRuntimeServices(): WorkoutLoggerServices {
   } catch (error) {
     console.warn("[workout-logger-runtime] Falling back to preview services:", error);
     return {
-      loadContext: async () => ({ chainDays: 7, rankTier: "silver", level: 12, xpTotal: 3400 }),
+      loadContext: async () => ({ chainDays: 7, rankTier: "vanguard", level: 12, xpTotal: 3400 }),
+      searchExercises: async (query: string): Promise<ExerciseOption[]> => {
+        const q = query.trim().toLowerCase();
+        if (q.length < 2) return [];
+        const catalog: ExerciseOption[] = [
+          { id: "preview-ex-1", name: "Back Squat" },
+          { id: "preview-ex-2", name: "Bench Press" },
+          { id: "preview-ex-3", name: "Deadlift" },
+          { id: "preview-ex-4", name: "Pull-up" }
+        ];
+        return catalog.filter((ex) => ex.name.toLowerCase().includes(q));
+      },
       submit: async () => {
         await new Promise((r) => setTimeout(r, 800));
         return {
