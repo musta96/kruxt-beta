@@ -26,25 +26,28 @@ const mobileTabs = [
 
 function MobileShell() {
   const location = useLocation();
+  const hideTabBar = location.pathname.startsWith("/log");
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      <main className="flex-1 overflow-y-auto pb-20"><Outlet /></main>
-      <nav className="fixed bottom-0 inset-x-0 bg-card/95 backdrop-blur-md border-t border-border z-50"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
-          {mobileTabs.map((tab) => {
-            const isActive = location.pathname.startsWith(tab.to);
-            return (
-              <NavLink key={tab.to} to={tab.to} className="flex flex-col items-center gap-0.5 px-2 py-1.5">
-                <span className="text-lg">{tab.icon}</span>
-                <span className={`text-[10px] font-display font-semibold ${isActive ? "text-primary" : "text-muted-foreground"}`}>
-                  {tab.label}
-                </span>
-              </NavLink>
-            );
-          })}
-        </div>
-      </nav>
+      <main className={`flex-1 overflow-y-auto ${hideTabBar ? "" : "pb-20"}`}><Outlet /></main>
+      {!hideTabBar && (
+        <nav className="fixed bottom-0 inset-x-0 bg-card/95 backdrop-blur-md border-t border-border z-50"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+          <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
+            {mobileTabs.map((tab) => {
+              const isActive = location.pathname.startsWith(tab.to);
+              return (
+                <NavLink key={tab.to} to={tab.to} className="flex flex-col items-center gap-0.5 px-2 py-1.5">
+                  <span className="text-lg">{tab.icon}</span>
+                  <span className={`text-[10px] font-display font-semibold ${isActive ? "text-primary" : "text-muted-foreground"}`}>
+                    {tab.label}
+                  </span>
+                </NavLink>
+              );
+            })}
+          </div>
+        </nav>
+      )}
     </div>
   );
 }
