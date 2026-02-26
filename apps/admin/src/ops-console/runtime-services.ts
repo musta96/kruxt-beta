@@ -485,6 +485,12 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
     }
   };
 
+  const wrapMutation = (
+    fn: (f: NonNullable<typeof flow>) => Promise<Phase5OpsMutationResult>,
+    fallbackUnavailable: () => Promise<Phase5OpsMutationResult>,
+    fallbackFailed: () => Promise<Phase5OpsMutationResult>
+  ): Promise<Phase5OpsMutationResult> => wrap<Phase5OpsMutationResult>(fn, fallbackUnavailable, fallbackFailed);
+
   return {
     load: (gymId, options) =>
       wrap(
@@ -599,9 +605,9 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
       }
     },
     createClass: (gymId, input) =>
-      wrap(
+      wrapMutation(
         (f) => f.createClass(gymId, input),
-        async () => {
+        async (): Promise<Phase5OpsMutationResult> => {
           const timestamp = nowIso();
           const gymClass = {
             id: createPreviewId("class"),
@@ -631,19 +637,19 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackFailedMutation("Unable to create class.")
       ),
     updateClass: (gymId, classId, input) =>
-      wrap(
+      wrapMutation(
         (f) => f.updateClass(gymId, classId, input),
-        async () => {
-          let gymClass: Phase5OpsMutationSuccess["gymClass"];
-          previewClasses = previewClasses.map((item) => {
-            if (item.id !== classId) return item;
-            gymClass = {
-              ...item,
-              ...input,
-              updatedAt: nowIso()
-            };
-            return gymClass;
-          });
+        async (): Promise<Phase5OpsMutationResult> => {
+          const existing = previewClasses.find((item) => item.id === classId);
+          if (!existing) {
+            return fallbackFailedMutation("Unable to update class.");
+          }
+          const gymClass = {
+            ...existing,
+            ...input,
+            updatedAt: nowIso()
+          };
+          previewClasses = previewClasses.map((item) => (item.id === classId ? gymClass : item));
 
           return {
             ok: true,
@@ -655,19 +661,19 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackFailedMutation("Unable to update class.")
       ),
     setClassStatus: (gymId, classId, status) =>
-      wrap(
+      wrapMutation(
         (f) => f.setClassStatus(gymId, classId, status),
-        async () => {
-          let gymClass: Phase5OpsMutationSuccess["gymClass"];
-          previewClasses = previewClasses.map((item) => {
-            if (item.id !== classId) return item;
-            gymClass = {
-              ...item,
-              status,
-              updatedAt: nowIso()
-            };
-            return gymClass;
-          });
+        async (): Promise<Phase5OpsMutationResult> => {
+          const existing = previewClasses.find((item) => item.id === classId);
+          if (!existing) {
+            return fallbackFailedMutation("Unable to set class status.");
+          }
+          const gymClass = {
+            ...existing,
+            status,
+            updatedAt: nowIso()
+          };
+          previewClasses = previewClasses.map((item) => (item.id === classId ? gymClass : item));
 
           return {
             ok: true,
@@ -679,14 +685,14 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackFailedMutation("Unable to set class status.")
       ),
     upsertClassBooking: (gymId, input) =>
-      wrap(
+      wrapMutation(
         (f) => f.upsertClassBooking(gymId, input),
-        async () => {
+        async (): Promise<Phase5OpsMutationResult> => {
           const timestamp = nowIso();
           const existing = previewBookings.find(
             (item) => item.classId === input.classId && item.userId === input.userId
           );
-          const booking = existing
+          const booking: ClassBooking = existing
             ? {
                 ...existing,
                 status: input.status ?? existing.status,
@@ -720,19 +726,19 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackFailedMutation("Unable to upsert booking.")
       ),
     updateClassBookingStatus: (gymId, bookingId, status, classIdForRefresh) =>
-      wrap(
+      wrapMutation(
         (f) => f.updateClassBookingStatus(gymId, bookingId, status, classIdForRefresh),
-        async () => {
-          let booking: Phase5OpsMutationSuccess["booking"];
-          previewBookings = previewBookings.map((item) => {
-            if (item.id !== bookingId) return item;
-            booking = {
-              ...item,
-              status,
-              updatedAt: nowIso()
-            };
-            return booking;
-          });
+        async (): Promise<Phase5OpsMutationResult> => {
+          const existing = previewBookings.find((item) => item.id === bookingId);
+          if (!existing) {
+            return fallbackFailedMutation("Unable to update booking status.");
+          }
+          const booking: ClassBooking = {
+            ...existing,
+            status,
+            updatedAt: nowIso()
+          };
+          previewBookings = previewBookings.map((item) => (item.id === bookingId ? booking : item));
           previewSelectedClassId = classIdForRefresh;
 
           return {
@@ -745,9 +751,9 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackFailedMutation("Unable to update booking status.")
       ),
     updateWaitlistEntry: (gymId, waitlistEntryId, input, classIdForRefresh) =>
-      wrap(
+      wrapMutation(
         (f) => f.updateWaitlistEntry(gymId, waitlistEntryId, input, classIdForRefresh),
-        async () => {
+        async (): Promise<Phase5OpsMutationResult> => {
           previewWaitlist = previewWaitlist.map((item) =>
             item.id === waitlistEntryId
               ? {
@@ -768,9 +774,9 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackFailedMutation("Unable to update waitlist entry.")
       ),
     promoteWaitlistMember: (gymId, classId) =>
-      wrap(
+      wrapMutation(
         (f) => f.promoteWaitlistMember(gymId, classId),
-        async () => {
+        async (): Promise<Phase5OpsMutationResult> => {
           const candidate = previewWaitlist
             .filter((item) => item.classId === classId && item.status === "pending")
             .sort((a, b) => a.position - b.position)[0];
@@ -789,7 +795,7 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
                 : item
             );
 
-            const booking = {
+            const booking: ClassBooking = {
               id: createPreviewId("booking"),
               classId,
               userId: candidate.userId,
@@ -815,9 +821,9 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackFailedMutation("Unable to promote waitlist member.")
       ),
     recordCheckinAndAccessLog: (gymId, input, accessLogOverride) =>
-      wrap(
+      wrapMutation(
         (f) => f.recordCheckinAndAccessLog(gymId, input, accessLogOverride),
-        async () => {
+        async (): Promise<Phase5OpsMutationResult> => {
           const timestamp = nowIso();
           const checkin = {
             id: createPreviewId("checkin"),
@@ -861,9 +867,9 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackFailedMutation("Unable to record check-in.")
       ),
     recordWaiverAcceptance: (gymId, waiverId, input) =>
-      wrap(
+      wrapMutation(
         (f) => f.recordWaiverAcceptance(gymId, waiverId, input),
-        async () => ({
+        async (): Promise<Phase5OpsMutationResult> => ({
           ok: true,
           action: "record_waiver_acceptance",
           waiverAcceptanceId: createPreviewId("waiver_acceptance"),
@@ -872,9 +878,9 @@ export function createOpsConsoleRuntimeServices(): OpsConsoleServices {
         () => fallbackFailedMutation("Unable to record waiver acceptance.")
       ),
     recordContractAcceptance: (gymId, contractId, input) =>
-      wrap(
+      wrapMutation(
         (f) => f.recordContractAcceptance(gymId, contractId, input),
-        async () => ({
+        async (): Promise<Phase5OpsMutationResult> => ({
           ok: true,
           action: "record_contract_acceptance",
           contractAcceptanceId: createPreviewId("contract_acceptance"),

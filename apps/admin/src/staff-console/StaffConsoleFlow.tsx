@@ -40,7 +40,7 @@ export function StaffConsoleFlow({ services, gymId }: StaffConsoleFlowProps) {
     setLoading(true);
     setError(null);
     const result = await services.load(gymId);
-    if (!result.ok) {
+    if (result.ok === false) {
       setError(result.error.message);
       setLoading(false);
       return;
@@ -70,11 +70,11 @@ export function StaffConsoleFlow({ services, gymId }: StaffConsoleFlowProps) {
       const result = await services.searchProfiles(gymId, trimmed);
       if (!active) return;
 
-      if (result.ok) {
-        setProfileOptions(result.profiles);
-      } else {
+      if (result.ok === false) {
         setProfileOptions([]);
         setError(result.error.message);
+      } else {
+        setProfileOptions(result.profiles);
       }
 
       setProfileLoading(false);
