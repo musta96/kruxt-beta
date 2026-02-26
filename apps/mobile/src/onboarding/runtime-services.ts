@@ -1,36 +1,54 @@
 import type { OnboardingServices, OnboardingSubmitInput, GymSearchResult } from "./types";
 import { createMobileSupabaseClient } from "../services/supabase-client";
 import { GymService } from "../services/gym-service";
-import { createPhase2OnboardingUiFlow } from "../flows/phase2-onboarding-ui";
+import { createPhase2OnboardingUiFlow, type OnboardingUiDraft } from "../flows/phase2-onboarding-ui";
 
 export function createOnboardingRuntimeServices(): OnboardingServices {
-  const supabase = createMobileSupabaseClient();
-  const gymService = new GymService(supabase);
-  const flow = createPhase2OnboardingUiFlow();
+  try {
+    const supabase = createMobileSupabaseClient();
+    const gymService = new GymService(supabase);
+    const flow = createPhase2OnboardingUiFlow();
 
-  return {
-    searchGyms: async (query: string): Promise<GymSearchResult[]> => {
-      const gyms = await gymService.listVisibleGyms(100);
-      const q = query.trim().toLowerCase();
-      if (!q) return gyms.map(mapGym);
-      return gyms.filter((g) => g.name.toLowerCase().includes(q)).map(mapGym);
-    },
+    return {
+      searchGyms: async (query: string): Promise<GymSearchResult[]> => {
+        const gyms = await gymService.listVisibleGyms(100);
+        const q = query.trim().toLowerCase();
+        if (!q) return gyms.map(mapGym);
+        return gyms.filter((g) => g.name.toLowerCase().includes(q)).map(mapGym);
+      },
 
-    submit: async (input: OnboardingSubmitInput): Promise<void> => {
-      const draft = mapToDraft(input);
-      const result = await flow.submit(draft);
-      if (result.ok === false) {
-        throw new Error(result.error.message);
-      }
-    },
-  };
+      submit: async (input: OnboardingSubmitInput): Promise<void> => {
+        const draft = mapToDraft(input);
+        const result = await flow.submit(draft);
+        if (result.ok === false) {
+          throw new Error(result.error.message);
+        }
+      },
+    };
+  } catch (error) {
+    // Keep Lovable preview usable when env vars are not available.
+    console.warn("[onboarding-runtime] Falling back to preview services:", error);
+    return {
+      searchGyms: async (query: string): Promise<GymSearchResult[]> => {
+        const q = query.trim();
+        if (!q) return [];
+        return [
+          { id: "preview-1", name: `${q} Fitness`, city: "Pavia", isPublic: true },
+          { id: "preview-2", name: `${q} Guild Club`, city: "Milan", isPublic: false },
+        ];
+      },
+      submit: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      },
+    };
+  }
 }
 
 function mapGym(g: { id: string; name: string; city?: string | null; isPublic: boolean }): GymSearchResult {
   return { id: g.id, name: g.name, city: g.city ?? null, isPublic: g.isPublic };
 }
 
-function mapToDraft(input: OnboardingSubmitInput) {
+function mapToDraft(input: OnboardingSubmitInput): OnboardingUiDraft {
   const auth = input.auth;
   const profile = input.profile;
   const gym = input.gym;
@@ -67,7 +85,7 @@ function mapToDraft(input: OnboardingSubmitInput) {
     consents: {
       acceptTerms: consents.acceptTerms,
       acceptPrivacy: consents.acceptPrivacy,
-      acceptHealthDataProcessing: consents.acceptHealthData,
+      acceptHealthData: consents.acceptHealthData,
     },
     gym: gymDraft,
   };
