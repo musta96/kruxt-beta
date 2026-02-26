@@ -49,6 +49,18 @@ function reducer(s: State, a: Action): State {
 
 const INIT: State = { loading: true, snapshot: null, error: null, actionPending: null, actionError: null };
 
+function makeRuntimeUiError(
+  message: string,
+  step: Phase5OpsUiError["step"] = "class_management"
+): Phase5OpsUiError {
+  return {
+    code: "ADMIN_OPS_RUNTIME_ERROR",
+    step,
+    message,
+    recoverable: true
+  };
+}
+
 /* ── Props ──────────────────────────────────────────────────────── */
 
 export interface OpsConsoleFlowProps {
@@ -65,18 +77,42 @@ export function OpsConsoleFlow({ services, gymId, defaultTab = "classes" }: OpsC
 
   const load = useCallback(async () => {
     dispatch({ type: "load_start" });
-    const result = await services.load(gymId);
-    if (result.ok === false) dispatch({ type: "load_fail", error: result.error });
-    else dispatch({ type: "load_ok", snapshot: result.snapshot });
+    try {
+      const result = await services.load(gymId);
+      if (result.ok === false) {
+        dispatch({ type: "load_fail", error: result.error });
+      } else {
+        dispatch({ type: "load_ok", snapshot: result.snapshot });
+      }
+    } catch (error) {
+      const fallbackMessage =
+        error instanceof Error ? error.message : "Unable to load operations data.";
+      dispatch({
+        type: "load_fail",
+        error: makeRuntimeUiError(fallbackMessage)
+      });
+    }
   }, [gymId, services]);
 
   useEffect(() => { load(); }, [load]);
 
   const runAction = useCallback(async (key: string, fn: () => Promise<any>) => {
     dispatch({ type: "action_start", key });
-    const result = await fn();
-    if (result.ok) dispatch({ type: "action_ok", snapshot: result.snapshot });
-    else dispatch({ type: "action_fail", error: result.error });
+    try {
+      const result = await fn();
+      if (result.ok) {
+        dispatch({ type: "action_ok", snapshot: result.snapshot });
+      } else {
+        dispatch({ type: "action_fail", error: result.error });
+      }
+    } catch (error) {
+      const fallbackMessage =
+        error instanceof Error ? error.message : "Unable to complete this action.";
+      dispatch({
+        type: "action_fail",
+        error: makeRuntimeUiError(fallbackMessage)
+      });
+    }
   }, []);
 
   const snap = state.snapshot;
