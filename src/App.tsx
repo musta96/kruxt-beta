@@ -4,6 +4,8 @@ import { OnboardingFlow } from "@mobile/onboarding";
 import { createOnboardingRuntimeServices } from "@mobile/onboarding/runtime-services";
 import { WorkoutLoggerFlow } from "@mobile/workout-logger";
 import { createWorkoutLoggerRuntimeServices } from "@mobile/workout-logger/runtime-services";
+import { ProofFeedFlow } from "@mobile/proof-feed";
+import { createProofFeedRuntimeServices } from "@mobile/proof-feed/runtime-services";
 
 // ─── Placeholder screen ──────────────────────────────────────────
 function PlaceholderScreen({ title }: { title: string }) {
@@ -369,6 +371,11 @@ function WorkoutLoggerEntry() {
   );
 }
 
+function ProofFeedEntry() {
+  const services = React.useMemo(() => createProofFeedRuntimeServices(), []);
+  return <ProofFeedFlow services={services} />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -376,7 +383,7 @@ export default function App() {
         <Route path="/" element={<OnboardingEntry />} />
         <Route path="/showcase" element={<DesignShowcase />} />
         <Route element={<MobileShell />}>
-          <Route path="/feed" element={<PlaceholderScreen title="Proof Feed" />} />
+          <Route path="/feed" element={<ProofFeedEntry />} />
           <Route path="/log" element={<WorkoutLoggerEntry />} />
           <Route path="/guild" element={<PlaceholderScreen title="Guild Hall" />} />
           <Route path="/rank" element={<PlaceholderScreen title="Rank Ladder" />} />
