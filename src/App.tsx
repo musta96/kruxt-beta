@@ -6,6 +6,7 @@ import { WorkoutLoggerFlow } from "@mobile/workout-logger";
 import { createWorkoutLoggerRuntimeServices } from "@mobile/workout-logger/runtime-services";
 import { ProofFeedFlow } from "@mobile/proof-feed";
 import { createProofFeedRuntimeServices } from "@mobile/proof-feed/runtime-services";
+import { createMobileSupabaseClient } from "@mobile/services/supabase-client";
 import { OpsConsoleFlow } from "@admin/ops-console";
 import { createOpsConsoleRuntimeServices } from "@admin/ops-console/runtime-services";
 import { AdminSettingsFlow } from "@admin/admin-settings";
@@ -518,6 +519,43 @@ function DesignShowcase() {
 function OnboardingEntry() {
   const navigate = useNavigate();
   const services = React.useMemo(() => createOnboardingRuntimeServices(), []);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  React.useEffect(() => {
+    let active = true;
+
+    const checkSession = async () => {
+      try {
+        const supabase = createMobileSupabaseClient();
+        const { data } = await supabase.auth.getUser();
+        if (!active) return;
+        if (data.user) {
+          navigate("/feed", { replace: true });
+          return;
+        }
+      } catch (error) {
+        console.warn("[onboarding-entry] session check failed:", error);
+      } finally {
+        if (active) setCheckingSession(false);
+      }
+    };
+
+    void checkSession();
+    return () => {
+      active = false;
+    };
+  }, [navigate]);
+
+  if (checkingSession) {
+    return (
+      <div className="p-6">
+        <div className="panel p-4">
+          <p className="text-sm text-muted-foreground">Checking session...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <OnboardingFlow
       onComplete={() => navigate("/feed")}
