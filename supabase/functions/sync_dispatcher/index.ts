@@ -1,13 +1,22 @@
 import { jsonResponse, parseJsonOr } from "../_shared/http.ts";
 import { serviceClient } from "../_shared/supabase.ts";
+import { requireAuth, isAuthResult } from "../_shared/auth.ts";
+import { safeErrorResponse } from "../_shared/errors.ts";
+import { z } from "npm:zod@3";
 import {
   asRecord,
   asString,
   isActiveSyncProvider,
   isIntegrationProvider,
   isProviderEnabled,
+  INTEGRATION_PROVIDERS,
   type IntegrationProvider
 } from "../_shared/integrations.ts";
+
+const DispatcherInputSchema = z.object({
+  limit: z.number().int().min(1).max(100).optional(),
+  provider: z.enum(INTEGRATION_PROVIDERS).optional(),
+});
 
 interface DispatcherInput {
   limit?: number;
@@ -253,12 +262,20 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
+  const auth = await requireAuth(request);
+  if (!isAuthResult(auth)) return auth;
+
   try {
-    const body = await parseJsonOr<DispatcherInput>(request, {});
-    if (body.provider && !isIntegrationProvider(body.provider)) {
-      return jsonResponse({ error: "Unsupported provider." }, 400);
+    const raw = await parseJsonOr<unknown>(request, {});
+    const parsed = DispatcherInputSchema.safeParse(raw);
+    if (!parsed.success) {
+      return jsonResponse({
+        error: "Validation failed",
+        issues: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      }, 400);
     }
 
+    const body = parsed.data;
     const limit = Math.min(Math.max(body.limit ?? 20, 1), 100);
     const now = new Date();
     const nowIso = now.toISOString();
@@ -580,6 +597,6 @@ Deno.serve(async (request) => {
       failedJobIds
     });
   } catch (error) {
-    return jsonResponse({ error: String(error) }, 500);
+    return safeErrorResponse(error, "sync_dispatcher");
   }
 });

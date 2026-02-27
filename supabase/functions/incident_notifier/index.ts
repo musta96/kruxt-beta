@@ -1,5 +1,15 @@
 import { jsonResponse, parseJsonOr } from "../_shared/http.ts";
 import { serviceClient } from "../_shared/supabase.ts";
+import { requireAuth, isAuthResult } from "../_shared/auth.ts";
+import { safeErrorResponse } from "../_shared/errors.ts";
+import { z } from "npm:zod@3";
+
+const IncidentNotifierSchema = z.object({
+  claimLimit: z.number().int().min(1).max(100).optional(),
+  retryDelaySeconds: z.number().int().min(60).max(86400).optional(),
+  maxRetries: z.number().int().min(1).max(20).optional(),
+  forceDrill: z.boolean().optional(),
+});
 
 type IncidentNotificationChannel = "email" | "webhook";
 type IncidentDeliveryMode = "drill" | "live";
@@ -116,9 +126,21 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
+  const auth = await requireAuth(request);
+  if (!isAuthResult(auth)) return auth;
+
   try {
+    const raw = await parseJsonOr<unknown>(request, {});
+    const parsed = IncidentNotifierSchema.safeParse(raw);
+    if (!parsed.success) {
+      return jsonResponse({
+        error: "Validation failed",
+        issues: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      }, 400);
+    }
+
+    const payload = parsed.data;
     const supabase = serviceClient();
-    const payload = await parseJsonOr<IncidentNotifierPayload>(request, {});
     const claimLimit = clamp(payload.claimLimit, 1, 100, 20);
     const retryDelaySeconds = clamp(payload.retryDelaySeconds, 60, 86400, 900);
     const maxRetries = clamp(payload.maxRetries, 1, 20, 5);
@@ -208,6 +230,6 @@ Deno.serve(async (request) => {
       errors
     });
   } catch (error) {
-    return jsonResponse({ error: String(error) }, 500);
+    return safeErrorResponse(error, "incident_notifier");
   }
 });

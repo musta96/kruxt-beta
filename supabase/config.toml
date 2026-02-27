@@ -29,19 +29,19 @@ site_url = "http://localhost:3000"
 additional_redirect_urls = ["http://localhost:19006", "http://localhost:3001"]
 
 [functions.provider_webhook_ingest]
-verify_jwt = true
+verify_jwt = false
 
 [functions.sync_dispatcher]
-verify_jwt = true
+verify_jwt = false
 
 [functions.rank_recompute_weekly]
-verify_jwt = true
+verify_jwt = false
 
 [functions.privacy_request_processor]
-verify_jwt = true
+verify_jwt = false
 
 [functions.audit_event_ingest]
-verify_jwt = true
+verify_jwt = false
 
 [functions.incident_notifier]
-verify_jwt = true
+verify_jwt = false
