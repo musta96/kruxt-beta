@@ -15,6 +15,20 @@ import { GymService } from "./gym-service";
 import { PolicyService, type BaselineConsentInput } from "./policy-service";
 import { ProfileService } from "./profile-service";
 
+const AVATAR_BUCKET =
+  (import.meta as { env?: Record<string, string | undefined> }).env?.EXPO_PUBLIC_AVATAR_BUCKET ||
+  (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_AVATAR_BUCKET ||
+  (import.meta as { env?: Record<string, string | undefined> }).env?.SUPABASE_AVATAR_BUCKET ||
+  "profile-avatars";
+
+function extensionFromMimeType(mimeType: string): string {
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/webp") return "webp";
+  if (mimeType === "image/gif") return "gif";
+  if (mimeType === "image/jpg" || mimeType === "image/jpeg") return "jpg";
+  return "bin";
+}
+
 export interface OnboardingGymPreference {
   createGym?: CreateGymInput;
   joinGymId?: string;
@@ -82,6 +96,56 @@ export class Phase2OnboardingService {
     return details.includes("already registered") || details.includes("user_already_exists");
   }
 
+  private async uploadAvatarIfNeeded(userId: string, avatarUrl?: string): Promise<string | undefined> {
+    const value = avatarUrl?.trim();
+    if (!value) return undefined;
+    if (!value.startsWith("data:image/")) return value;
+
+    const dataUrlMatch = value.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!dataUrlMatch) {
+      throw new KruxtAppError("AVATAR_UPLOAD_FAILED", "Invalid avatar format.");
+    }
+
+    const mimeType = dataUrlMatch[1];
+    const base64Payload = dataUrlMatch[2];
+
+    if (typeof atob !== "function") {
+      throw new KruxtAppError("AVATAR_UPLOAD_FAILED", "Avatar upload is not supported in this environment.");
+    }
+
+    const binary = atob(base64Payload);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+
+    const extension = extensionFromMimeType(mimeType);
+    const path = `users/${userId}/avatar-${Date.now()}.${extension}`;
+    const storage = this.supabase.storage.from(AVATAR_BUCKET);
+    const { error: uploadError } = await storage.upload(path, bytes, {
+      contentType: mimeType,
+      upsert: true,
+      cacheControl: "3600"
+    });
+
+    if (uploadError) {
+      throw new KruxtAppError(
+        "AVATAR_UPLOAD_FAILED",
+        `Avatar upload failed. Confirm bucket "${AVATAR_BUCKET}" exists and allows authenticated uploads.`,
+        uploadError
+      );
+    }
+
+    const {
+      data: { publicUrl }
+    } = storage.getPublicUrl(path);
+    if (!publicUrl) {
+      throw new KruxtAppError("AVATAR_UPLOAD_FAILED", "Avatar upload succeeded but URL generation failed.");
+    }
+
+    return publicUrl;
+  }
+
   async run(input: Phase2OnboardingInput): Promise<Phase2OnboardingResult> {
     this.validateInput(input);
     const credentials: CredentialsInput = {
@@ -110,8 +174,11 @@ export class Phase2OnboardingService {
 
     const userId = currentUser.id;
     const userEmail = currentUser.email ?? credentials.email;
-
-    const profile = await this.profiles.ensureProfile(userId, userEmail, input.profile ?? {});
+    const avatarUrl = await this.uploadAvatarIfNeeded(userId, input.profile?.avatarUrl);
+    const profile = await this.profiles.ensureProfile(userId, userEmail, {
+      ...(input.profile ?? {}),
+      avatarUrl
+    });
     const policyLocale = input.profile?.locale ?? input.baselineConsents.locale ?? null;
     const localizedPolicies = new PolicyService(this.supabase, { locale: policyLocale });
 
