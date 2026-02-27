@@ -602,11 +602,6 @@ function StaffConsoleEntry({ gymId }: { gymId: string }) {
   return <StaffConsoleFlow services={services} gymId={gymId} />;
 }
 
-function GymStaffHomeEntry({ gymId }: { gymId: string }) {
-  const services = React.useMemo(() => createStaffConsoleRuntimeServices(), []);
-  return <GymStaffHomeDashboard services={services} gymId={gymId} />;
-}
-
 function FounderConsoleEntry({
   gymId,
   onGymChange,
