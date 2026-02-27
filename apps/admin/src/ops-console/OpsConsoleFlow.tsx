@@ -82,6 +82,38 @@ interface CreateClassDraft {
   notes: string;
 }
 
+type ClassStatus = Phase5B2BOpsSnapshot["classes"][number]["status"];
+
+interface ClassListRow {
+  item: Phase5B2BOpsSnapshot["classes"][number];
+  location: string;
+  course: string;
+  coachLabel: string;
+  startsAtTs: number;
+  startsAtLabel: string;
+  weekdayLabel: string;
+  timeLabel: string;
+  durationMinutes: number;
+  seriesKey: string;
+}
+
+interface ClassSeriesSummary {
+  key: string;
+  title: string;
+  location: string;
+  course: string;
+  coachLabel: string;
+  status: ClassStatus;
+  capacity: number;
+  weekdayLabel: string;
+  timeLabel: string;
+  durationMinutes: number;
+  firstStartsAtTs: number;
+  lastStartsAtTs: number;
+  nextStartsAtTs: number;
+  count: number;
+}
+
 function toDateValue(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -126,6 +158,19 @@ function parseClassMeta(description: string | null | undefined): { location?: st
   }
 
   return output;
+}
+
+function toShortDateTime(date: Date): string {
+  const dateLabel = date.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "2-digit",
+    month: "short"
+  });
+  const timeLabel = date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  return `${dateLabel}, ${timeLabel}`;
 }
 
 function buildInitialCreateDraft(options: ClassSchedulingOptions): CreateClassDraft {
@@ -345,6 +390,12 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
     templates: [],
     coaches: []
   }));
+  const [viewMode, setViewMode] = useState<"series" | "occurrences">("series");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | ClassStatus>("all");
+  const [locationFilter, setLocationFilter] = useState<"all" | string>("all");
+  const [seriesFilter, setSeriesFilter] = useState<"all" | string>("all");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let active = true;
@@ -369,8 +420,9 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
     };
   }, [gymId, services, showCreateForm]);
 
-  const coachNameById = new Map<string, string>(
-    options.coaches.map((coach: CoachOption) => [coach.userId, coach.displayName])
+  const coachNameById = React.useMemo(
+    () => new Map<string, string>(options.coaches.map((coach: CoachOption) => [coach.userId, coach.displayName])),
+    [options.coaches]
   );
 
   const templatesForLocation = options.templates.filter((item) => item.location === draft.location);
@@ -488,11 +540,141 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
     setShowCreateForm(false);
   };
 
+  const classRows = React.useMemo<ClassListRow[]>(() => {
+    return [...classes]
+      .map((item) => {
+        const meta = parseClassMeta(item.description);
+        const startsAtDate = new Date(item.startsAt);
+        const startsAtTs = startsAtDate.getTime();
+        const endsAtTs = new Date(item.endsAt).getTime();
+        const durationMinutes = Math.max(0, Math.round((endsAtTs - startsAtTs) / 60_000));
+        const weekdayLabel = startsAtDate.toLocaleDateString(undefined, { weekday: "short" });
+        const timeLabel = startsAtDate.toLocaleTimeString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+        const location = meta.location ?? "Unspecified";
+        const course = meta.course ?? item.title;
+        const coachLabel = item.coachUserId
+          ? coachNameById.get(item.coachUserId) ?? `${item.coachUserId.slice(0, 8)}...`
+          : "Unassigned";
+
+        const seriesKey = [
+          item.title.trim().toLowerCase(),
+          location.trim().toLowerCase(),
+          course.trim().toLowerCase(),
+          item.coachUserId ?? "unassigned",
+          item.status,
+          String(item.capacity),
+          String(startsAtDate.getDay()),
+          `${startsAtDate.getHours()}:${startsAtDate.getMinutes()}`
+        ].join("|");
+
+        return {
+          item,
+          location,
+          course,
+          coachLabel,
+          startsAtTs,
+          startsAtLabel: toShortDateTime(startsAtDate),
+          weekdayLabel,
+          timeLabel,
+          durationMinutes,
+          seriesKey
+        };
+      })
+      .sort((left, right) => right.startsAtTs - left.startsAtTs);
+  }, [classes, coachNameById]);
+
+  const locationOptions = React.useMemo(
+    () => Array.from(new Set(classRows.map((row) => row.location))).sort((a, b) => a.localeCompare(b)),
+    [classRows]
+  );
+
+  const filteredRows = React.useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return classRows.filter((row) => {
+      if (statusFilter !== "all" && row.item.status !== statusFilter) return false;
+      if (locationFilter !== "all" && row.location !== locationFilter) return false;
+      if (seriesFilter !== "all" && row.seriesKey !== seriesFilter) return false;
+      if (!query) return true;
+      return [
+        row.item.title,
+        row.course,
+        row.location,
+        row.coachLabel
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [classRows, locationFilter, searchQuery, seriesFilter, statusFilter]);
+
+  const seriesSummaries = React.useMemo<ClassSeriesSummary[]>(() => {
+    const bySeries = new Map<string, ClassSeriesSummary>();
+    const nowTs = Date.now();
+
+    for (const row of filteredRows) {
+      const existing = bySeries.get(row.seriesKey);
+      if (!existing) {
+        bySeries.set(row.seriesKey, {
+          key: row.seriesKey,
+          title: row.item.title,
+          location: row.location,
+          course: row.course,
+          coachLabel: row.coachLabel,
+          status: row.item.status,
+          capacity: row.item.capacity,
+          weekdayLabel: row.weekdayLabel,
+          timeLabel: row.timeLabel,
+          durationMinutes: row.durationMinutes,
+          firstStartsAtTs: row.startsAtTs,
+          lastStartsAtTs: row.startsAtTs,
+          nextStartsAtTs: row.startsAtTs >= nowTs ? row.startsAtTs : Number.POSITIVE_INFINITY,
+          count: 1
+        });
+        continue;
+      }
+
+      existing.count += 1;
+      existing.firstStartsAtTs = Math.min(existing.firstStartsAtTs, row.startsAtTs);
+      existing.lastStartsAtTs = Math.max(existing.lastStartsAtTs, row.startsAtTs);
+      if (row.startsAtTs >= nowTs) {
+        existing.nextStartsAtTs = Math.min(existing.nextStartsAtTs, row.startsAtTs);
+      }
+    }
+
+    const list = Array.from(bySeries.values());
+    list.sort((left, right) => {
+      const leftNext = Number.isFinite(left.nextStartsAtTs) ? left.nextStartsAtTs : left.lastStartsAtTs;
+      const rightNext = Number.isFinite(right.nextStartsAtTs) ? right.nextStartsAtTs : right.lastStartsAtTs;
+      return rightNext - leftNext;
+    });
+    return list;
+  }, [filteredRows]);
+
+  useEffect(() => {
+    if (seriesFilter === "all") return;
+    if (seriesSummaries.some((series) => series.key === seriesFilter)) return;
+    setSeriesFilter("all");
+  }, [seriesFilter, seriesSummaries]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, statusFilter, locationFilter, seriesFilter, viewMode]);
+
+  const pageSize = 18;
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const totalScheduled = classes.filter((item) => item.status === "scheduled").length;
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Classes" value={classes.length} />
-        <StatCard label="Scheduled" value={classes.filter(c => c.status === "scheduled").length} />
+        <StatCard label="Scheduled" value={totalScheduled} />
+        <StatCard label="Series" value={seriesSummaries.length} />
         <StatCard label="Bookings" value={bookings.length} />
         <StatCard label="Plans" value={snapshot.membershipPlans.length} />
       </div>
@@ -824,45 +1006,196 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
           </div>
         )}
 
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Title</th><th>Location</th><th>Coach</th><th>Status</th><th>Capacity</th><th>Starts</th><th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {classes.length === 0 ? (
-              <tr><td colSpan={7} className="text-center text-muted-foreground text-sm py-6">No classes found</td></tr>
-            ) : classes.map((c) => (
-              <tr key={c.id} className={c.id === selectedId ? "bg-muted/30" : ""}>
-                <td className="font-medium">{c.title}</td>
-                <td className="text-xs text-muted-foreground">
-                  {parseClassMeta(c.description).location ?? "—"}
-                </td>
-                <td className="text-xs text-muted-foreground">
-                  {c.coachUserId ? coachNameById.get(c.coachUserId) ?? `${c.coachUserId.slice(0, 8)}...` : "Unassigned"}
-                </td>
-                <td><StatusBadge status={c.status} /></td>
-                <td className="font-mono tabular-nums">{c.capacity}</td>
-                <td className="text-xs text-muted-foreground">{new Date(c.startsAt).toLocaleString()}</td>
-                <td>
-                  <div className="flex gap-1.5">
-                    {c.status === "scheduled" && (
-                      <ActionButton label="Cancel" small pending={pending === `cancel_${c.id}`} onClick={() =>
-                        runAction(`cancel_${c.id}`, () => services.setClassStatus(gymId, c.id, "cancelled"))
-                      } />
-                    )}
-                    {c.status === "scheduled" && (
-                      <ActionButton label="Complete" small pending={pending === `complete_${c.id}`} onClick={() =>
-                        runAction(`complete_${c.id}`, () => services.setClassStatus(gymId, c.id, "completed"))
-                      } />
-                    )}
-                  </div>
-                </td>
+        <div className="px-4 py-3 border-t border-border bg-muted/10 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <input
+              className="input-field"
+              placeholder="Search by class, course, coach, location"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+            <select
+              className="input-field"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as "all" | ClassStatus)}
+            >
+              <option value="all">All statuses</option>
+              <option value="scheduled">scheduled</option>
+              <option value="cancelled">cancelled</option>
+              <option value="completed">completed</option>
+            </select>
+            <select
+              className="input-field"
+              value={locationFilter}
+              onChange={(event) => setLocationFilter(event.target.value)}
+            >
+              <option value="all">All locations</option>
+              {locationOptions.map((location) => (
+                <option key={location} value={location}>{location}</option>
+              ))}
+            </select>
+            <select
+              className="input-field"
+              value={seriesFilter}
+              onChange={(event) => setSeriesFilter(event.target.value)}
+            >
+              <option value="all">All series</option>
+              {seriesSummaries.map((series) => (
+                <option key={series.key} value={series.key}>
+                  {series.title} - {series.location} ({series.count})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {filteredRows.length} occurrences shown from {classes.length} total
+              {seriesFilter !== "all" && " - filtered by one series"}
+            </p>
+            <div className="flex items-center gap-2">
+              {seriesFilter !== "all" && (
+                <button type="button" className="btn-compact" onClick={() => setSeriesFilter("all")}>
+                  Clear series filter
+                </button>
+              )}
+              <button
+                type="button"
+                className={`btn-compact ${viewMode === "series" ? "ring-2 ring-primary bg-primary/15 text-primary" : ""}`}
+                onClick={() => setViewMode("series")}
+              >
+                Series View
+              </button>
+              <button
+                type="button"
+                className={`btn-compact ${viewMode === "occurrences" ? "ring-2 ring-primary bg-primary/15 text-primary" : ""}`}
+                onClick={() => setViewMode("occurrences")}
+              >
+                Occurrences View
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {viewMode === "series" ? (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Class</th><th>Pattern</th><th>Coach</th><th>Status</th><th>Window</th><th>Count</th><th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {seriesSummaries.length === 0 ? (
+                <tr><td colSpan={7} className="text-center text-muted-foreground text-sm py-6">No series found</td></tr>
+              ) : seriesSummaries.map((series) => {
+                const nextLabel = Number.isFinite(series.nextStartsAtTs)
+                  ? toShortDateTime(new Date(series.nextStartsAtTs))
+                  : "No upcoming";
+                const windowLabel = `${toShortDateTime(new Date(series.firstStartsAtTs))} -> ${toShortDateTime(new Date(series.lastStartsAtTs))}`;
+                return (
+                  <tr key={series.key}>
+                    <td>
+                      <div className="font-medium">{series.title}</div>
+                      <div className="text-xs text-muted-foreground">{series.course} - {series.location}</div>
+                    </td>
+                    <td className="text-xs text-muted-foreground">
+                      {series.weekdayLabel} at {series.timeLabel} ({series.durationMinutes}m)
+                    </td>
+                    <td className="text-xs text-muted-foreground">{series.coachLabel}</td>
+                    <td><StatusBadge status={series.status} /></td>
+                    <td className="text-xs text-muted-foreground">
+                      <div>{nextLabel}</div>
+                      <div className="opacity-70">{windowLabel}</div>
+                    </td>
+                    <td className="font-mono tabular-nums">{series.count}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn-compact"
+                        onClick={() => {
+                          setSeriesFilter(series.key);
+                          setViewMode("occurrences");
+                          setPage(1);
+                        }}
+                      >
+                        View occurrences
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Title</th><th>Location</th><th>Coach</th><th>Status</th><th>Capacity</th><th>Starts</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center text-muted-foreground text-sm py-6">No classes found</td></tr>
+                ) : pageRows.map((row) => {
+                  const c = row.item;
+                  return (
+                    <tr key={c.id} className={c.id === selectedId ? "bg-muted/30" : ""}>
+                      <td>
+                        <div className="font-medium">{c.title}</div>
+                        <div className="text-xs text-muted-foreground">{row.course}</div>
+                      </td>
+                      <td className="text-xs text-muted-foreground">{row.location}</td>
+                      <td className="text-xs text-muted-foreground">{row.coachLabel}</td>
+                      <td><StatusBadge status={c.status} /></td>
+                      <td className="font-mono tabular-nums">{c.capacity}</td>
+                      <td className="text-xs text-muted-foreground">{row.startsAtLabel}</td>
+                      <td className="min-w-[180px]">
+                        <div className="flex flex-wrap gap-1.5">
+                          {c.status === "scheduled" && (
+                            <ActionButton label="Cancel" small pending={pending === `cancel_${c.id}`} onClick={() =>
+                              runAction(`cancel_${c.id}`, () => services.setClassStatus(gymId, c.id, "cancelled"))
+                            } />
+                          )}
+                          {c.status === "scheduled" && (
+                            <ActionButton label="Complete" small pending={pending === `complete_${c.id}`} onClick={() =>
+                              runAction(`complete_${c.id}`, () => services.setClassStatus(gymId, c.id, "completed"))
+                            } />
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {totalPages > 1 && (
+              <div className="px-4 py-3 border-t border-border flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  Page {safePage} of {totalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn-compact"
+                    disabled={safePage <= 1}
+                    onClick={() => setPage(Math.max(1, safePage - 1))}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-compact"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {selectedId && (
