@@ -377,6 +377,11 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
   const selectedTemplate =
     templatesForLocation.find((item) => item.id === draft.templateId) ??
     pickTemplate(options, draft.location, draft.templateId);
+  const eligibleCoachIds = selectedTemplate?.eligibleCoachUserIds ?? [];
+  const coachOptionsForTemplate =
+    eligibleCoachIds.length > 0
+      ? options.coaches.filter((coach) => eligibleCoachIds.includes(coach.userId))
+      : options.coaches;
   const quickDateOptions = React.useMemo(() => {
     const now = new Date();
     return [
@@ -386,6 +391,12 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
     ];
   }, []);
   const quickTimeOptions = ["06:30", "08:00", "12:30", "18:00", "19:30"];
+
+  useEffect(() => {
+    if (!draft.coachUserId) return;
+    if (coachOptionsForTemplate.some((coach) => coach.userId === draft.coachUserId)) return;
+    setDraft((prev) => ({ ...prev, coachUserId: "" }));
+  }, [coachOptionsForTemplate, draft.coachUserId]);
 
   const openCreateForm = () => {
     setDraft(buildInitialCreateDraft(options));
@@ -554,12 +565,17 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
                   onChange={(event) => setDraft((prev) => ({ ...prev, coachUserId: event.target.value }))}
                 >
                   <option value="">Unassigned</option>
-                  {options.coaches.map((coach) => (
+                  {coachOptionsForTemplate.map((coach) => (
                     <option key={coach.userId} value={coach.userId}>
                       {coach.displayName}
                     </option>
                   ))}
                 </select>
+                {eligibleCoachIds.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Filtered to coaches eligible for this course.
+                  </p>
+                )}
               </div>
             </div>
 

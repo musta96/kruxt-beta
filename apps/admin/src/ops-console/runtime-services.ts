@@ -44,6 +44,7 @@ export interface ClassTemplateOption {
   location: string;
   defaultCapacity: number;
   defaultDurationMinutes: number;
+  eligibleCoachUserIds?: string[];
 }
 
 export interface ClassSchedulingOptions {
@@ -212,12 +213,22 @@ function normalizeCatalog(input: ClassSchedulingCatalogInput): StoredCatalog {
     const name = item.name.trim();
     if (!location || !name) continue;
     locationSet.add(location);
+    const eligibleCoachUserIds = Array.isArray(item.eligibleCoachUserIds)
+      ? Array.from(
+          new Set(
+            item.eligibleCoachUserIds
+              .map((userId) => (typeof userId === "string" ? userId.trim() : ""))
+              .filter(Boolean)
+          )
+        )
+      : [];
     templates.push({
       id: item.id || createPreviewId("template"),
       name,
       location,
       defaultCapacity: Math.max(1, Math.floor(item.defaultCapacity || 1)),
-      defaultDurationMinutes: Math.max(15, Math.floor(item.defaultDurationMinutes || 60))
+      defaultDurationMinutes: Math.max(15, Math.floor(item.defaultDurationMinutes || 60)),
+      ...(eligibleCoachUserIds.length > 0 ? { eligibleCoachUserIds } : {})
     });
   }
 

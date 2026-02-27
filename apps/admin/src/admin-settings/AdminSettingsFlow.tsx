@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import type {
+  CoachOption,
   ClassSchedulingCatalogInput,
   ClassTemplateOption,
   OpsConsoleServices
@@ -27,6 +28,7 @@ export function AdminSettingsFlow({ services, gymId }: AdminSettingsFlowProps) {
   const [locationInput, setLocationInput] = useState("");
   const [locations, setLocations] = useState<string[]>([]);
   const [templates, setTemplates] = useState<ClassTemplateOption[]>([]);
+  const [coaches, setCoaches] = useState<CoachOption[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -39,6 +41,7 @@ export function AdminSettingsFlow({ services, gymId }: AdminSettingsFlowProps) {
         if (!active) return;
         setLocations(options.locations);
         setTemplates(options.templates.map(ensureTemplateId));
+        setCoaches(options.coaches);
       } catch (err) {
         if (!active) return;
         setError(err instanceof Error ? err.message : "Unable to load class catalog.");
@@ -88,7 +91,8 @@ export function AdminSettingsFlow({ services, gymId }: AdminSettingsFlowProps) {
         name: "New Course",
         location: firstLocation,
         defaultCapacity: 12,
-        defaultDurationMinutes: 60
+        defaultDurationMinutes: 60,
+        eligibleCoachUserIds: []
       }
     ]);
     setSuccess(null);
@@ -106,6 +110,34 @@ export function AdminSettingsFlow({ services, gymId }: AdminSettingsFlowProps) {
     setSuccess(null);
   };
 
+  const toggleTemplateCoach = (templateId: string, coachUserId: string) => {
+    setTemplates((prev) =>
+      prev.map((template) => {
+        if (template.id !== templateId) return template;
+        const existing = template.eligibleCoachUserIds ?? [];
+        const next = existing.includes(coachUserId)
+          ? existing.filter((userId) => userId !== coachUserId)
+          : [...existing, coachUserId];
+        return {
+          ...template,
+          eligibleCoachUserIds: next
+        };
+      })
+    );
+    setSuccess(null);
+  };
+
+  const clearTemplateCoachRestrictions = (templateId: string) => {
+    setTemplates((prev) =>
+      prev.map((template) =>
+        template.id === templateId
+          ? { ...template, eligibleCoachUserIds: [] }
+          : template
+      )
+    );
+    setSuccess(null);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -119,7 +151,10 @@ export function AdminSettingsFlow({ services, gymId }: AdminSettingsFlowProps) {
           name: template.name.trim(),
           location: template.location.trim(),
           defaultCapacity: Math.max(1, Math.floor(template.defaultCapacity || 1)),
-          defaultDurationMinutes: Math.max(15, Math.floor(template.defaultDurationMinutes || 60))
+          defaultDurationMinutes: Math.max(15, Math.floor(template.defaultDurationMinutes || 60)),
+          eligibleCoachUserIds: Array.from(
+            new Set((template.eligibleCoachUserIds ?? []).map((userId) => userId.trim()).filter(Boolean))
+          )
         }))
         .filter((template) => template.name && template.location)
     };
@@ -230,13 +265,14 @@ export function AdminSettingsFlow({ services, gymId }: AdminSettingsFlowProps) {
               <th>Location</th>
               <th>Default Capacity</th>
               <th>Default Duration</th>
+              <th>Eligible Coaches</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {templates.length === 0 && (
               <tr>
-                <td colSpan={5} className="text-center text-muted-foreground text-sm py-6">
+                <td colSpan={6} className="text-center text-muted-foreground text-sm py-6">
                   No courses configured yet.
                 </td>
               </tr>
@@ -288,6 +324,39 @@ export function AdminSettingsFlow({ services, gymId }: AdminSettingsFlowProps) {
                       })
                     }
                   />
+                </td>
+                <td className="min-w-[280px]">
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      className={`btn-compact ${!(template.eligibleCoachUserIds?.length) ? "ring-2 ring-primary" : ""}`}
+                      onClick={() => clearTemplateCoachRestrictions(template.id)}
+                    >
+                      All coaches
+                    </button>
+                    {coaches.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        No staff coaches available yet. Add them in Members.
+                      </p>
+                    )}
+                    {coaches.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {coaches.map((coach) => {
+                          const active = (template.eligibleCoachUserIds ?? []).includes(coach.userId);
+                          return (
+                            <button
+                              key={`${template.id}_${coach.userId}`}
+                              type="button"
+                              className={`btn-compact ${active ? "ring-2 ring-primary bg-primary/15 text-primary" : ""}`}
+                              onClick={() => toggleTemplateCoach(template.id, coach.userId)}
+                            >
+                              {coach.displayName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </td>
                 <td>
                   <button
