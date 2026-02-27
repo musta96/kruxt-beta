@@ -17,6 +17,8 @@ import {
   type FounderConsoleServices
 } from "@admin/founder-console";
 import { createAdminSupabaseClient } from "@admin/services";
+import { FounderHomeDashboard } from "./components/admin/FounderHomeDashboard";
+import { GymStaffHomeDashboard } from "./components/admin/GymStaffHomeDashboard";
 
 // ─── Placeholder screen ──────────────────────────────────────────
 function PlaceholderScreen({ title }: { title: string }) {
@@ -90,7 +92,6 @@ type PlatformOperatorRole =
 interface AdminAccessState {
   status: "loading" | "ready";
   isAuthenticated: boolean;
-  previewBypass: boolean;
   platformRole: PlatformOperatorRole | null;
   staffGymIds: string[];
 }
@@ -136,7 +137,7 @@ function RequireAdminAccess({
     );
   }
 
-  const isFounder = access.previewBypass || access.platformRole === "founder";
+  const isFounder = access.platformRole === "founder";
   if (mode === "founder" && !isFounder) {
     return (
       <AccessDeniedCard
@@ -601,6 +602,11 @@ function StaffConsoleEntry({ gymId }: { gymId: string }) {
   return <StaffConsoleFlow services={services} gymId={gymId} />;
 }
 
+function GymStaffHomeEntry({ gymId }: { gymId: string }) {
+  const services = React.useMemo(() => createStaffConsoleRuntimeServices(), []);
+  return <GymStaffHomeDashboard services={services} gymId={gymId} />;
+}
+
 function FounderConsoleEntry({
   gymId,
   onGymChange,
@@ -625,7 +631,6 @@ export default function App() {
   const [adminAccess, setAdminAccess] = useState<AdminAccessState>({
     status: "loading",
     isAuthenticated: false,
-    previewBypass: false,
     platformRole: null,
     staffGymIds: []
   });
@@ -646,7 +651,6 @@ export default function App() {
           setAdminAccess({
             status: "ready",
             isAuthenticated: false,
-            previewBypass: false,
             platformRole: null,
             staffGymIds: []
           });
@@ -673,18 +677,16 @@ export default function App() {
         setAdminAccess({
           status: "ready",
           isAuthenticated: true,
-          previewBypass: false,
           platformRole: (platformData?.role as PlatformOperatorRole | undefined) ?? null,
           staffGymIds: (membershipsData ?? []).map((row) => row.gym_id)
         });
       } catch (error) {
-        console.warn("[admin-access] Falling back to preview bypass:", error);
+        console.warn("[admin-access] Access check failed:", error);
         if (!active) return;
         setAdminAccess({
           status: "ready",
-          isAuthenticated: true,
-          previewBypass: true,
-          platformRole: "founder",
+          isAuthenticated: false,
+          platformRole: null,
           staffGymIds: []
         });
       }
@@ -696,7 +698,7 @@ export default function App() {
     };
   }, []);
 
-  const canManageGyms = adminAccess.previewBypass || adminAccess.platformRole === "founder";
+  const canManageGyms = adminAccess.platformRole === "founder";
   const allowedGymIds = canManageGyms ? null : adminAccess.staffGymIds;
 
   React.useEffect(() => {
@@ -740,7 +742,22 @@ export default function App() {
             </RequireAdminAccess>
           }
         >
-          <Route path="/admin" element={<PlaceholderScreen title="Overview" />} />
+          <Route
+            path="/admin"
+            element={
+              canManageGyms ? (
+                <FounderHomeDashboard
+                  services={founderServices}
+                  selectedGymId={adminGymId}
+                  onSelectGym={handleGymChange}
+                />
+              ) : (
+                <RequireAdminAccess access={adminAccess} mode="gym_staff" gymId={adminGymId}>
+                  <GymStaffHomeEntry gymId={adminGymId} />
+                </RequireAdminAccess>
+              )
+            }
+          />
           <Route
             path="/admin/gyms"
             element={
