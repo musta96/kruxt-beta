@@ -7456,6 +7456,10 @@ export type Database = {
       }
       get_platform_admin_overview: { Args: never; Returns: Json }
       has_active_legal_hold: { Args: { p_user_id?: string }; Returns: boolean }
+      has_gym_staff_access: {
+        Args: { _gym_id: string; _viewer?: string }
+        Returns: boolean
+      }
       is_gym_member: {
         Args: { _gym_id: string; _viewer?: string }
         Returns: boolean
@@ -7465,6 +7469,7 @@ export type Database = {
         Returns: boolean
       }
       is_incident_open_status: { Args: { p_status: string }; Returns: boolean }
+      is_platform_founder: { Args: { _viewer?: string }; Returns: boolean }
       is_platform_operator: { Args: { _viewer?: string }; Returns: boolean }
       is_privacy_request_open_status: {
         Args: { _status: Database["public"]["Enums"]["privacy_request_status"] }
