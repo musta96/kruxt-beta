@@ -699,8 +699,15 @@ export default function App() {
     let active = true;
 
     const loadAccess = async () => {
+      let supabase: ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createMobileSupabaseClient>;
       try {
-        const supabase = createAdminSupabaseClient();
+        try {
+          supabase = createAdminSupabaseClient();
+        } catch (adminClientError) {
+          console.warn("[admin-access] Admin client unavailable, trying mobile env keys:", adminClientError);
+          supabase = createMobileSupabaseClient();
+        }
+
         const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError || !authData.user) {
           if (!active) return;
@@ -714,30 +721,41 @@ export default function App() {
         }
 
         const userId = authData.user.id;
-        const [{ data: platformData }, { data: membershipsData }] = await Promise.all([
-          supabase
-            .from("platform_operator_accounts")
-            .select("role,is_active")
-            .eq("user_id", userId)
-            .eq("is_active", true)
-            .maybeSingle(),
-          supabase
-            .from("gym_memberships")
-            .select("gym_id")
-            .eq("user_id", userId)
-            .in("membership_status", ["trial", "active"])
-            .in("role", ["leader", "officer", "coach"])
-        ]);
+        try {
+          const [{ data: platformData }, { data: membershipsData }] = await Promise.all([
+            supabase
+              .from("platform_operator_accounts")
+              .select("role,is_active")
+              .eq("user_id", userId)
+              .eq("is_active", true)
+              .maybeSingle(),
+            supabase
+              .from("gym_memberships")
+              .select("gym_id")
+              .eq("user_id", userId)
+              .in("membership_status", ["trial", "active"])
+              .in("role", ["leader", "officer", "coach"])
+          ]);
 
-        if (!active) return;
-        setAdminAccess({
-          status: "ready",
-          isAuthenticated: true,
-          platformRole: (platformData?.role as PlatformOperatorRole | undefined) ?? null,
-          staffGymIds: (membershipsData ?? []).map((row) => row.gym_id)
-        });
+          if (!active) return;
+          setAdminAccess({
+            status: "ready",
+            isAuthenticated: true,
+            platformRole: (platformData?.role as PlatformOperatorRole | undefined) ?? null,
+            staffGymIds: (membershipsData ?? []).map((row) => row.gym_id)
+          });
+        } catch (accessError) {
+          console.warn("[admin-access] Role query failed; preserving authenticated state:", accessError);
+          if (!active) return;
+          setAdminAccess({
+            status: "ready",
+            isAuthenticated: true,
+            platformRole: null,
+            staffGymIds: []
+          });
+        }
       } catch (error) {
-        console.warn("[admin-access] Access check failed:", error);
+        console.warn("[admin-access] Auth check failed:", error);
         if (!active) return;
         setAdminAccess({
           status: "ready",

@@ -33,8 +33,11 @@ export function createAdminSupabaseClient(config?: AdminSupabaseConfig): Supabas
     config?.anonKey ??
     readEnv([
       "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
       "EXPO_PUBLIC_SUPABASE_ANON_KEY",
+      "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
       "VITE_SUPABASE_ANON_KEY",
+      "VITE_SUPABASE_PUBLISHABLE_KEY",
       "SUPABASE_ANON_KEY"
     ]);
 
@@ -47,7 +50,8 @@ export function createAdminSupabaseClient(config?: AdminSupabaseConfig): Supabas
   return createClient(url, anonKey, {
     auth: {
       autoRefreshToken: true,
-      persistSession: true
+      persistSession: true,
+      detectSessionInUrl: false
     }
   });
 }
