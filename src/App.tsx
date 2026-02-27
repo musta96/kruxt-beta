@@ -16,6 +16,7 @@ import {
   createFounderConsoleRuntimeServices,
   type FounderConsoleServices
 } from "@admin/founder-console";
+import { createAdminSupabaseClient } from "@admin/services";
 
 // ─── Placeholder screen ──────────────────────────────────────────
 function PlaceholderScreen({ title }: { title: string }) {
@@ -65,9 +66,8 @@ function MobileShell() {
 }
 
 // ─── Admin Shell ─────────────────────────────────────────────────
-const adminNav = [
+const adminNavCore = [
   { to: "/admin", label: "Overview", end: true },
-  { to: "/admin/gyms", label: "Gyms" },
   { to: "/admin/members", label: "Members" },
   { to: "/admin/classes", label: "Classes" },
   { to: "/admin/checkins", label: "Check-ins" },
@@ -79,18 +79,111 @@ const adminNav = [
   { to: "/admin/settings", label: "Settings" },
 ];
 
+type PlatformOperatorRole =
+  | "founder"
+  | "ops_admin"
+  | "support_admin"
+  | "compliance_admin"
+  | "analyst"
+  | "read_only";
+
+interface AdminAccessState {
+  status: "loading" | "ready";
+  isAuthenticated: boolean;
+  previewBypass: boolean;
+  platformRole: PlatformOperatorRole | null;
+  staffGymIds: string[];
+}
+
+function AccessDeniedCard({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="p-6">
+      <div className="panel border-destructive/40 bg-destructive/10 p-4 max-w-xl">
+        <h1 className="text-lg font-display font-bold text-destructive">{title}</h1>
+        <p className="text-sm text-destructive mt-1">{message}</p>
+      </div>
+    </div>
+  );
+}
+
+function RequireAdminAccess({
+  access,
+  mode,
+  gymId,
+  children
+}: {
+  access: AdminAccessState;
+  mode: "auth" | "founder" | "gym_staff";
+  gymId?: string;
+  children: React.ReactElement;
+}) {
+  if (access.status === "loading") {
+    return (
+      <div className="p-6">
+        <div className="panel p-4">
+          <p className="text-sm text-muted-foreground">Checking access...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!access.isAuthenticated) {
+    return (
+      <AccessDeniedCard
+        title="Sign-in required"
+        message="You must sign in before opening the admin console."
+      />
+    );
+  }
+
+  const isFounder = access.previewBypass || access.platformRole === "founder";
+  if (mode === "founder" && !isFounder) {
+    return (
+      <AccessDeniedCard
+        title="Founder access required"
+        message="This page is restricted to KRUXT founder-level operators."
+      />
+    );
+  }
+
+  if (mode === "gym_staff") {
+    const canAccessGym = isFounder || (gymId ? access.staffGymIds.includes(gymId) : false);
+    if (!canAccessGym) {
+      return (
+        <AccessDeniedCard
+          title="Gym staff access required"
+          message="You can only access admin pages for gyms where you are leader/officer/coach."
+        />
+      );
+    }
+  }
+
+  return children;
+}
+
 function AdminShell({
   selectedGymId,
   onSelectGym,
-  founderServices
+  founderServices,
+  canManageGyms,
+  allowedGymIds
 }: {
   selectedGymId: string;
   onSelectGym: (gymId: string) => void;
   founderServices: FounderConsoleServices;
+  canManageGyms: boolean;
+  allowedGymIds: string[] | null;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [gymOptions, setGymOptions] = useState<Array<{ id: string; name: string }>>([]);
   const location = useLocation();
+  const navItems = React.useMemo(
+    () => [
+      ...(canManageGyms ? [{ to: "/admin/gyms", label: "Gyms" }] : []),
+      ...adminNavCore
+    ],
+    [canManageGyms]
+  );
 
   React.useEffect(() => {
     let active = true;
@@ -98,9 +191,13 @@ function AdminShell({
       try {
         const gyms = await founderServices.listGyms();
         if (!active) return;
-        setGymOptions(gyms.map((gym) => ({ id: gym.id, name: gym.name })));
-        if (gyms.length > 0 && !gyms.some((gym) => gym.id === selectedGymId)) {
-          onSelectGym(gyms[0].id);
+        const visibleGyms =
+          canManageGyms || !allowedGymIds
+            ? gyms
+            : gyms.filter((gym) => allowedGymIds.includes(gym.id));
+        setGymOptions(visibleGyms.map((gym) => ({ id: gym.id, name: gym.name })));
+        if (visibleGyms.length > 0 && !visibleGyms.some((gym) => gym.id === selectedGymId)) {
+          onSelectGym(visibleGyms[0].id);
         }
       } catch {
         if (!active) return;
@@ -111,7 +208,7 @@ function AdminShell({
     return () => {
       active = false;
     };
-  }, [founderServices, onSelectGym, selectedGymId]);
+  }, [allowedGymIds, canManageGyms, founderServices, onSelectGym, selectedGymId]);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -139,14 +236,16 @@ function AdminShell({
                 <option key={gym.id} value={gym.id}>{gym.name}</option>
               ))}
             </select>
-            <NavLink to="/admin/gyms" className="text-xs text-primary underline underline-offset-2">
-              Manage gyms
-            </NavLink>
+            {canManageGyms && (
+              <NavLink to="/admin/gyms" className="text-xs text-primary underline underline-offset-2">
+                Manage gyms
+              </NavLink>
+            )}
           </div>
         )}
         <nav className="flex-1 overflow-y-auto py-4">
           <ul className="flex flex-col gap-0.5 px-2">
-            {adminNav.map((item) => {
+            {navItems.map((item) => {
               const isActive = item.end ? location.pathname === item.to : location.pathname.startsWith(item.to);
               return (
                 <li key={item.to}>
@@ -523,9 +622,89 @@ function FounderConsoleEntry({
 export default function App() {
   const founderServices = React.useMemo(() => createFounderConsoleRuntimeServices(), []);
   const [adminGymId, setAdminGymId] = useState<string>(() => readInitialAdminGymId());
+  const [adminAccess, setAdminAccess] = useState<AdminAccessState>({
+    status: "loading",
+    isAuthenticated: false,
+    previewBypass: false,
+    platformRole: null,
+    staffGymIds: []
+  });
+
   const handleGymChange = React.useCallback((gymId: string) => {
     setAdminGymId(gymId);
   }, []);
+
+  React.useEffect(() => {
+    let active = true;
+
+    const loadAccess = async () => {
+      try {
+        const supabase = createAdminSupabaseClient();
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user) {
+          if (!active) return;
+          setAdminAccess({
+            status: "ready",
+            isAuthenticated: false,
+            previewBypass: false,
+            platformRole: null,
+            staffGymIds: []
+          });
+          return;
+        }
+
+        const userId = authData.user.id;
+        const [{ data: platformData }, { data: membershipsData }] = await Promise.all([
+          supabase
+            .from("platform_operator_accounts")
+            .select("role,is_active")
+            .eq("user_id", userId)
+            .eq("is_active", true)
+            .maybeSingle(),
+          supabase
+            .from("gym_memberships")
+            .select("gym_id")
+            .eq("user_id", userId)
+            .in("membership_status", ["trial", "active"])
+            .in("role", ["leader", "officer", "coach"])
+        ]);
+
+        if (!active) return;
+        setAdminAccess({
+          status: "ready",
+          isAuthenticated: true,
+          previewBypass: false,
+          platformRole: (platformData?.role as PlatformOperatorRole | undefined) ?? null,
+          staffGymIds: (membershipsData ?? []).map((row) => row.gym_id)
+        });
+      } catch (error) {
+        console.warn("[admin-access] Falling back to preview bypass:", error);
+        if (!active) return;
+        setAdminAccess({
+          status: "ready",
+          isAuthenticated: true,
+          previewBypass: true,
+          platformRole: "founder",
+          staffGymIds: []
+        });
+      }
+    };
+
+    void loadAccess();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const canManageGyms = adminAccess.previewBypass || adminAccess.platformRole === "founder";
+  const allowedGymIds = canManageGyms ? null : adminAccess.staffGymIds;
+
+  React.useEffect(() => {
+    if (canManageGyms) return;
+    if (adminAccess.staffGymIds.length === 0) return;
+    if (adminAccess.staffGymIds.includes(adminGymId)) return;
+    setAdminGymId(adminAccess.staffGymIds[0]);
+  }, [adminAccess.staffGymIds, adminGymId, canManageGyms]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -550,33 +729,74 @@ export default function App() {
         </Route>
         <Route
           element={
-            <AdminShell
-              selectedGymId={adminGymId}
-              onSelectGym={handleGymChange}
-              founderServices={founderServices}
-            />
+            <RequireAdminAccess access={adminAccess} mode="auth">
+              <AdminShell
+                selectedGymId={adminGymId}
+                onSelectGym={handleGymChange}
+                founderServices={founderServices}
+                canManageGyms={canManageGyms}
+                allowedGymIds={allowedGymIds}
+              />
+            </RequireAdminAccess>
           }
         >
           <Route path="/admin" element={<PlaceholderScreen title="Overview" />} />
           <Route
             path="/admin/gyms"
             element={
-              <FounderConsoleEntry
-                gymId={adminGymId}
-                onGymChange={handleGymChange}
-                services={founderServices}
-              />
+              <RequireAdminAccess access={adminAccess} mode="founder">
+                <FounderConsoleEntry
+                  gymId={adminGymId}
+                  onGymChange={handleGymChange}
+                  services={founderServices}
+                />
+              </RequireAdminAccess>
             }
           />
-          <Route path="/admin/members" element={<StaffConsoleEntry gymId={adminGymId} />} />
-          <Route path="/admin/classes" element={<OpsConsoleEntry gymId={adminGymId} defaultTab="classes" />} />
-          <Route path="/admin/checkins" element={<OpsConsoleEntry gymId={adminGymId} defaultTab="checkin" />} />
-          <Route path="/admin/waivers" element={<OpsConsoleEntry gymId={adminGymId} defaultTab="waiver" />} />
+          <Route
+            path="/admin/members"
+            element={
+              <RequireAdminAccess access={adminAccess} mode="gym_staff" gymId={adminGymId}>
+                <StaffConsoleEntry gymId={adminGymId} />
+              </RequireAdminAccess>
+            }
+          />
+          <Route
+            path="/admin/classes"
+            element={
+              <RequireAdminAccess access={adminAccess} mode="gym_staff" gymId={adminGymId}>
+                <OpsConsoleEntry gymId={adminGymId} defaultTab="classes" />
+              </RequireAdminAccess>
+            }
+          />
+          <Route
+            path="/admin/checkins"
+            element={
+              <RequireAdminAccess access={adminAccess} mode="gym_staff" gymId={adminGymId}>
+                <OpsConsoleEntry gymId={adminGymId} defaultTab="checkin" />
+              </RequireAdminAccess>
+            }
+          />
+          <Route
+            path="/admin/waivers"
+            element={
+              <RequireAdminAccess access={adminAccess} mode="gym_staff" gymId={adminGymId}>
+                <OpsConsoleEntry gymId={adminGymId} defaultTab="waiver" />
+              </RequireAdminAccess>
+            }
+          />
           <Route path="/admin/billing" element={<PlaceholderScreen title="Billing" />} />
           <Route path="/admin/integrations" element={<PlaceholderScreen title="Integrations" />} />
           <Route path="/admin/compliance" element={<PlaceholderScreen title="Compliance" />} />
           <Route path="/admin/support" element={<PlaceholderScreen title="Support" />} />
-          <Route path="/admin/settings" element={<AdminSettingsEntry gymId={adminGymId} />} />
+          <Route
+            path="/admin/settings"
+            element={
+              <RequireAdminAccess access={adminAccess} mode="gym_staff" gymId={adminGymId}>
+                <AdminSettingsEntry gymId={adminGymId} />
+              </RequireAdminAccess>
+            }
+          />
         </Route>
       </Routes>
     </BrowserRouter>

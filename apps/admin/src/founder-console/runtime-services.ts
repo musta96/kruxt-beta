@@ -10,11 +10,34 @@ export interface FounderGymRecord {
   countryCode: string | null;
   timezone: string;
   isPublic: boolean;
+  motto: string | null;
+  description: string | null;
+  bannerUrl: string | null;
+  sigilUrl: string | null;
   ownerUserId: string;
   ownerLabel: string;
+  paymentProvider: string | null;
+  providerAccountId: string | null;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
   subscriptionStatus: SubscriptionStatus;
   subscriptionProvider: string;
+  complianceProfile: FounderComplianceProfile | null;
   createdAt: string;
+}
+
+export interface FounderComplianceProfile {
+  countryCode: string;
+  legalEntityName: string;
+  defaultCurrency: string;
+  locale: string;
+  invoiceScheme: string;
+  vatNumber?: string;
+  taxCode?: string;
+  taxRegime?: string;
+  registrationNumber?: string;
+  pecEmail?: string;
+  sdiDestinationCode?: string;
 }
 
 export interface FounderOwnerOption {
@@ -35,6 +58,19 @@ export interface CreateFounderGymInput {
   billingContactEmail?: string;
 }
 
+export interface UpdateFounderGymInput {
+  slug?: string;
+  name?: string;
+  city?: string;
+  countryCode?: string;
+  timezone?: string;
+  isPublic?: boolean;
+  motto?: string;
+  description?: string;
+  bannerUrl?: string;
+  sigilUrl?: string;
+}
+
 export interface FounderMutationResult {
   ok: boolean;
   gym?: FounderGymRecord;
@@ -45,6 +81,7 @@ export interface FounderConsoleServices {
   listGyms(): Promise<FounderGymRecord[]>;
   listOwnerOptions(search?: string): Promise<FounderOwnerOption[]>;
   createGym(input: CreateFounderGymInput): Promise<FounderMutationResult>;
+  updateGym(gymId: string, input: UpdateFounderGymInput): Promise<FounderMutationResult>;
   assignGymOwner(gymId: string, ownerUserId: string): Promise<FounderMutationResult>;
   upsertGymSubscription(
     gymId: string,
@@ -54,6 +91,7 @@ export interface FounderConsoleServices {
       billingContactEmail?: string;
     }
   ): Promise<FounderMutationResult>;
+  upsertComplianceProfile(gymId: string, input: FounderComplianceProfile): Promise<FounderMutationResult>;
 }
 
 type GymRow = {
@@ -64,7 +102,15 @@ type GymRow = {
   country_code: string | null;
   timezone: string;
   is_public: boolean;
+  motto: string | null;
+  description: string | null;
+  banner_url: string | null;
+  sigil_url: string | null;
   owner_user_id: string;
+  payment_provider: string | null;
+  provider_account_id: string | null;
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
   created_at: string;
 };
 
@@ -79,6 +125,21 @@ type SubscriptionRow = {
   status: SubscriptionStatus;
   provider: string;
   updated_at: string;
+};
+
+type ComplianceRow = {
+  gym_id: string;
+  country_code: string;
+  legal_entity_name: string;
+  default_currency: string;
+  locale: string;
+  invoice_scheme: string;
+  vat_number: string | null;
+  tax_code: string | null;
+  tax_regime: string | null;
+  registration_number: string | null;
+  pec_email: string | null;
+  sdi_destination_code: string | null;
 };
 
 function ownerLabelFromProfile(profile?: ProfileRow): string {
@@ -110,7 +171,9 @@ async function mapLiveGyms(
 ): Promise<FounderGymRecord[]> {
   const { data: gymsData, error: gymsError } = await supabase
     .from("gyms")
-    .select("id,slug,name,city,country_code,timezone,is_public,owner_user_id,created_at")
+    .select(
+      "id,slug,name,city,country_code,timezone,is_public,motto,description,banner_url,sigil_url,owner_user_id,payment_provider,provider_account_id,charges_enabled,payouts_enabled,created_at"
+    )
     .order("created_at", { ascending: false })
     .limit(500);
 
@@ -155,9 +218,26 @@ async function mapLiveGyms(
     }
   }
 
+  const complianceMap = new Map<string, ComplianceRow>();
+  if (gymIds.length > 0) {
+    const { data: complianceData, error: complianceError } = await supabase
+      .from("invoice_compliance_profiles")
+      .select(
+        "gym_id,country_code,legal_entity_name,default_currency,locale,invoice_scheme,vat_number,tax_code,tax_regime,registration_number,pec_email,sdi_destination_code"
+      )
+      .in("gym_id", gymIds);
+
+    if (!complianceError) {
+      for (const row of (complianceData ?? []) as ComplianceRow[]) {
+        complianceMap.set(row.gym_id, row);
+      }
+    }
+  }
+
   return gyms.map((gym) => {
     const ownerProfile = profileMap.get(gym.owner_user_id);
     const subscription = subscriptionMap.get(gym.id);
+    const compliance = complianceMap.get(gym.id);
 
     return {
       id: gym.id,
@@ -167,10 +247,33 @@ async function mapLiveGyms(
       countryCode: gym.country_code,
       timezone: gym.timezone,
       isPublic: gym.is_public,
+      motto: gym.motto,
+      description: gym.description,
+      bannerUrl: gym.banner_url,
+      sigilUrl: gym.sigil_url,
       ownerUserId: gym.owner_user_id,
       ownerLabel: ownerLabelFromProfile(ownerProfile),
+      paymentProvider: gym.payment_provider,
+      providerAccountId: gym.provider_account_id,
+      chargesEnabled: gym.charges_enabled,
+      payoutsEnabled: gym.payouts_enabled,
       subscriptionStatus: subscription?.status ?? "incomplete",
       subscriptionProvider: subscription?.provider ?? "manual",
+      complianceProfile: compliance
+        ? {
+            countryCode: compliance.country_code,
+            legalEntityName: compliance.legal_entity_name,
+            defaultCurrency: compliance.default_currency,
+            locale: compliance.locale,
+            invoiceScheme: compliance.invoice_scheme,
+            vatNumber: compliance.vat_number ?? undefined,
+            taxCode: compliance.tax_code ?? undefined,
+            taxRegime: compliance.tax_regime ?? undefined,
+            registrationNumber: compliance.registration_number ?? undefined,
+            pecEmail: compliance.pec_email ?? undefined,
+            sdiDestinationCode: compliance.sdi_destination_code ?? undefined
+          }
+        : null,
       createdAt: gym.created_at
     } satisfies FounderGymRecord;
   });
@@ -193,10 +296,19 @@ export function createFounderConsoleRuntimeServices(): FounderConsoleServices {
       countryCode: "IT",
       timezone: "Europe/Rome",
       isPublic: true,
+      motto: "No log, no legend.",
+      description: "Preview gym profile for founder console.",
+      bannerUrl: null,
+      sigilUrl: null,
       ownerUserId: "preview-owner",
       ownerLabel: "Founder",
+      paymentProvider: "manual",
+      providerAccountId: null,
+      chargesEnabled: false,
+      payoutsEnabled: false,
       subscriptionStatus: "trialing",
       subscriptionProvider: "manual",
+      complianceProfile: null,
       createdAt: new Date().toISOString()
     }
   ];
@@ -303,10 +415,19 @@ export function createFounderConsoleRuntimeServices(): FounderConsoleServices {
           countryCode: input.countryCode?.trim() || null,
           timezone: input.timezone?.trim() || "Europe/Rome",
           isPublic: input.isPublic ?? true,
+          motto: null,
+          description: null,
+          bannerUrl: null,
+          sigilUrl: null,
           ownerUserId,
           ownerLabel: ownerUserId === "preview-owner" ? "Founder" : `${ownerUserId.slice(0, 8)}...`,
+          paymentProvider: "manual",
+          providerAccountId: null,
+          chargesEnabled: false,
+          payoutsEnabled: false,
           subscriptionStatus: input.subscriptionStatus ?? "trialing",
           subscriptionProvider: input.subscriptionProvider ?? "manual",
+          complianceProfile: null,
           createdAt: new Date().toISOString()
         };
 
@@ -328,7 +449,9 @@ export function createFounderConsoleRuntimeServices(): FounderConsoleServices {
             is_public: input.isPublic ?? true,
             owner_user_id: ownerUserId
           })
-          .select("id,slug,name,city,country_code,timezone,is_public,owner_user_id,created_at")
+          .select(
+            "id,slug,name,city,country_code,timezone,is_public,motto,description,banner_url,sigil_url,owner_user_id,payment_provider,provider_account_id,charges_enabled,payouts_enabled,created_at"
+          )
           .single();
 
         if (gymError || !gymData) {
@@ -380,6 +503,68 @@ export function createFounderConsoleRuntimeServices(): FounderConsoleServices {
         return createdGym ? { ok: true, gym: createdGym } : { ok: true };
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to create gym.";
+        return mutationError(message);
+      }
+    },
+
+    updateGym: async (gymId, input) => {
+      const client = getSupabase();
+      const normalize = (value?: string) => {
+        if (value === undefined) return undefined;
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : null;
+      };
+
+      if (!client) {
+        const index = previewGyms.findIndex((item) => item.id === gymId);
+        if (index === -1) return mutationError("Gym not found in preview state.");
+
+        const current = previewGyms[index];
+        const updated: FounderGymRecord = {
+          ...current,
+          ...(input.slug !== undefined ? { slug: input.slug.trim() } : {}),
+          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(input.city !== undefined ? { city: normalize(input.city) } : {}),
+          ...(input.countryCode !== undefined ? { countryCode: normalize(input.countryCode)?.toUpperCase() ?? null } : {}),
+          ...(input.timezone !== undefined ? { timezone: input.timezone.trim() || "Europe/Rome" } : {}),
+          ...(input.isPublic !== undefined ? { isPublic: input.isPublic } : {}),
+          ...(input.motto !== undefined ? { motto: normalize(input.motto) } : {}),
+          ...(input.description !== undefined ? { description: normalize(input.description) } : {}),
+          ...(input.bannerUrl !== undefined ? { bannerUrl: normalize(input.bannerUrl) } : {}),
+          ...(input.sigilUrl !== undefined ? { sigilUrl: normalize(input.sigilUrl) } : {})
+        };
+
+        previewGyms = previewGyms.map((item) => (item.id === gymId ? updated : item));
+        return { ok: true, gym: updated };
+      }
+
+      try {
+        const payload: Record<string, unknown> = {};
+        if (input.slug !== undefined) payload.slug = input.slug.trim();
+        if (input.name !== undefined) payload.name = input.name.trim();
+        if (input.city !== undefined) payload.city = normalize(input.city);
+        if (input.countryCode !== undefined) payload.country_code = normalize(input.countryCode)?.toUpperCase() ?? null;
+        if (input.timezone !== undefined) payload.timezone = input.timezone.trim() || "Europe/Rome";
+        if (input.isPublic !== undefined) payload.is_public = input.isPublic;
+        if (input.motto !== undefined) payload.motto = normalize(input.motto);
+        if (input.description !== undefined) payload.description = normalize(input.description);
+        if (input.bannerUrl !== undefined) payload.banner_url = normalize(input.bannerUrl);
+        if (input.sigilUrl !== undefined) payload.sigil_url = normalize(input.sigilUrl);
+
+        if (Object.keys(payload).length === 0) {
+          return mutationError("No gym profile changes provided.");
+        }
+
+        const { error } = await client.from("gyms").update(payload).eq("id", gymId);
+        if (error) {
+          return mutationError(error.message || "Unable to update gym profile.");
+        }
+
+        const gyms = await mapLiveGyms(client);
+        const updatedGym = gyms.find((item) => item.id === gymId);
+        return updatedGym ? { ok: true, gym: updatedGym } : { ok: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to update gym profile.";
         return mutationError(message);
       }
     },
@@ -490,6 +675,74 @@ export function createFounderConsoleRuntimeServices(): FounderConsoleServices {
         return updatedGym ? { ok: true, gym: updatedGym } : { ok: true };
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to update platform subscription.";
+        return mutationError(message);
+      }
+    },
+
+    upsertComplianceProfile: async (gymId, input) => {
+      const normalizeOptional = (value?: string) => {
+        const trimmed = value?.trim();
+        return trimmed ? trimmed : null;
+      };
+      const normalizeRequired = (value: string, fallback: string) => {
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : fallback;
+      };
+
+      const client = getSupabase();
+      if (!client) {
+        const index = previewGyms.findIndex((item) => item.id === gymId);
+        if (index === -1) return mutationError("Gym not found in preview state.");
+
+        const updated: FounderGymRecord = {
+          ...previewGyms[index],
+          complianceProfile: {
+            countryCode: normalizeRequired(input.countryCode, "IT").toUpperCase(),
+            legalEntityName: normalizeRequired(input.legalEntityName, previewGyms[index].name),
+            defaultCurrency: normalizeRequired(input.defaultCurrency, "EUR").toUpperCase(),
+            locale: normalizeRequired(input.locale, "it-IT"),
+            invoiceScheme: normalizeRequired(input.invoiceScheme, "standard"),
+            vatNumber: input.vatNumber?.trim() || undefined,
+            taxCode: input.taxCode?.trim() || undefined,
+            taxRegime: input.taxRegime?.trim() || undefined,
+            registrationNumber: input.registrationNumber?.trim() || undefined,
+            pecEmail: input.pecEmail?.trim() || undefined,
+            sdiDestinationCode: input.sdiDestinationCode?.trim() || undefined
+          }
+        };
+        previewGyms = previewGyms.map((item) => (item.id === gymId ? updated : item));
+        return { ok: true, gym: updated };
+      }
+
+      try {
+        const payload = {
+          gym_id: gymId,
+          country_code: normalizeRequired(input.countryCode, "IT").toUpperCase(),
+          legal_entity_name: normalizeRequired(input.legalEntityName, "Unknown Legal Entity"),
+          default_currency: normalizeRequired(input.defaultCurrency, "EUR").toUpperCase(),
+          locale: normalizeRequired(input.locale, "it-IT"),
+          invoice_scheme: normalizeRequired(input.invoiceScheme, "standard"),
+          vat_number: normalizeOptional(input.vatNumber),
+          tax_code: normalizeOptional(input.taxCode),
+          tax_regime: normalizeOptional(input.taxRegime),
+          registration_number: normalizeOptional(input.registrationNumber),
+          pec_email: normalizeOptional(input.pecEmail),
+          sdi_destination_code: normalizeOptional(input.sdiDestinationCode)
+        };
+
+        const { error } = await client
+          .from("invoice_compliance_profiles")
+          .upsert(payload, { onConflict: "gym_id" });
+
+        if (error) {
+          return mutationError(error.message || "Unable to save compliance profile.");
+        }
+
+        const gyms = await mapLiveGyms(client);
+        const updatedGym = gyms.find((item) => item.id === gymId);
+        return updatedGym ? { ok: true, gym: updatedGym } : { ok: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to save compliance profile.";
         return mutationError(message);
       }
     }

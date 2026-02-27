@@ -3,9 +3,11 @@ import type { SubscriptionStatus } from "@kruxt/types";
 
 import type {
   CreateFounderGymInput,
+  FounderComplianceProfile,
   FounderConsoleServices,
   FounderGymRecord,
-  FounderOwnerOption
+  FounderOwnerOption,
+  UpdateFounderGymInput
 } from "./runtime-services";
 
 const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
@@ -49,6 +51,37 @@ function buildCreateDraft(): CreateFounderGymInput {
   };
 }
 
+function buildProfileDraft(gym: FounderGymRecord): UpdateFounderGymInput {
+  return {
+    slug: gym.slug,
+    name: gym.name,
+    city: gym.city ?? "",
+    countryCode: gym.countryCode ?? "",
+    timezone: gym.timezone,
+    isPublic: gym.isPublic,
+    motto: gym.motto ?? "",
+    description: gym.description ?? "",
+    bannerUrl: gym.bannerUrl ?? "",
+    sigilUrl: gym.sigilUrl ?? ""
+  };
+}
+
+function buildComplianceDraft(gym: FounderGymRecord): FounderComplianceProfile {
+  return {
+    countryCode: gym.complianceProfile?.countryCode ?? gym.countryCode ?? "IT",
+    legalEntityName: gym.complianceProfile?.legalEntityName ?? gym.name,
+    defaultCurrency: gym.complianceProfile?.defaultCurrency ?? "EUR",
+    locale: gym.complianceProfile?.locale ?? "it-IT",
+    invoiceScheme: gym.complianceProfile?.invoiceScheme ?? "standard",
+    vatNumber: gym.complianceProfile?.vatNumber ?? "",
+    taxCode: gym.complianceProfile?.taxCode ?? "",
+    taxRegime: gym.complianceProfile?.taxRegime ?? "",
+    registrationNumber: gym.complianceProfile?.registrationNumber ?? "",
+    pecEmail: gym.complianceProfile?.pecEmail ?? "",
+    sdiDestinationCode: gym.complianceProfile?.sdiDestinationCode ?? ""
+  };
+}
+
 export function FounderConsoleFlow({ services, selectedGymId, onSelectGym }: FounderConsoleFlowProps) {
   const [gyms, setGyms] = useState<FounderGymRecord[]>([]);
   const [ownerOptions, setOwnerOptions] = useState<FounderOwnerOption[]>([]);
@@ -61,6 +94,8 @@ export function FounderConsoleFlow({ services, selectedGymId, onSelectGym }: Fou
   const [createDraft, setCreateDraft] = useState<CreateFounderGymInput>(() => buildCreateDraft());
   const [ownerDrafts, setOwnerDrafts] = useState<Record<string, string>>({});
   const [subscriptionDrafts, setSubscriptionDrafts] = useState<Record<string, SubscriptionStatus>>({});
+  const [profileDrafts, setProfileDrafts] = useState<Record<string, UpdateFounderGymInput>>({});
+  const [complianceDrafts, setComplianceDrafts] = useState<Record<string, FounderComplianceProfile>>({});
 
   const loadGyms = useCallback(async () => {
     setLoading(true);
@@ -98,6 +133,22 @@ export function FounderConsoleFlow({ services, selectedGymId, onSelectGym }: Fou
       }
       return next;
     });
+
+    setProfileDrafts((previous) => {
+      const next = { ...previous };
+      for (const gym of gyms) {
+        if (!next[gym.id]) next[gym.id] = buildProfileDraft(gym);
+      }
+      return next;
+    });
+
+    setComplianceDrafts((previous) => {
+      const next = { ...previous };
+      for (const gym of gyms) {
+        if (!next[gym.id]) next[gym.id] = buildComplianceDraft(gym);
+      }
+      return next;
+    });
   }, [gyms]);
 
   useEffect(() => {
@@ -127,6 +178,8 @@ export function FounderConsoleFlow({ services, selectedGymId, onSelectGym }: Fou
       pastDue: gyms.filter((gym) => gym.subscriptionStatus === "past_due").length
     };
   }, [gyms]);
+
+  const selectedGym = React.useMemo(() => gyms.find((gym) => gym.id === selectedGymId) ?? gyms[0] ?? null, [gyms, selectedGymId]);
 
   const runMutation = useCallback(
     async (key: string, mutate: () => Promise<{ ok: boolean; error?: { message: string }; gym?: FounderGymRecord }>) => {
@@ -183,6 +236,61 @@ export function FounderConsoleFlow({ services, selectedGymId, onSelectGym }: Fou
 
       return result;
     });
+  };
+
+  const handleSaveProfile = async () => {
+    if (!selectedGym) return;
+    const draft = profileDrafts[selectedGym.id] ?? buildProfileDraft(selectedGym);
+    const normalizedName = draft.name?.trim();
+    const normalizedSlug = draft.slug ? slugify(draft.slug) : "";
+    if (!normalizedName) {
+      setError("Gym name is required.");
+      return;
+    }
+    if (!normalizedSlug) {
+      setError("Gym slug is required.");
+      return;
+    }
+
+    await runMutation(`profile_${selectedGym.id}`, () =>
+      services.updateGym(selectedGym.id, {
+        ...draft,
+        slug: normalizedSlug,
+        name: normalizedName,
+        countryCode: draft.countryCode?.trim().toUpperCase() || undefined,
+        timezone: draft.timezone?.trim() || "Europe/Rome"
+      })
+    );
+  };
+
+  const handleSaveCompliance = async () => {
+    if (!selectedGym) return;
+    const draft = complianceDrafts[selectedGym.id] ?? buildComplianceDraft(selectedGym);
+    if (!draft.legalEntityName?.trim()) {
+      setError("Legal entity name is required.");
+      return;
+    }
+    if (!draft.countryCode?.trim()) {
+      setError("Compliance country code is required.");
+      return;
+    }
+
+    await runMutation(`compliance_${selectedGym.id}`, () =>
+      services.upsertComplianceProfile(selectedGym.id, {
+        ...draft,
+        countryCode: draft.countryCode.trim().toUpperCase(),
+        legalEntityName: draft.legalEntityName.trim(),
+        defaultCurrency: draft.defaultCurrency.trim().toUpperCase(),
+        locale: draft.locale.trim() || "it-IT",
+        invoiceScheme: draft.invoiceScheme.trim() || "standard",
+        vatNumber: draft.vatNumber?.trim() || undefined,
+        taxCode: draft.taxCode?.trim() || undefined,
+        taxRegime: draft.taxRegime?.trim() || undefined,
+        registrationNumber: draft.registrationNumber?.trim() || undefined,
+        pecEmail: draft.pecEmail?.trim() || undefined,
+        sdiDestinationCode: draft.sdiDestinationCode?.trim() || undefined
+      })
+    );
   };
 
   return (
@@ -463,6 +571,325 @@ export function FounderConsoleFlow({ services, selectedGymId, onSelectGym }: Fou
           </table>
         )}
       </div>
+
+      {selectedGym && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div className="panel p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-display font-bold text-foreground">
+                Edit Gym Profile — {selectedGym.name}
+              </h2>
+              <span className="text-xs text-muted-foreground">{selectedGym.id.slice(0, 8)}...</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <input
+                className="input-field"
+                placeholder="Gym name"
+                value={profileDrafts[selectedGym.id]?.name ?? ""}
+                onChange={(event) =>
+                  setProfileDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildProfileDraft(selectedGym), ...prev[selectedGym.id], name: event.target.value }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Slug"
+                value={profileDrafts[selectedGym.id]?.slug ?? ""}
+                onChange={(event) =>
+                  setProfileDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: {
+                      ...buildProfileDraft(selectedGym),
+                      ...prev[selectedGym.id],
+                      slug: slugify(event.target.value)
+                    }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="City"
+                value={profileDrafts[selectedGym.id]?.city ?? ""}
+                onChange={(event) =>
+                  setProfileDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildProfileDraft(selectedGym), ...prev[selectedGym.id], city: event.target.value }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Country code"
+                value={profileDrafts[selectedGym.id]?.countryCode ?? ""}
+                onChange={(event) =>
+                  setProfileDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: {
+                      ...buildProfileDraft(selectedGym),
+                      ...prev[selectedGym.id],
+                      countryCode: event.target.value.toUpperCase().slice(0, 2)
+                    }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Timezone"
+                value={profileDrafts[selectedGym.id]?.timezone ?? ""}
+                onChange={(event) =>
+                  setProfileDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildProfileDraft(selectedGym), ...prev[selectedGym.id], timezone: event.target.value }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Motto"
+                value={profileDrafts[selectedGym.id]?.motto ?? ""}
+                onChange={(event) =>
+                  setProfileDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildProfileDraft(selectedGym), ...prev[selectedGym.id], motto: event.target.value }
+                  }))
+                }
+              />
+            </div>
+
+            <textarea
+              className="input-field min-h-[80px]"
+              placeholder="Description"
+              value={profileDrafts[selectedGym.id]?.description ?? ""}
+              onChange={(event) =>
+                setProfileDrafts((prev) => ({
+                  ...prev,
+                  [selectedGym.id]: { ...buildProfileDraft(selectedGym), ...prev[selectedGym.id], description: event.target.value }
+                }))
+              }
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <input
+                className="input-field"
+                placeholder="Banner URL"
+                value={profileDrafts[selectedGym.id]?.bannerUrl ?? ""}
+                onChange={(event) =>
+                  setProfileDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildProfileDraft(selectedGym), ...prev[selectedGym.id], bannerUrl: event.target.value }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Sigil URL"
+                value={profileDrafts[selectedGym.id]?.sigilUrl ?? ""}
+                onChange={(event) =>
+                  setProfileDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildProfileDraft(selectedGym), ...prev[selectedGym.id], sigilUrl: event.target.value }
+                  }))
+                }
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label className="inline-flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={profileDrafts[selectedGym.id]?.isPublic ?? true}
+                  onChange={(event) =>
+                    setProfileDrafts((prev) => ({
+                      ...prev,
+                      [selectedGym.id]: { ...buildProfileDraft(selectedGym), ...prev[selectedGym.id], isPublic: event.target.checked }
+                    }))
+                  }
+                />
+                Public listing
+              </label>
+              <button
+                type="button"
+                className="btn-primary w-auto"
+                disabled={pendingKey === `profile_${selectedGym.id}`}
+                onClick={() => {
+                  void handleSaveProfile();
+                }}
+              >
+                {pendingKey === `profile_${selectedGym.id}` ? "Saving..." : "Save Gym Profile"}
+              </button>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Provider: {selectedGym.paymentProvider ?? "—"} · Account: {selectedGym.providerAccountId ?? "—"} ·
+              Charges: {selectedGym.chargesEnabled ? "enabled" : "disabled"} · Payouts: {selectedGym.payoutsEnabled ? "enabled" : "disabled"}
+            </p>
+          </div>
+
+          <div className="panel p-5 space-y-3">
+            <h2 className="text-sm font-display font-bold text-foreground">Compliance & Legal Profile</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <input
+                className="input-field"
+                placeholder="Legal entity name"
+                value={complianceDrafts[selectedGym.id]?.legalEntityName ?? ""}
+                onChange={(event) =>
+                  setComplianceDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: {
+                      ...buildComplianceDraft(selectedGym),
+                      ...prev[selectedGym.id],
+                      legalEntityName: event.target.value
+                    }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Country code"
+                value={complianceDrafts[selectedGym.id]?.countryCode ?? ""}
+                onChange={(event) =>
+                  setComplianceDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: {
+                      ...buildComplianceDraft(selectedGym),
+                      ...prev[selectedGym.id],
+                      countryCode: event.target.value.toUpperCase().slice(0, 2)
+                    }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Default currency (EUR)"
+                value={complianceDrafts[selectedGym.id]?.defaultCurrency ?? ""}
+                onChange={(event) =>
+                  setComplianceDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: {
+                      ...buildComplianceDraft(selectedGym),
+                      ...prev[selectedGym.id],
+                      defaultCurrency: event.target.value.toUpperCase().slice(0, 3)
+                    }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Locale (it-IT)"
+                value={complianceDrafts[selectedGym.id]?.locale ?? ""}
+                onChange={(event) =>
+                  setComplianceDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildComplianceDraft(selectedGym), ...prev[selectedGym.id], locale: event.target.value }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Invoice scheme"
+                value={complianceDrafts[selectedGym.id]?.invoiceScheme ?? ""}
+                onChange={(event) =>
+                  setComplianceDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildComplianceDraft(selectedGym), ...prev[selectedGym.id], invoiceScheme: event.target.value }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="VAT number"
+                value={complianceDrafts[selectedGym.id]?.vatNumber ?? ""}
+                onChange={(event) =>
+                  setComplianceDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildComplianceDraft(selectedGym), ...prev[selectedGym.id], vatNumber: event.target.value }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Tax code"
+                value={complianceDrafts[selectedGym.id]?.taxCode ?? ""}
+                onChange={(event) =>
+                  setComplianceDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildComplianceDraft(selectedGym), ...prev[selectedGym.id], taxCode: event.target.value }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Tax regime"
+                value={complianceDrafts[selectedGym.id]?.taxRegime ?? ""}
+                onChange={(event) =>
+                  setComplianceDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildComplianceDraft(selectedGym), ...prev[selectedGym.id], taxRegime: event.target.value }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="Registration number"
+                value={complianceDrafts[selectedGym.id]?.registrationNumber ?? ""}
+                onChange={(event) =>
+                  setComplianceDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: {
+                      ...buildComplianceDraft(selectedGym),
+                      ...prev[selectedGym.id],
+                      registrationNumber: event.target.value
+                    }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="PEC email"
+                value={complianceDrafts[selectedGym.id]?.pecEmail ?? ""}
+                onChange={(event) =>
+                  setComplianceDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: { ...buildComplianceDraft(selectedGym), ...prev[selectedGym.id], pecEmail: event.target.value }
+                  }))
+                }
+              />
+              <input
+                className="input-field"
+                placeholder="SDI destination code"
+                value={complianceDrafts[selectedGym.id]?.sdiDestinationCode ?? ""}
+                onChange={(event) =>
+                  setComplianceDrafts((prev) => ({
+                    ...prev,
+                    [selectedGym.id]: {
+                      ...buildComplianceDraft(selectedGym),
+                      ...prev[selectedGym.id],
+                      sdiDestinationCode: event.target.value
+                    }
+                  }))
+                }
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="btn-primary w-auto"
+                disabled={pendingKey === `compliance_${selectedGym.id}`}
+                onClick={() => {
+                  void handleSaveCompliance();
+                }}
+              >
+                {pendingKey === `compliance_${selectedGym.id}` ? "Saving..." : "Save Compliance Profile"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

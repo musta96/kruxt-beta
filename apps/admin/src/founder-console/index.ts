@@ -6,5 +6,7 @@ export type {
   FounderGymRecord,
   FounderMutationResult,
   FounderOwnerOption,
-  CreateFounderGymInput
+  FounderComplianceProfile,
+  CreateFounderGymInput,
+  UpdateFounderGymInput
 } from "./runtime-services";
