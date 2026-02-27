@@ -114,6 +114,21 @@ interface ClassSeriesSummary {
   count: number;
 }
 
+interface ClassCalendarEvent {
+  id: string;
+  title: string;
+  course: string;
+  location: string;
+  coachLabel: string;
+  status: ClassStatus;
+  capacity: number;
+  startsAtTs: number;
+  startMinute: number;
+  endMinute: number;
+  startsAtLabel: string;
+  seriesKey: string;
+}
+
 function toDateValue(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -128,6 +143,48 @@ function addDays(base: Date, days: number): Date {
   const next = new Date(base.getTime());
   next.setDate(next.getDate() + days);
   return next;
+}
+
+function startOfDay(base: Date): Date {
+  const next = new Date(base.getTime());
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function startOfWeek(base: Date): Date {
+  const day = base.getDay();
+  const mondayOffset = (day + 6) % 7;
+  return addDays(startOfDay(base), -mondayOffset);
+}
+
+function toWeekdayIndex(base: Date): number {
+  return (base.getDay() + 6) % 7;
+}
+
+function toCalendarDateLabel(base: Date): string {
+  return base.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "2-digit",
+    month: "short"
+  });
+}
+
+function toHourMinuteLabel(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const date = new Date();
+  date.setHours(hours, minutes, 0, 0);
+  return date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function weekRangeLabel(startDate: Date): string {
+  const endDate = addDays(startDate, 6);
+  const startLabel = startDate.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+  const endLabel = endDate.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+  return `${startLabel} - ${endLabel}`;
 }
 
 function defaultStartDateTime(): { startDate: string; startTime: string } {
@@ -390,12 +447,13 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
     templates: [],
     coaches: []
   }));
-  const [viewMode, setViewMode] = useState<"series" | "occurrences">("series");
+  const [viewMode, setViewMode] = useState<"series" | "occurrences" | "calendar">("series");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ClassStatus>("all");
   const [locationFilter, setLocationFilter] = useState<"all" | string>("all");
   const [seriesFilter, setSeriesFilter] = useState<"all" | string>("all");
   const [page, setPage] = useState(1);
+  const [calendarWeekStart, setCalendarWeekStart] = useState<Date>(() => startOfWeek(new Date()));
 
   useEffect(() => {
     let active = true;
@@ -653,6 +711,65 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
     return list;
   }, [filteredRows]);
 
+  const calendarWeekDays = React.useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addDays(calendarWeekStart, index)),
+    [calendarWeekStart]
+  );
+
+  const {
+    calendarDayEvents,
+    calendarStartMinute,
+    calendarEndMinute
+  } = React.useMemo(() => {
+    const weekStartTs = calendarWeekStart.getTime();
+    const weekEndTs = addDays(calendarWeekStart, 7).getTime();
+    const byDay: ClassCalendarEvent[][] = Array.from({ length: 7 }, () => []);
+    let minMinute = 6 * 60;
+    let maxMinute = 22 * 60;
+
+    for (const row of filteredRows) {
+      if (row.startsAtTs < weekStartTs || row.startsAtTs >= weekEndTs) continue;
+      const start = new Date(row.item.startsAt);
+      const end = new Date(row.item.endsAt);
+      const startMinute = start.getHours() * 60 + start.getMinutes();
+      const rawEndMinute = end.getHours() * 60 + end.getMinutes();
+      const endMinute = Math.max(rawEndMinute, startMinute + Math.max(30, row.durationMinutes));
+      const weekdayIndex = toWeekdayIndex(start);
+      byDay[weekdayIndex].push({
+        id: row.item.id,
+        title: row.item.title,
+        course: row.course,
+        location: row.location,
+        coachLabel: row.coachLabel,
+        status: row.item.status,
+        capacity: row.item.capacity,
+        startsAtTs: row.startsAtTs,
+        startMinute,
+        endMinute,
+        startsAtLabel: row.startsAtLabel,
+        seriesKey: row.seriesKey
+      });
+      minMinute = Math.min(minMinute, startMinute);
+      maxMinute = Math.max(maxMinute, endMinute);
+    }
+
+    minMinute = Math.max(0, Math.floor((minMinute - 30) / 30) * 30);
+    maxMinute = Math.min(24 * 60, Math.ceil((maxMinute + 30) / 30) * 30);
+    if (maxMinute - minMinute < 6 * 60) {
+      maxMinute = Math.min(24 * 60, minMinute + 6 * 60);
+    }
+
+    for (const events of byDay) {
+      events.sort((left, right) => left.startMinute - right.startMinute);
+    }
+
+    return {
+      calendarDayEvents: byDay,
+      calendarStartMinute: minMinute,
+      calendarEndMinute: maxMinute
+    };
+  }, [calendarWeekStart, filteredRows]);
+
   useEffect(() => {
     if (seriesFilter === "all") return;
     if (seriesSummaries.some((series) => series.key === seriesFilter)) return;
@@ -668,10 +785,24 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
   const safePage = Math.min(page, totalPages);
   const pageRows = filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize);
   const totalScheduled = classes.filter((item) => item.status === "scheduled").length;
+  const calendarHasEvents = calendarDayEvents.some((events) => events.length > 0);
+  const calendarPixelsPerMinute = 1;
+  const calendarHeight = Math.max(
+    540,
+    Math.round((calendarEndMinute - calendarStartMinute) * calendarPixelsPerMinute)
+  );
+  const todayDateKey = toDateValue(new Date());
+  const calendarHourMarkers = React.useMemo(() => {
+    const markers: number[] = [];
+    for (let minute = calendarStartMinute; minute <= calendarEndMinute; minute += 60) {
+      markers.push(minute);
+    }
+    return markers;
+  }, [calendarEndMinute, calendarStartMinute]);
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <StatCard label="Classes" value={classes.length} />
         <StatCard label="Scheduled" value={totalScheduled} />
         <StatCard label="Series" value={seriesSummaries.length} />
@@ -1073,102 +1204,259 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
               >
                 Occurrences View
               </button>
+              <button
+                type="button"
+                className={`btn-compact ${viewMode === "calendar" ? "ring-2 ring-primary bg-primary/15 text-primary" : ""}`}
+                onClick={() => setViewMode("calendar")}
+              >
+                Calendar View
+              </button>
             </div>
           </div>
+
+          {viewMode === "calendar" && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Week of {weekRangeLabel(calendarWeekStart)}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn-compact"
+                  onClick={() => setCalendarWeekStart((prev) => addDays(prev, -7))}
+                >
+                  Previous Week
+                </button>
+                <button
+                  type="button"
+                  className="btn-compact"
+                  onClick={() => setCalendarWeekStart(startOfWeek(new Date()))}
+                >
+                  This Week
+                </button>
+                <button
+                  type="button"
+                  className="btn-compact"
+                  onClick={() => setCalendarWeekStart((prev) => addDays(prev, 7))}
+                >
+                  Next Week
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {viewMode === "series" ? (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Class</th><th>Pattern</th><th>Coach</th><th>Status</th><th>Window</th><th>Count</th><th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {seriesSummaries.length === 0 ? (
-                <tr><td colSpan={7} className="text-center text-muted-foreground text-sm py-6">No series found</td></tr>
-              ) : seriesSummaries.map((series) => {
-                const nextLabel = Number.isFinite(series.nextStartsAtTs)
-                  ? toShortDateTime(new Date(series.nextStartsAtTs))
-                  : "No upcoming";
-                const windowLabel = `${toShortDateTime(new Date(series.firstStartsAtTs))} -> ${toShortDateTime(new Date(series.lastStartsAtTs))}`;
-                return (
-                  <tr key={series.key}>
-                    <td>
-                      <div className="font-medium">{series.title}</div>
-                      <div className="text-xs text-muted-foreground">{series.course} - {series.location}</div>
-                    </td>
-                    <td className="text-xs text-muted-foreground">
-                      {series.weekdayLabel} at {series.timeLabel} ({series.durationMinutes}m)
-                    </td>
-                    <td className="text-xs text-muted-foreground">{series.coachLabel}</td>
-                    <td><StatusBadge status={series.status} /></td>
-                    <td className="text-xs text-muted-foreground">
-                      <div>{nextLabel}</div>
-                      <div className="opacity-70">{windowLabel}</div>
-                    </td>
-                    <td className="font-mono tabular-nums">{series.count}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn-compact"
-                        onClick={() => {
-                          setSeriesFilter(series.key);
-                          setViewMode("occurrences");
-                          setPage(1);
-                        }}
-                      >
-                        View occurrences
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <>
-            <table className="data-table">
+          <div className="overflow-x-auto">
+            <table className="data-table min-w-[980px]">
               <thead>
                 <tr>
-                  <th>Title</th><th>Location</th><th>Coach</th><th>Status</th><th>Capacity</th><th>Starts</th><th>Actions</th>
+                  <th>Class</th><th>Pattern</th><th>Coach</th><th>Status</th><th>Window</th><th>Count</th><th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {pageRows.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center text-muted-foreground text-sm py-6">No classes found</td></tr>
-                ) : pageRows.map((row) => {
-                  const c = row.item;
+                {seriesSummaries.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center text-muted-foreground text-sm py-6">No series found</td></tr>
+                ) : seriesSummaries.map((series) => {
+                  const nextLabel = Number.isFinite(series.nextStartsAtTs)
+                    ? toShortDateTime(new Date(series.nextStartsAtTs))
+                    : "No upcoming";
+                  const windowLabel = `${toShortDateTime(new Date(series.firstStartsAtTs))} -> ${toShortDateTime(new Date(series.lastStartsAtTs))}`;
                   return (
-                    <tr key={c.id} className={c.id === selectedId ? "bg-muted/30" : ""}>
+                    <tr key={series.key}>
                       <td>
-                        <div className="font-medium">{c.title}</div>
-                        <div className="text-xs text-muted-foreground">{row.course}</div>
+                        <div className="font-medium">{series.title}</div>
+                        <div className="text-xs text-muted-foreground">{series.course} - {series.location}</div>
                       </td>
-                      <td className="text-xs text-muted-foreground">{row.location}</td>
-                      <td className="text-xs text-muted-foreground">{row.coachLabel}</td>
-                      <td><StatusBadge status={c.status} /></td>
-                      <td className="font-mono tabular-nums">{c.capacity}</td>
-                      <td className="text-xs text-muted-foreground">{row.startsAtLabel}</td>
-                      <td className="min-w-[180px]">
-                        <div className="flex flex-wrap gap-1.5">
-                          {c.status === "scheduled" && (
-                            <ActionButton label="Cancel" small pending={pending === `cancel_${c.id}`} onClick={() =>
-                              runAction(`cancel_${c.id}`, () => services.setClassStatus(gymId, c.id, "cancelled"))
-                            } />
-                          )}
-                          {c.status === "scheduled" && (
-                            <ActionButton label="Complete" small pending={pending === `complete_${c.id}`} onClick={() =>
-                              runAction(`complete_${c.id}`, () => services.setClassStatus(gymId, c.id, "completed"))
-                            } />
-                          )}
-                        </div>
+                      <td className="text-xs text-muted-foreground">
+                        {series.weekdayLabel} at {series.timeLabel} ({series.durationMinutes}m)
+                      </td>
+                      <td className="text-xs text-muted-foreground">{series.coachLabel}</td>
+                      <td><StatusBadge status={series.status} /></td>
+                      <td className="text-xs text-muted-foreground">
+                        <div>{nextLabel}</div>
+                        <div className="opacity-70">{windowLabel}</div>
+                      </td>
+                      <td className="font-mono tabular-nums">{series.count}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-compact"
+                          onClick={() => {
+                            setSeriesFilter(series.key);
+                            setViewMode("occurrences");
+                            setPage(1);
+                          }}
+                        >
+                          View occurrences
+                        </button>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+        ) : viewMode === "calendar" ? (
+          <div className="overflow-x-auto">
+            <div className="min-w-[1080px]">
+              {!calendarHasEvents && (
+                <div className="px-4 py-3 border-b border-border bg-muted/10 text-xs text-muted-foreground">
+                  No classes in this week with the current filters.
+                </div>
+              )}
+              <div className="grid grid-cols-[72px_repeat(7,minmax(0,1fr))] border-b border-border bg-muted/15">
+                <div className="px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Time
+                </div>
+                {calendarWeekDays.map((day) => {
+                  const dayKey = toDateValue(day);
+                  const isToday = dayKey === todayDateKey;
+                  return (
+                    <div
+                      key={dayKey}
+                      className={`px-3 py-2 text-xs font-semibold border-l border-border/40 ${isToday ? "text-primary" : "text-muted-foreground"}`}
+                    >
+                      {toCalendarDateLabel(day)}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-[72px_repeat(7,minmax(0,1fr))]">
+                <div className="relative border-r border-border/50 bg-card/35" style={{ height: `${calendarHeight}px` }}>
+                  {calendarHourMarkers.map((minute) => {
+                    const top = Math.round((minute - calendarStartMinute) * calendarPixelsPerMinute);
+                    return (
+                      <div key={minute} className="absolute left-0 right-0" style={{ top }}>
+                        <span className="absolute -top-2 left-2 text-[10px] text-muted-foreground font-mono tabular-nums">
+                          {toHourMinuteLabel(minute)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {calendarWeekDays.map((day, dayIndex) => {
+                  const dayEvents = calendarDayEvents[dayIndex];
+                  const laneEnds: number[] = [];
+                  const laidOut = dayEvents.map((event) => {
+                    let lane = 0;
+                    while (laneEnds[lane] !== undefined && laneEnds[lane] > event.startMinute) {
+                      lane += 1;
+                    }
+                    laneEnds[lane] = event.endMinute;
+                    return { ...event, lane };
+                  });
+
+                  const laneCountById = new Map<string, number>();
+                  for (const event of laidOut) {
+                    const overlaps = laidOut.filter(
+                      (other) => other.startMinute < event.endMinute && other.endMinute > event.startMinute
+                    );
+                    const laneCount = Math.max(1, ...overlaps.map((other) => other.lane + 1));
+                    laneCountById.set(event.id, laneCount);
+                  }
+
+                  return (
+                    <div
+                      key={toDateValue(day)}
+                      className="relative border-r border-border/40 last:border-r-0 bg-card/15"
+                      style={{ height: `${calendarHeight}px` }}
+                    >
+                      {calendarHourMarkers.map((minute) => {
+                        const top = Math.round((minute - calendarStartMinute) * calendarPixelsPerMinute);
+                        return (
+                          <div
+                            key={minute}
+                            className="absolute left-0 right-0 border-t border-border/30"
+                            style={{ top }}
+                          />
+                        );
+                      })}
+                      {laidOut.map((event) => {
+                        const laneCount = laneCountById.get(event.id) ?? 1;
+                        const top = Math.round((event.startMinute - calendarStartMinute) * calendarPixelsPerMinute);
+                        const height = Math.max(
+                          28,
+                          Math.round((event.endMinute - event.startMinute) * calendarPixelsPerMinute - 4)
+                        );
+                        const left = `calc(${(event.lane * 100) / laneCount}% + 4px)`;
+                        const width = `calc(${100 / laneCount}% - 8px)`;
+                        const cardClass =
+                          event.status === "cancelled"
+                            ? "bg-destructive/15 border-destructive/35 text-destructive"
+                            : event.status === "completed"
+                              ? "bg-secondary/70 border-border text-secondary-foreground"
+                              : "bg-primary/12 border-primary/35 text-foreground hover:bg-primary/18";
+                        return (
+                          <button
+                            key={event.id}
+                            type="button"
+                            className={`absolute rounded-md border px-2 py-1 text-left text-[11px] leading-tight overflow-hidden transition-colors ${cardClass}`}
+                            style={{ top, height, left, width }}
+                            onClick={() => {
+                              setSeriesFilter(event.seriesKey);
+                              setViewMode("occurrences");
+                              setPage(1);
+                            }}
+                            title={`${event.title} - ${event.startsAtLabel}`}
+                          >
+                            <p className="font-semibold truncate">{event.title}</p>
+                            <p className="truncate opacity-80">{event.location} - {event.course}</p>
+                            <p className="truncate opacity-80">{toHourMinuteLabel(event.startMinute)} - cap {event.capacity}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="data-table min-w-[980px]">
+                <thead>
+                  <tr>
+                    <th>Title</th><th>Location</th><th>Coach</th><th>Status</th><th>Capacity</th><th>Starts</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageRows.length === 0 ? (
+                    <tr><td colSpan={7} className="text-center text-muted-foreground text-sm py-6">No classes found</td></tr>
+                  ) : pageRows.map((row) => {
+                    const c = row.item;
+                    return (
+                      <tr key={c.id} className={c.id === selectedId ? "bg-muted/30" : ""}>
+                        <td>
+                          <div className="font-medium">{c.title}</div>
+                          <div className="text-xs text-muted-foreground">{row.course}</div>
+                        </td>
+                        <td className="text-xs text-muted-foreground">{row.location}</td>
+                        <td className="text-xs text-muted-foreground">{row.coachLabel}</td>
+                        <td><StatusBadge status={c.status} /></td>
+                        <td className="font-mono tabular-nums">{c.capacity}</td>
+                        <td className="text-xs text-muted-foreground">{row.startsAtLabel}</td>
+                        <td className="min-w-[180px]">
+                          <div className="flex flex-wrap gap-1.5">
+                            {c.status === "scheduled" && (
+                              <ActionButton label="Cancel" small pending={pending === `cancel_${c.id}`} onClick={() =>
+                                runAction(`cancel_${c.id}`, () => services.setClassStatus(gymId, c.id, "cancelled"))
+                              } />
+                            )}
+                            {c.status === "scheduled" && (
+                              <ActionButton label="Complete" small pending={pending === `complete_${c.id}`} onClick={() =>
+                                runAction(`complete_${c.id}`, () => services.setClassStatus(gymId, c.id, "completed"))
+                              } />
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             {totalPages > 1 && (
               <div className="px-4 py-3 border-t border-border flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
