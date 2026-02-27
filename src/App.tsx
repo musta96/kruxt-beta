@@ -697,15 +697,29 @@ export default function App() {
 
   React.useEffect(() => {
     let active = true;
+    let authSubscription: { unsubscribe: () => void } | null = null;
+    let supabase: ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createMobileSupabaseClient> | null = null;
 
     const loadAccess = async () => {
-      let supabase: ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createMobileSupabaseClient>;
       try {
-        try {
-          supabase = createAdminSupabaseClient();
-        } catch (adminClientError) {
-          console.warn("[admin-access] Admin client unavailable, trying mobile env keys:", adminClientError);
-          supabase = createMobileSupabaseClient();
+        if (!supabase) {
+          try {
+            supabase = createAdminSupabaseClient();
+          } catch (adminClientError) {
+            console.warn("[admin-access] Admin client unavailable, trying mobile env keys:", adminClientError);
+            supabase = createMobileSupabaseClient();
+          }
+        }
+
+        if (!supabase) {
+          if (!active) return;
+          setAdminAccess({
+            status: "ready",
+            isAuthenticated: false,
+            platformRole: null,
+            staffGymIds: []
+          });
+          return;
         }
 
         const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -766,9 +780,27 @@ export default function App() {
       }
     };
 
+    try {
+      if (!supabase) {
+        try {
+          supabase = createAdminSupabaseClient();
+        } catch {
+          supabase = createMobileSupabaseClient();
+        }
+      }
+      const listener = supabase.auth.onAuthStateChange(() => {
+        if (!active) return;
+        void loadAccess();
+      });
+      authSubscription = listener.data.subscription;
+    } catch (listenerError) {
+      console.warn("[admin-access] Unable to subscribe to auth changes:", listenerError);
+    }
+
     void loadAccess();
     return () => {
       active = false;
+      authSubscription?.unsubscribe();
     };
   }, []);
 
