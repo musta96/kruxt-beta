@@ -625,6 +625,29 @@ function FounderConsoleEntry({
   );
 }
 
+function FounderHomeEntry({
+  services,
+  selectedGymId,
+  onSelectGym
+}: {
+  services: FounderConsoleServices;
+  selectedGymId: string;
+  onSelectGym: (gymId: string) => void;
+}) {
+  return (
+    <FounderHomeDashboard
+      services={services}
+      selectedGymId={selectedGymId}
+      onSelectGym={onSelectGym}
+    />
+  );
+}
+
+function GymStaffHomeEntry({ gymId }: { gymId: string }) {
+  const services = React.useMemo(() => createStaffConsoleRuntimeServices(), []);
+  return <GymStaffHomeDashboard gymId={gymId} services={services} />;
+}
+
 export default function App() {
   const founderServices = React.useMemo(() => createFounderConsoleRuntimeServices(), []);
   const [adminGymId, setAdminGymId] = useState<string>(() => readInitialAdminGymId());
@@ -746,7 +769,7 @@ export default function App() {
             path="/admin"
             element={
               canManageGyms ? (
-                <FounderHomeDashboard
+                <FounderHomeEntry
                   services={founderServices}
                   selectedGymId={adminGymId}
                   onSelectGym={handleGymChange}
