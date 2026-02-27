@@ -683,7 +683,7 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h3 className="text-sm font-display font-bold text-foreground">Classes</h3>
           <div className="flex items-center gap-2">
-            <Link to="/admin/settings" className="btn-ghost w-auto">
+            <Link to="/admin/settings" className="btn-ghost w-auto px-3.5 py-2 text-xs">
               Manage Catalog
             </Link>
             <ActionButton
@@ -1540,7 +1540,11 @@ function StatusBadge({ status }: { status: string }) {
 
 function ActionButton({ label, pending, onClick, small }: { label: string; pending: boolean; onClick: () => void; small?: boolean }) {
   return (
-    <button className="btn-compact" disabled={pending} onClick={onClick}>
+    <button
+      className={`btn-compact ${small ? "px-2.5 py-1 text-[11px]" : ""}`}
+      disabled={pending}
+      onClick={onClick}
+    >
       {pending ? "…" : label}
     </button>
   );

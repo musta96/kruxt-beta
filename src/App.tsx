@@ -167,7 +167,11 @@ function AdminShell({
           {collapsed ? "→" : "←"}
         </button>
       </aside>
-      <main className="flex-1 overflow-y-auto"><Outlet /></main>
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1680px]">
+          <Outlet />
+        </div>
+      </main>
     </div>
   );
 }
