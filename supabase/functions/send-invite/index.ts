@@ -29,11 +29,105 @@ function addDaysIso(days: number): string {
   return next.toISOString();
 }
 
+type EmailDeliveryResult = {
+  status: "sent" | "link_only" | "failed";
+  provider: "resend" | "none";
+  error?: string;
+};
+
 async function sha256Hex(value: string): Promise<string> {
   const buffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(buffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+async function sendInviteEmail(args: {
+  email: string;
+  inviteUrl: string;
+  role: string;
+  gymName?: string | null;
+}): Promise<EmailDeliveryResult> {
+  const apiKey = Deno.env.get("RESEND_API_KEY")?.trim();
+  const from =
+    Deno.env.get("INVITE_EMAIL_FROM")?.trim() ||
+    Deno.env.get("RESEND_FROM_EMAIL")?.trim();
+
+  if (!apiKey || !from) {
+    return {
+      status: "link_only",
+      provider: "none",
+    };
+  }
+
+  const replyTo = Deno.env.get("INVITE_EMAIL_REPLY_TO")?.trim();
+  const roleLabel = `${args.role.slice(0, 1).toUpperCase()}${args.role.slice(1)}`;
+  const destinationName = args.gymName?.trim() || "this organization";
+  const subject = `You're invited to join ${destinationName} on KRUXT`;
+  const safeDestinationName = escapeHtml(destinationName);
+  const safeRoleLabel = escapeHtml(roleLabel);
+  const safeInviteUrl = escapeHtml(args.inviteUrl);
+  const text = [
+    `You've been invited to join ${destinationName} on KRUXT.`,
+    `Assigned role: ${roleLabel}.`,
+    "",
+    `Accept your invite: ${args.inviteUrl}`,
+  ].join("\n");
+  const html = [
+    "<div style=\"font-family:Arial,sans-serif;line-height:1.6;color:#111827\">",
+    `<p>You've been invited to join <strong>${safeDestinationName}</strong> on KRUXT.</p>`,
+    `<p>Assigned role: <strong>${safeRoleLabel}</strong>.</p>`,
+    `<p><a href="${safeInviteUrl}">Accept your invite</a></p>`,
+    `<p>If the button does not work, copy and paste this URL into your browser:<br />${safeInviteUrl}</p>`,
+    "</div>",
+  ].join("");
+
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [args.email],
+        subject,
+        text,
+        html,
+        ...(replyTo ? { reply_to: replyTo } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        status: "failed",
+        provider: "resend",
+        error: `Resend returned ${response.status}: ${errorText.slice(0, 300)}`,
+      };
+    }
+
+    return {
+      status: "sent",
+      provider: "resend",
+    };
+  } catch (error) {
+    return {
+      status: "failed",
+      provider: "resend",
+      error: error instanceof Error ? error.message : "Unknown email delivery failure.",
+    };
+  }
 }
 
 async function assertCanManageGym(supabase: ReturnType<typeof serviceClient>, gymId: string, userId: string) {
@@ -104,6 +198,13 @@ Deno.serve(async (request) => {
     if (!canManage) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
+
+    const { data: gymRow } = await supabase
+      .from("gyms")
+      .select("name")
+      .eq("id", payload.gymId)
+      .maybeSingle();
+    const gymName = typeof gymRow?.name === "string" ? gymRow.name : null;
 
     if (payload.action === "revoke") {
       if (!payload.inviteId) {
@@ -188,6 +289,13 @@ Deno.serve(async (request) => {
         return new Response(JSON.stringify({ error: "Invite not found." }), { status: 404, headers });
       }
 
+      const emailDelivery = await sendInviteEmail({
+        email: data.email,
+        inviteUrl,
+        role: data.role,
+        gymName,
+      });
+
       return new Response(
         JSON.stringify({
           ok: true,
@@ -195,6 +303,9 @@ Deno.serve(async (request) => {
           inviteUrl,
           token,
           mode: "resend",
+          emailDelivery: emailDelivery.status,
+          emailProvider: emailDelivery.provider,
+          ...(emailDelivery.error ? { emailError: emailDelivery.error } : {}),
         }),
         { status: 200, headers }
       );
@@ -269,6 +380,13 @@ Deno.serve(async (request) => {
       invite = data;
     }
 
+    const emailDelivery = await sendInviteEmail({
+      email: normalizedEmail,
+      inviteUrl,
+      role,
+      gymName,
+    });
+
     return new Response(
       JSON.stringify({
         ok: true,
@@ -276,6 +394,9 @@ Deno.serve(async (request) => {
         inviteUrl,
         token,
         mode: "send",
+        emailDelivery: emailDelivery.status,
+        emailProvider: emailDelivery.provider,
+        ...(emailDelivery.error ? { emailError: emailDelivery.error } : {}),
       }),
       { status: 200, headers }
     );

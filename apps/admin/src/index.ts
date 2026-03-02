@@ -14,3 +14,4 @@ export * from "./admin-settings";
 export * from "./staff-console";
 export * from "./founder-console";
 export * from "./org-invites";
+export * from "./org-settings";

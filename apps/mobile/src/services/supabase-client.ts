@@ -24,18 +24,25 @@ function readEnv(candidates: string[]): string | undefined {
 
 export function createMobileSupabaseClient(config?: MobileSupabaseConfig): SupabaseClient {
   const url = config?.url ?? readEnv([
+    "NEXT_PUBLIC_SUPABASE_URL",
     "EXPO_PUBLIC_SUPABASE_URL",
     "VITE_SUPABASE_URL",
     "SUPABASE_URL"
   ]);
   const anonKey = config?.anonKey ?? readEnv([
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
     "EXPO_PUBLIC_SUPABASE_ANON_KEY",
+    "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
     "VITE_SUPABASE_ANON_KEY",
+    "VITE_SUPABASE_PUBLISHABLE_KEY",
     "SUPABASE_ANON_KEY"
   ]);
 
   if (!url || !anonKey) {
-    throw new Error("Missing Supabase mobile config. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.");
+    throw new Error(
+      "Missing Supabase mobile config. Set NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_ANON_KEY (or EXPO_PUBLIC_/VITE_ equivalents)."
+    );
   }
 
   return createClient(url, anonKey, {

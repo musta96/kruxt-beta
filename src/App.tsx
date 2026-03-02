@@ -18,7 +18,9 @@ import {
   type FounderConsoleServices
 } from "@admin/founder-console";
 import { OrgInvitesFlow, createOrgInvitesRuntimeServices } from "@admin/org-invites";
+import { OrgSettingsFlow } from "@admin/org-settings";
 import { createAdminSupabaseClient } from "@admin/services";
+import { AcceptInvitePage } from "./components/AcceptInvitePage";
 import { FounderHomeDashboard } from "./components/admin/FounderHomeDashboard";
 import { GymStaffHomeDashboard } from "./components/admin/GymStaffHomeDashboard";
 
@@ -524,9 +526,14 @@ function DesignShowcase() {
 }
 
 function OnboardingEntry() {
+  const location = useLocation();
   const navigate = useNavigate();
   const services = React.useMemo(() => createOnboardingRuntimeServices(), []);
   const [checkingSession, setCheckingSession] = useState(true);
+  const redirectTarget = React.useMemo(() => {
+    const requestedPath = new URLSearchParams(location.search).get("redirect")?.trim();
+    return requestedPath && requestedPath.startsWith("/") ? requestedPath : "/feed";
+  }, [location.search]);
 
   React.useEffect(() => {
     let active = true;
@@ -537,7 +544,7 @@ function OnboardingEntry() {
         const { data } = await supabase.auth.getUser();
         if (!active) return;
         if (data.user) {
-          navigate("/feed", { replace: true });
+          navigate(redirectTarget, { replace: true });
           return;
         }
       } catch (error) {
@@ -551,7 +558,7 @@ function OnboardingEntry() {
     return () => {
       active = false;
     };
-  }, [navigate]);
+  }, [navigate, redirectTarget]);
 
   if (checkingSession) {
     return (
@@ -565,7 +572,7 @@ function OnboardingEntry() {
 
   return (
     <OnboardingFlow
-      onComplete={() => navigate("/feed")}
+      onComplete={() => navigate(redirectTarget, { replace: true })}
       services={services}
     />
   );
@@ -637,9 +644,20 @@ function OpsConsoleEntry({
   return <OpsConsoleFlow services={services} gymId={gymId} defaultTab={defaultTab} />;
 }
 
-function AdminSettingsEntry({ gymId }: { gymId: string }) {
-  const services = React.useMemo(() => createOpsConsoleRuntimeServices(), []);
-  return <AdminSettingsFlow services={services} gymId={gymId} />;
+function GymSettingsEntry({
+  gymId,
+  founderServices
+}: {
+  gymId: string;
+  founderServices: FounderConsoleServices;
+}) {
+  const opsServices = React.useMemo(() => createOpsConsoleRuntimeServices(), []);
+  return (
+    <>
+      <OrgSettingsFlow gymId={gymId} services={founderServices} />
+      <AdminSettingsFlow services={opsServices} gymId={gymId} />
+    </>
+  );
 }
 
 function StaffConsoleEntry({ gymId }: { gymId: string }) {
@@ -839,6 +857,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<OnboardingEntry />} />
+        <Route path="/accept-invite" element={<AcceptInvitePage />} />
         <Route path="/showcase" element={<DesignShowcase />} />
         <Route element={<MobileShell />}>
           <Route path="/feed" element={<ProofFeedEntry />} />
@@ -965,7 +984,7 @@ export default function App() {
             path="/admin/settings"
             element={
               <RequireAdminAccess access={adminAccess} mode="gym_staff" gymId={adminGymId}>
-                <AdminSettingsEntry gymId={adminGymId} />
+                <GymSettingsEntry gymId={adminGymId} founderServices={founderServices} />
               </RequireAdminAccess>
             }
           />
