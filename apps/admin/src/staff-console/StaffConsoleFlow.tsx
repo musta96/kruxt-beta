@@ -184,7 +184,7 @@ export function StaffConsoleFlow({ services, gymId }: StaffConsoleFlowProps) {
   return (
     <div className="p-6 space-y-5">
       <div className="panel p-5 space-y-2">
-        <h1 className="text-xl font-display font-bold text-foreground">Members & Staff Access</h1>
+        <h1 className="text-xl font-display font-bold text-foreground">Users & Staff Access</h1>
         <p className="text-sm text-muted-foreground">
           Approve pending members, assign staff roles, and control permissions. Staff can later manage their own personal profile fields.
         </p>

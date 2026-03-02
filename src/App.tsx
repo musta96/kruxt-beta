@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { BrowserRouter, Routes, Route, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, NavLink, Outlet, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { OnboardingFlow } from "@mobile/onboarding";
 import { createOnboardingRuntimeServices } from "@mobile/onboarding/runtime-services";
 import { WorkoutLoggerFlow } from "@mobile/workout-logger";
@@ -17,6 +17,7 @@ import {
   createFounderConsoleRuntimeServices,
   type FounderConsoleServices
 } from "@admin/founder-console";
+import { OrgInvitesFlow, createOrgInvitesRuntimeServices } from "@admin/org-invites";
 import { createAdminSupabaseClient } from "@admin/services";
 import { FounderHomeDashboard } from "./components/admin/FounderHomeDashboard";
 import { GymStaffHomeDashboard } from "./components/admin/GymStaffHomeDashboard";
@@ -69,9 +70,11 @@ function MobileShell() {
 }
 
 // ─── Admin Shell ─────────────────────────────────────────────────
-const adminNavCore = [
+const founderNavItems = [
   { to: "/admin", label: "Overview", end: true },
-  { to: "/admin/members", label: "Members" },
+  { to: "/admin/gyms", label: "Gyms" },
+  { to: "/admin/users", label: "Users" },
+  { to: "/admin/invites", label: "Invites" },
   { to: "/admin/classes", label: "Classes" },
   { to: "/admin/checkins", label: "Check-ins" },
   { to: "/admin/waivers", label: "Waivers" },
@@ -79,6 +82,16 @@ const adminNavCore = [
   { to: "/admin/integrations", label: "Integrations" },
   { to: "/admin/compliance", label: "Compliance" },
   { to: "/admin/support", label: "Support" },
+  { to: "/admin/settings", label: "Settings" },
+];
+
+const orgNavItems = [
+  { to: "/admin", label: "Overview", end: true },
+  { to: "/admin/users", label: "Users" },
+  { to: "/admin/invites", label: "Invites" },
+  { to: "/admin/classes", label: "Classes" },
+  { to: "/admin/checkins", label: "Check-ins" },
+  { to: "/admin/waivers", label: "Waivers" },
   { to: "/admin/settings", label: "Settings" },
 ];
 
@@ -179,13 +192,7 @@ function AdminShell({
   const [collapsed, setCollapsed] = useState(false);
   const [gymOptions, setGymOptions] = useState<Array<{ id: string; name: string }>>([]);
   const location = useLocation();
-  const navItems = React.useMemo(
-    () => [
-      ...(canManageGyms ? [{ to: "/admin/gyms", label: "Gyms" }] : []),
-      ...adminNavCore
-    ],
-    [canManageGyms]
-  );
+  const navItems = React.useMemo(() => (canManageGyms ? founderNavItems : orgNavItems), [canManageGyms]);
 
   React.useEffect(() => {
     let active = true;
@@ -640,6 +647,11 @@ function StaffConsoleEntry({ gymId }: { gymId: string }) {
   return <StaffConsoleFlow services={services} gymId={gymId} />;
 }
 
+function OrgInvitesEntry({ gymId }: { gymId: string }) {
+  const services = React.useMemo(() => createOrgInvitesRuntimeServices(), []);
+  return <OrgInvitesFlow services={services} gymId={gymId} />;
+}
+
 function FounderConsoleEntry({
   gymId,
   onGymChange,
@@ -877,10 +889,19 @@ export default function App() {
             }
           />
           <Route
-            path="/admin/members"
+            path="/admin/users"
             element={
               <RequireAdminAccess access={adminAccess} mode="gym_staff" gymId={adminGymId}>
                 <StaffConsoleEntry gymId={adminGymId} />
+              </RequireAdminAccess>
+            }
+          />
+          <Route path="/admin/members" element={<Navigate to="/admin/users" replace />} />
+          <Route
+            path="/admin/invites"
+            element={
+              <RequireAdminAccess access={adminAccess} mode="gym_staff" gymId={adminGymId}>
+                <OrgInvitesEntry gymId={adminGymId} />
               </RequireAdminAccess>
             }
           />
@@ -908,10 +929,38 @@ export default function App() {
               </RequireAdminAccess>
             }
           />
-          <Route path="/admin/billing" element={<PlaceholderScreen title="Billing" />} />
-          <Route path="/admin/integrations" element={<PlaceholderScreen title="Integrations" />} />
-          <Route path="/admin/compliance" element={<PlaceholderScreen title="Compliance" />} />
-          <Route path="/admin/support" element={<PlaceholderScreen title="Support" />} />
+          <Route
+            path="/admin/billing"
+            element={
+              <RequireAdminAccess access={adminAccess} mode="founder">
+                <PlaceholderScreen title="Billing" />
+              </RequireAdminAccess>
+            }
+          />
+          <Route
+            path="/admin/integrations"
+            element={
+              <RequireAdminAccess access={adminAccess} mode="founder">
+                <PlaceholderScreen title="Integrations" />
+              </RequireAdminAccess>
+            }
+          />
+          <Route
+            path="/admin/compliance"
+            element={
+              <RequireAdminAccess access={adminAccess} mode="founder">
+                <PlaceholderScreen title="Compliance" />
+              </RequireAdminAccess>
+            }
+          />
+          <Route
+            path="/admin/support"
+            element={
+              <RequireAdminAccess access={adminAccess} mode="founder">
+                <PlaceholderScreen title="Support" />
+              </RequireAdminAccess>
+            }
+          />
           <Route
             path="/admin/settings"
             element={

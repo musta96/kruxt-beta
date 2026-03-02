@@ -138,7 +138,8 @@ export function FounderHomeDashboard({
       <div className="panel p-4">
         <div className="flex flex-wrap gap-2">
           <NavLink to="/admin/gyms" className="btn-compact">Manage Gyms</NavLink>
-          <NavLink to="/admin/members" className="btn-compact">Members</NavLink>
+          <NavLink to="/admin/users" className="btn-compact">Users</NavLink>
+          <NavLink to="/admin/invites" className="btn-compact">Invites</NavLink>
           <NavLink to="/admin/compliance" className="btn-compact">Compliance</NavLink>
           <NavLink to="/admin/billing" className="btn-compact">Billing</NavLink>
         </div>

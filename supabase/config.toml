@@ -45,3 +45,9 @@ verify_jwt = false
 
 [functions.incident_notifier]
 verify_jwt = false
+
+[functions."send-invite"]
+verify_jwt = false
+
+[functions."accept-invite"]
+verify_jwt = false

@@ -114,7 +114,8 @@ export function GymStaffHomeDashboard({ gymId, services }: GymStaffHomeDashboard
 
       <div className="panel p-4">
         <div className="flex flex-wrap gap-2">
-          <NavLink to="/admin/members" className="btn-compact">Manage Members</NavLink>
+          <NavLink to="/admin/users" className="btn-compact">Users</NavLink>
+          <NavLink to="/admin/invites" className="btn-compact">Invites</NavLink>
           <NavLink to="/admin/classes" className="btn-compact">Class Schedule</NavLink>
           <NavLink to="/admin/checkins" className="btn-compact">Check-ins</NavLink>
           <NavLink to="/admin/waivers" className="btn-compact">Waivers</NavLink>

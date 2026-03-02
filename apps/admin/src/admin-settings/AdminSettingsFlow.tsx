@@ -192,7 +192,7 @@ export function AdminSettingsFlow({ services, gymId }: AdminSettingsFlowProps) {
           Manage gym locations and course templates used in class scheduling.
         </p>
         <p className="text-xs text-muted-foreground">
-          Staff roles and authorizations are managed in <span className="font-semibold text-foreground">Members</span>.
+          Staff roles and authorizations are managed in <span className="font-semibold text-foreground">Users</span>.
         </p>
       </div>
 
@@ -336,7 +336,7 @@ export function AdminSettingsFlow({ services, gymId }: AdminSettingsFlowProps) {
                     </button>
                     {coaches.length === 0 && (
                       <p className="text-xs text-muted-foreground">
-                        No staff coaches available yet. Add them in Members.
+                        No staff coaches available yet. Add them in Users.
                       </p>
                     )}
                     {coaches.length > 0 && (
