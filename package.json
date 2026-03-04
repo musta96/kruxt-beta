@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.6.5",
   "scripts": {
     "build": "vite build",
+    "build:packages": "turbo run build",
     "build:dev": "vite build --mode development",
     "dev": "vite --host :: --port 8080",
     "lint": "turbo run lint",
