@@ -30,21 +30,39 @@ function validate(email: string, password: string, mode: AuthMode): FieldErrors 
  * via Phase2OnboardingService.run().
  */
 export function AuthScreen() {
-  const { goTo, setAuth, state } = useOnboarding();
+  const { goTo, setAuth, state, services, complete, setSubmitting, setError } = useOnboarding();
   const [mode, setMode] = useState<AuthMode>(state.auth.mode ?? "signup");
   const [email, setEmail] = useState(state.auth.email ?? "");
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const errs = validate(email, password, mode);
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
       return;
     }
     setFieldErrors({});
-    // Store credentials in state — no supabase call here
-    setAuth({ mode, email: email.trim().toLowerCase(), password });
+    const normalizedEmail = email.trim().toLowerCase();
+    setAuth({ mode, email: normalizedEmail, password });
+
+    if (mode === "signin") {
+      setSubmitting(true);
+      setError(null);
+      try {
+        await services.submit({
+          auth: { mode, email: normalizedEmail, password },
+          profile: state.profile,
+          gym: { mode: "skip" },
+          consents: state.consents
+        });
+        complete();
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Unable to sign in.");
+      }
+      return;
+    }
+
     goTo("profile");
   }
 
@@ -96,7 +114,22 @@ export function AuthScreen() {
           />
         </div>
 
-        <PrimaryBtn onClick={handleSubmit}>
+        {state.submitError && (
+          <ErrorBanner
+            message={state.submitError}
+            onRetry={() => {
+              void handleSubmit();
+            }}
+          />
+        )}
+
+        <PrimaryBtn
+          onClick={() => {
+            void handleSubmit();
+          }}
+          loading={state.isSubmitting}
+          loadingLabel={mode === "signin" ? "Signing in..." : "Claiming..."}
+        >
           {mode === "signup" ? "Create account" : "Sign in"}
         </PrimaryBtn>
 

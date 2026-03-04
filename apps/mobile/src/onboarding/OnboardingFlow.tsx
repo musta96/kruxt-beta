@@ -71,7 +71,7 @@ const PREVIEW_SERVICES: OnboardingServices = {
 
 export function OnboardingFlow({ onComplete, services }: OnboardingFlowProps) {
   return (
-    <OnboardingProvider services={services ?? PREVIEW_SERVICES}>
+    <OnboardingProvider services={services ?? PREVIEW_SERVICES} onComplete={onComplete}>
       <OnboardingFlowInner onComplete={onComplete} />
     </OnboardingProvider>
   );

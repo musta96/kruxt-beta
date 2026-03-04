@@ -1,5 +1,6 @@
 import type { OnboardingServices, OnboardingSubmitInput, GymSearchResult } from "./types";
 import { createMobileSupabaseClient } from "../services/supabase-client";
+import { Phase2OnboardingService } from "../services/phase2-onboarding-service";
 import { GymService } from "../services/gym-service";
 import { createPhase2OnboardingUiFlow, type OnboardingUiDraft } from "../flows/phase2-onboarding-ui";
 
@@ -7,6 +8,7 @@ export function createOnboardingRuntimeServices(): OnboardingServices {
   try {
     const supabase = createMobileSupabaseClient();
     const gymService = new GymService(supabase);
+    const onboardingService = new Phase2OnboardingService(supabase);
     const flow = createPhase2OnboardingUiFlow();
 
     return {
@@ -18,6 +20,20 @@ export function createOnboardingRuntimeServices(): OnboardingServices {
       },
 
       submit: async (input: OnboardingSubmitInput): Promise<void> => {
+        if ((input.auth.mode ?? "signup") === "signin") {
+          await onboardingService.run({
+            mode: "signin",
+            credentials: {
+              email: input.auth.email ?? "",
+              password: input.auth.password ?? ""
+            },
+            baselineConsents: {
+              locale: undefined
+            }
+          });
+          return;
+        }
+
         const draft = mapToDraft(input);
         const result = await flow.submit(draft);
         if (result.ok === false) {

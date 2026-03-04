@@ -174,6 +174,20 @@ export class Phase2OnboardingService {
 
     const userId = currentUser.id;
     const userEmail = currentUser.email ?? credentials.email;
+
+    if (input.mode === "signin") {
+      const existingProfile = await this.profiles.ensureProfile(userId, userEmail);
+      const consents = await this.policies.listUserConsents(userId);
+      const guildHall = await this.gyms.getGuildHallSnapshot(userId);
+
+      return {
+        userId,
+        profile: existingProfile,
+        consents,
+        guildHall
+      };
+    }
+
     const avatarUrl = await this.uploadAvatarIfNeeded(userId, input.profile?.avatarUrl);
     const profile = await this.profiles.ensureProfile(userId, userEmail, {
       ...(input.profile ?? {}),

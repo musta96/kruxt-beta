@@ -60,6 +60,7 @@ function reducer(state: OnboardingUiState, action: Action): OnboardingUiState {
 interface OnboardingCtx {
   state: OnboardingUiState;
   services: OnboardingServices;
+  complete: () => void;
   goTo: (step: OnboardingUiStep) => void;
   setAuth: (data: Partial<AuthDraft>) => void;
   setProfile: (data: Partial<ProfileDraft>) => void;
@@ -74,9 +75,10 @@ const OnboardingContext = createContext<OnboardingCtx | null>(null);
 interface OnboardingProviderProps {
   children: ReactNode;
   services: OnboardingServices;
+  onComplete: () => void;
 }
 
-export function OnboardingProvider({ children, services }: OnboardingProviderProps) {
+export function OnboardingProvider({ children, services, onComplete }: OnboardingProviderProps) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
 
   return (
@@ -84,6 +86,7 @@ export function OnboardingProvider({ children, services }: OnboardingProviderPro
       value={{
         state,
         services,
+        complete: onComplete,
         goTo: (step) => dispatch({ type: "GO_TO", step }),
         setAuth: (data) => dispatch({ type: "SET_AUTH", data }),
         setProfile: (data) => dispatch({ type: "SET_PROFILE", data }),
