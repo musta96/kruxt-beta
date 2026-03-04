@@ -3310,6 +3310,79 @@ export type Database = {
           },
         ]
       }
+      gym_staff_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          gym_id: string
+          id: string
+          invited_by: string
+          metadata: Json
+          revoked_at: string | null
+          role: Database["public"]["Enums"]["gym_role"]
+          status: string
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email: string
+          expires_at: string
+          gym_id: string
+          id?: string
+          invited_by: string
+          metadata?: Json
+          revoked_at?: string | null
+          role?: Database["public"]["Enums"]["gym_role"]
+          status?: string
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          gym_id?: string
+          id?: string
+          invited_by?: string
+          metadata?: Json
+          revoked_at?: string | null
+          role?: Database["public"]["Enums"]["gym_role"]
+          status?: string
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_staff_invites_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_staff_invites_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_staff_invites_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gym_support_access_grants: {
         Row: {
           approved_by_user_id: string | null
