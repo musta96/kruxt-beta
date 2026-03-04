@@ -17,6 +17,28 @@ function readEnv(candidates: string[]): string | undefined {
   return undefined;
 }
 
+const GLOBAL_CLIENT_CACHE_KEY = "__kruxtSupabaseBrowserClients";
+
+function getClientCache(): Map<string, SupabaseClient> {
+  const scope = globalThis as typeof globalThis & {
+    [GLOBAL_CLIENT_CACHE_KEY]?: Map<string, SupabaseClient>;
+  };
+
+  if (!scope[GLOBAL_CLIENT_CACHE_KEY]) {
+    scope[GLOBAL_CLIENT_CACHE_KEY] = new Map<string, SupabaseClient>();
+  }
+
+  return scope[GLOBAL_CLIENT_CACHE_KEY];
+}
+
+function buildAuthStorageKey(url: string): string {
+  try {
+    return `kruxt-auth:${new URL(url).host}`;
+  } catch {
+    return "kruxt-auth";
+  }
+}
+
 export interface AdminSupabaseConfig {
   url?: string;
   anonKey?: string;
@@ -47,11 +69,21 @@ export function createAdminSupabaseClient(config?: AdminSupabaseConfig): Supabas
     );
   }
 
-  return createClient(url, anonKey, {
+  const cacheKey = `${url}::${anonKey}`;
+  const cachedClient = getClientCache().get(cacheKey);
+  if (cachedClient) {
+    return cachedClient;
+  }
+
+  const client = createClient(url, anonKey, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false
+      detectSessionInUrl: false,
+      storageKey: buildAuthStorageKey(url)
     }
   });
+
+  getClientCache().set(cacheKey, client);
+  return client;
 }

@@ -5,6 +5,28 @@ export interface MobileSupabaseConfig {
   anonKey?: string;
 }
 
+const GLOBAL_CLIENT_CACHE_KEY = "__kruxtSupabaseBrowserClients";
+
+function getClientCache(): Map<string, SupabaseClient> {
+  const scope = globalThis as typeof globalThis & {
+    [GLOBAL_CLIENT_CACHE_KEY]?: Map<string, SupabaseClient>;
+  };
+
+  if (!scope[GLOBAL_CLIENT_CACHE_KEY]) {
+    scope[GLOBAL_CLIENT_CACHE_KEY] = new Map<string, SupabaseClient>();
+  }
+
+  return scope[GLOBAL_CLIENT_CACHE_KEY];
+}
+
+function buildAuthStorageKey(url: string): string {
+  try {
+    return `kruxt-auth:${new URL(url).host}`;
+  } catch {
+    return "kruxt-auth";
+  }
+}
+
 function readEnv(candidates: string[]): string | undefined {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
   const viteEnv =
@@ -45,11 +67,21 @@ export function createMobileSupabaseClient(config?: MobileSupabaseConfig): Supab
     );
   }
 
-  return createClient(url, anonKey, {
+  const cacheKey = `${url}::${anonKey}`;
+  const cachedClient = getClientCache().get(cacheKey);
+  if (cachedClient) {
+    return cachedClient;
+  }
+
+  const client = createClient(url, anonKey, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false
+      detectSessionInUrl: false,
+      storageKey: buildAuthStorageKey(url)
     }
   });
+
+  getClientCache().set(cacheKey, client);
+  return client;
 }
