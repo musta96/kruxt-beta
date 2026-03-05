@@ -4,17 +4,6 @@ type BrowserScope = typeof globalThis & {
   __kruxtWebSupabaseClients?: Map<string, SupabaseClient>;
 };
 
-function readEnv(candidates: string[]): string | undefined {
-  for (const key of candidates) {
-    const value = process.env[key];
-    if (value && value.length > 0) {
-      return value;
-    }
-  }
-
-  return undefined;
-}
-
 function getClientCache(): Map<string, SupabaseClient> {
   const scope = globalThis as BrowserScope;
   if (!scope.__kruxtWebSupabaseClients) {
@@ -33,18 +22,11 @@ function buildAuthStorageKey(url: string): string {
 }
 
 function getSupabaseConfig(): { url: string; anonKey: string } {
-  const url = readEnv([
-    "NEXT_PUBLIC_SUPABASE_URL",
-    "VITE_SUPABASE_URL",
-    "SUPABASE_URL"
-  ]);
-  const anonKey = readEnv([
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-    "VITE_SUPABASE_ANON_KEY",
-    "VITE_SUPABASE_PUBLISHABLE_KEY",
-    "SUPABASE_ANON_KEY"
-  ]);
+  // Next.js client bundles require static NEXT_PUBLIC env access.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
   if (!url || !anonKey) {
     throw new Error(
