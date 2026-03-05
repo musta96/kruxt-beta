@@ -7,6 +7,10 @@
   "scripts": {
     "build": "vite build",
     "build:packages": "turbo run build",
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build",
+    "web:start": "npm --prefix apps/web run start",
+    "web:typecheck": "npm --prefix apps/web run typecheck",
     "build:dev": "vite build --mode development",
     "dev": "vite --host :: --port 8080",
     "lint": "turbo run lint",
