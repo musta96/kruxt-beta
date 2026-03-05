@@ -52,6 +52,9 @@ Ship a stable production web app (admin + org operations) and an iOS app for pil
 
 ## Immediate Setup (Vercel)
 1. Create Vercel project from repo root and set `Root Directory` to `apps/web`.
+   - Framework preset: `Next.js`
+   - Build command: leave default (`next build`)
+   - Do not use `turbo run build` for this project.
 2. Set env vars:
    - `NEXT_PUBLIC_SUPABASE_URL=https://hgomsmhsybrxjdxbgkjy.supabase.co`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_IJoOtjmzI_S3fC6F_N32ZA_4Dk4wSM_`
