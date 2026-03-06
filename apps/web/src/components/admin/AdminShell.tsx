@@ -14,20 +14,22 @@ const FOUNDER_NAV = [
 ];
 
 const ORG_NAV = [
-  { href: "/admin", label: "Overview" },
-  { href: "/admin/users", label: "Users" },
-  { href: "/admin/invites", label: "Invites" },
-  { href: "/admin/classes", label: "Classes" }
+  { href: "/org", label: "Overview" },
+  { href: "/org/users", label: "Users" },
+  { href: "/org/invites", label: "Invites" },
+  { href: "/org/classes", label: "Classes" }
 ];
 
 export function AdminShell({
   access,
+  scope,
   title,
   subtitle,
   onSignOut,
   children
 }: {
   access: AdminAccessState;
+  scope: "founder" | "org";
   title: string;
   subtitle?: string;
   onSignOut: () => Promise<void>;
@@ -62,7 +64,41 @@ export function AdminShell({
   }
 
   const isFounder = access.platformRole === "founder";
-  const nav = isFounder ? FOUNDER_NAV : ORG_NAV;
+  const hasGymAccess = access.staffGymIds.length > 0;
+  const nav = scope === "founder" ? FOUNDER_NAV : ORG_NAV;
+
+  if (scope === "founder" && !isFounder) {
+    return (
+      <main className="container">
+        <div className="panel" style={{ maxWidth: 760 }}>
+          <h1 className="heading">Founder access required</h1>
+          <p className="subheading">This area is reserved for KRUXT platform operators.</p>
+          <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {hasGymAccess && (
+              <button className="btn btn-primary" onClick={() => router.push("/org")}>
+                Open organization workspace
+              </button>
+            )}
+            <button className="btn" onClick={() => router.push("/")}>Back to sign in</button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (scope === "org" && !isFounder && !hasGymAccess) {
+    return (
+      <main className="container">
+        <div className="panel" style={{ maxWidth: 760 }}>
+          <h1 className="heading">Organization access required</h1>
+          <p className="subheading">This account has no active gym staff memberships yet.</p>
+          <div style={{ marginTop: 16 }}>
+            <button className="btn" onClick={() => router.push("/")}>Back to sign in</button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="container">
@@ -74,7 +110,7 @@ export function AdminShell({
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span className={`badge ${isFounder ? "badge-founder" : "badge-staff"}`}>
-              {isFounder ? "Founder" : access.platformRole ?? "Staff"}
+              {scope === "founder" ? "Founder Area" : isFounder ? "Founder" : "Gym Staff"}
             </span>
             <button className="btn btn-danger" onClick={() => void onSignOut()}>Sign out</button>
           </div>

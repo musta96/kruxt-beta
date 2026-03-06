@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
-import { ensureProfileForUser } from "@/lib/auth/access";
+import { ensureProfileForUser, resolveAdminAccess } from "@/lib/auth/access";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type AuthMode = "signin" | "signup";
@@ -22,6 +22,13 @@ export function AuthGateway() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
 
+  async function resolvePostAuthPath(): Promise<string> {
+    const access = await resolveAdminAccess(supabase);
+    if (access.platformRole === "founder") return "/admin";
+    if (access.staffGymIds.length > 0) return "/org";
+    return "/org";
+  }
+
   useEffect(() => {
     let active = true;
 
@@ -29,7 +36,8 @@ export function AuthGateway() {
       const { data } = await supabase.auth.getUser();
       if (!active) return;
       if (data.user) {
-        router.replace("/admin");
+        const nextPath = await resolvePostAuthPath();
+        router.replace(nextPath);
         return;
       }
 
@@ -39,7 +47,10 @@ export function AuthGateway() {
     const listener = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (!active) return;
       if (event === "SIGNED_IN" && session?.user) {
-        router.replace("/admin");
+        void resolvePostAuthPath().then((nextPath) => {
+          if (!active) return;
+          router.replace(nextPath);
+        });
       }
     });
 
@@ -66,7 +77,8 @@ export function AuthGateway() {
         });
         if (signInError) throw signInError;
 
-        router.replace("/admin");
+        const nextPath = await resolvePostAuthPath();
+        router.replace(nextPath);
         return;
       }
 
@@ -98,7 +110,8 @@ export function AuthGateway() {
         return;
       }
 
-      router.replace("/admin");
+      const nextPath = await resolvePostAuthPath();
+      router.replace(nextPath);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Authentication failed.");
     } finally {

@@ -38,6 +38,11 @@ export interface InviteRecord {
   invitedBy: string;
 }
 
+export interface ProfileSearchResult {
+  userId: string;
+  label: string;
+}
+
 type ProfileRow = {
   id: string;
   display_name: string | null;
@@ -203,6 +208,109 @@ export async function createGym(
   if (subscriptionError) {
     throw new Error(subscriptionError.message || "Gym created, but subscription setup failed.");
   }
+}
+
+export async function updateGym(
+  client: SupabaseClient,
+  gymId: string,
+  input: {
+    name: string;
+    slug: string;
+    city?: string;
+    countryCode?: string;
+    timezone?: string;
+    ownerUserId?: string;
+    subscriptionStatus?: SubscriptionStatus;
+  }
+): Promise<void> {
+  const updatePayload: Record<string, string | null> = {
+    name: input.name.trim(),
+    slug: input.slug.trim(),
+    city: input.city?.trim() || null,
+    country_code: input.countryCode?.trim().toUpperCase() || null,
+    timezone: input.timezone?.trim() || "Europe/Rome",
+    updated_at: new Date().toISOString()
+  };
+
+  if (input.ownerUserId?.trim()) {
+    updatePayload.owner_user_id = input.ownerUserId.trim();
+  }
+
+  const { error: gymError } = await client
+    .from("gyms")
+    .update(updatePayload)
+    .eq("id", gymId);
+
+  if (gymError) {
+    throw new Error(gymError.message || "Unable to update gym.");
+  }
+
+  if (input.subscriptionStatus) {
+    const { error: subscriptionError } = await client
+      .from("gym_platform_subscriptions")
+      .upsert(
+        {
+          gym_id: gymId,
+          provider: "manual",
+          status: input.subscriptionStatus
+        },
+        { onConflict: "gym_id,provider" }
+      );
+
+    if (subscriptionError) {
+      throw new Error(subscriptionError.message || "Gym updated, but subscription update failed.");
+    }
+  }
+}
+
+export async function verifyCurrentUserPassword(client: SupabaseClient, password: string): Promise<void> {
+  const { data, error } = await client.auth.getUser();
+  if (error || !data.user?.email) {
+    throw new Error("Authentication required.");
+  }
+
+  const { error: signInError } = await client.auth.signInWithPassword({
+    email: data.user.email,
+    password
+  });
+
+  if (signInError) {
+    throw new Error("Password confirmation failed.");
+  }
+}
+
+export async function deleteGym(client: SupabaseClient, gymId: string): Promise<void> {
+  const { error } = await client.from("gyms").delete().eq("id", gymId);
+  if (error) {
+    throw new Error(
+      error.message ||
+        "Unable to delete gym. Remove dependent records first (memberships/classes/billing links)."
+    );
+  }
+}
+
+export async function searchProfiles(
+  client: SupabaseClient,
+  query: string
+): Promise<ProfileSearchResult[]> {
+  const needle = query.trim();
+  if (!needle) return [];
+
+  const { data, error } = await client
+    .from("profiles")
+    .select("id,display_name,username")
+    .or(`display_name.ilike.%${needle}%,username.ilike.%${needle}%`)
+    .order("updated_at", { ascending: false })
+    .limit(12);
+
+  if (error) {
+    throw new Error(error.message || "Unable to search users.");
+  }
+
+  return ((data as ProfileRow[] | null) ?? []).map((profile) => ({
+    userId: profile.id,
+    label: profileLabel(profile)
+  }));
 }
 
 export async function listMemberships(client: SupabaseClient, gymId: string): Promise<MembershipRecord[]> {
