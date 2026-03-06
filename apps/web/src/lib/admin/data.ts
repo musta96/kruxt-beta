@@ -1,4 +1,4 @@
-import type { GymRole, MembershipStatus, SubscriptionStatus } from "@kruxt/types";
+import type { ClassStatus, GymRole, MembershipStatus, SubscriptionStatus } from "@kruxt/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface GymRecord {
@@ -43,6 +43,44 @@ export interface ProfileSearchResult {
   label: string;
 }
 
+export interface CoachOption {
+  userId: string;
+  label: string;
+  role: GymRole;
+}
+
+export interface GymClassRecord {
+  id: string;
+  gymId: string;
+  title: string;
+  location: string | null;
+  notes: string | null;
+  coachUserId: string | null;
+  coachLabel: string;
+  capacity: number;
+  status: ClassStatus;
+  startsAt: string;
+  endsAt: string;
+  bookingOpensAt: string | null;
+  bookingClosesAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateGymClassInput {
+  gymId: string;
+  title: string;
+  location?: string;
+  notes?: string;
+  coachUserId?: string;
+  capacity: number;
+  startsAt: string;
+  endsAt: string;
+  bookingOpensAt?: string;
+  bookingClosesAt?: string;
+}
+
+const CLASS_META_PREFIX = "__KRUXT_META__";
+
 type ProfileRow = {
   id: string;
   display_name: string | null;
@@ -54,6 +92,32 @@ function profileLabel(profile?: ProfileRow): string {
   if (profile.display_name) return profile.display_name;
   if (profile.username) return `@${profile.username}`;
   return `${profile.id.slice(0, 8)}...`;
+}
+
+function serializeClassDescription(input: { location?: string; notes?: string }): string | null {
+  const location = input.location?.trim() || "";
+  const notes = input.notes?.trim() || "";
+  if (!location && !notes) return null;
+  return `${CLASS_META_PREFIX}${JSON.stringify({ location: location || null, notes: notes || null })}`;
+}
+
+function parseClassDescription(description: string | null): { location: string | null; notes: string | null } {
+  if (!description) return { location: null, notes: null };
+  if (!description.startsWith(CLASS_META_PREFIX)) {
+    return { location: null, notes: description };
+  }
+  try {
+    const payload = JSON.parse(description.slice(CLASS_META_PREFIX.length)) as {
+      location?: string | null;
+      notes?: string | null;
+    };
+    return {
+      location: payload.location ?? null,
+      notes: payload.notes ?? null
+    };
+  } catch {
+    return { location: null, notes: description };
+  }
 }
 
 export async function listGyms(client: SupabaseClient, allowedGymIds?: string[] | null): Promise<GymRecord[]> {
@@ -358,6 +422,186 @@ export async function listMemberships(client: SupabaseClient, gymId: string): Pr
     startedAt: item.started_at,
     profileLabel: profileLabel(profileMap.get(item.user_id))
   }));
+}
+
+export async function listGymCoaches(client: SupabaseClient, gymId: string): Promise<CoachOption[]> {
+  const { data, error } = await client
+    .from("gym_memberships")
+    .select("user_id,role,membership_status")
+    .eq("gym_id", gymId)
+    .in("role", ["leader", "officer", "coach"])
+    .in("membership_status", ["trial", "active"]);
+
+  if (error) {
+    throw new Error(error.message || "Unable to load coaches.");
+  }
+
+  const rows =
+    (data as Array<{ user_id: string; role: GymRole; membership_status: MembershipStatus }> | null) ?? [];
+  if (rows.length === 0) return [];
+
+  const uniqueIds = Array.from(new Set(rows.map((row) => row.user_id)));
+  const { data: profilesData } = await client
+    .from("profiles")
+    .select("id,display_name,username")
+    .in("id", uniqueIds);
+
+  const profileMap = new Map<string, ProfileRow>();
+  for (const profile of (profilesData as ProfileRow[] | null) ?? []) {
+    profileMap.set(profile.id, profile);
+  }
+
+  return rows
+    .map((row) => ({
+      userId: row.user_id,
+      role: row.role,
+      label: profileLabel(profileMap.get(row.user_id))
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+export async function listGymClasses(client: SupabaseClient, gymId: string): Promise<GymClassRecord[]> {
+  const { data, error } = await client
+    .from("gym_classes")
+    .select(
+      "id,gym_id,coach_user_id,title,description,capacity,status,starts_at,ends_at,booking_opens_at,booking_closes_at,created_at"
+    )
+    .eq("gym_id", gymId)
+    .order("starts_at", { ascending: true })
+    .limit(1000);
+
+  if (error) {
+    throw new Error(error.message || "Unable to load classes.");
+  }
+
+  const rows =
+    (data as Array<{
+      id: string;
+      gym_id: string;
+      coach_user_id: string | null;
+      title: string;
+      description: string | null;
+      capacity: number;
+      status: ClassStatus;
+      starts_at: string;
+      ends_at: string;
+      booking_opens_at: string | null;
+      booking_closes_at: string | null;
+      created_at: string;
+    }> | null) ?? [];
+
+  const coachIds = Array.from(
+    new Set(
+      rows
+        .map((row) => row.coach_user_id)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+  const profileMap = new Map<string, ProfileRow>();
+  if (coachIds.length > 0) {
+    const { data: profilesData } = await client
+      .from("profiles")
+      .select("id,display_name,username")
+      .in("id", coachIds);
+    for (const profile of (profilesData as ProfileRow[] | null) ?? []) {
+      profileMap.set(profile.id, profile);
+    }
+  }
+
+  return rows.map((row) => {
+    const parsed = parseClassDescription(row.description);
+    return {
+      id: row.id,
+      gymId: row.gym_id,
+      title: row.title,
+      location: parsed.location,
+      notes: parsed.notes,
+      coachUserId: row.coach_user_id,
+      coachLabel: row.coach_user_id ? profileLabel(profileMap.get(row.coach_user_id)) : "Unassigned",
+      capacity: row.capacity,
+      status: row.status,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      bookingOpensAt: row.booking_opens_at,
+      bookingClosesAt: row.booking_closes_at,
+      createdAt: row.created_at
+    };
+  });
+}
+
+export async function createGymClasses(
+  client: SupabaseClient,
+  input: CreateGymClassInput[]
+): Promise<void> {
+  if (input.length === 0) return;
+  const payload = input.map((item) => ({
+    gym_id: item.gymId,
+    coach_user_id: item.coachUserId?.trim() || null,
+    title: item.title.trim(),
+    description: serializeClassDescription({ location: item.location, notes: item.notes }),
+    capacity: Math.max(1, Math.floor(item.capacity)),
+    status: "scheduled" as const,
+    starts_at: item.startsAt,
+    ends_at: item.endsAt,
+    booking_opens_at: item.bookingOpensAt || null,
+    booking_closes_at: item.bookingClosesAt || null
+  }));
+
+  const { error } = await client.from("gym_classes").insert(payload);
+  if (error) {
+    throw new Error(error.message || "Unable to create classes.");
+  }
+}
+
+export async function updateGymClass(
+  client: SupabaseClient,
+  classId: string,
+  input: {
+    title?: string;
+    location?: string;
+    notes?: string;
+    coachUserId?: string;
+    capacity?: number;
+    startsAt?: string;
+    endsAt?: string;
+    bookingOpensAt?: string;
+    bookingClosesAt?: string;
+  }
+): Promise<void> {
+  const updatePayload: Record<string, unknown> = {};
+
+  if (input.title !== undefined) updatePayload.title = input.title.trim();
+  if (input.coachUserId !== undefined) updatePayload.coach_user_id = input.coachUserId.trim() || null;
+  if (input.capacity !== undefined) updatePayload.capacity = Math.max(1, Math.floor(input.capacity));
+  if (input.startsAt !== undefined) updatePayload.starts_at = input.startsAt;
+  if (input.endsAt !== undefined) updatePayload.ends_at = input.endsAt;
+  if (input.bookingOpensAt !== undefined) updatePayload.booking_opens_at = input.bookingOpensAt || null;
+  if (input.bookingClosesAt !== undefined) updatePayload.booking_closes_at = input.bookingClosesAt || null;
+
+  if (input.location !== undefined || input.notes !== undefined) {
+    updatePayload.description = serializeClassDescription({
+      location: input.location,
+      notes: input.notes
+    });
+  }
+
+  if (Object.keys(updatePayload).length === 0) return;
+
+  const { error } = await client.from("gym_classes").update(updatePayload).eq("id", classId);
+  if (error) {
+    throw new Error(error.message || "Unable to update class.");
+  }
+}
+
+export async function setGymClassStatus(
+  client: SupabaseClient,
+  classId: string,
+  status: ClassStatus
+): Promise<void> {
+  const { error } = await client.from("gym_classes").update({ status }).eq("id", classId);
+  if (error) {
+    throw new Error(error.message || "Unable to update class status.");
+  }
 }
 
 export async function updateMembership(
