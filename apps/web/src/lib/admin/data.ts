@@ -79,7 +79,31 @@ export interface CreateGymClassInput {
   bookingClosesAt?: string;
 }
 
+export interface GymLocationCatalogRecord {
+  id: string;
+  name: string;
+  address: string | null;
+  active: boolean;
+}
+
+export interface ClassTemplateCatalogRecord {
+  id: string;
+  name: string;
+  description: string | null;
+  locationIds: string[];
+  eligibleCoachUserIds: string[];
+  defaultCapacity: number;
+  defaultDurationMinutes: number;
+  active: boolean;
+}
+
+export interface GymClassCatalog {
+  locations: GymLocationCatalogRecord[];
+  templates: ClassTemplateCatalogRecord[];
+}
+
 const CLASS_META_PREFIX = "__KRUXT_META__";
+const CLASS_CATALOG_FEATURE_KEY = "class_scheduling_catalog";
 
 type ProfileRow = {
   id: string;
@@ -92,6 +116,109 @@ function profileLabel(profile?: ProfileRow): string {
   if (profile.display_name) return profile.display_name;
   if (profile.username) return `@${profile.username}`;
   return `${profile.id.slice(0, 8)}...`;
+}
+
+function createCatalogId(prefix: string): string {
+  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeCatalogString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeCatalogId(value: unknown, prefix: string): string {
+  const normalized = normalizeCatalogString(value);
+  return normalized ?? createCatalogId(prefix);
+}
+
+function normalizeCatalogStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((entry) => normalizeCatalogString(entry))
+        .filter((entry): entry is string => Boolean(entry))
+    )
+  );
+}
+
+function normalizeGymClassCatalog(config: unknown): GymClassCatalog {
+  const source =
+    config && typeof config === "object" && !Array.isArray(config)
+      ? (config as {
+          locations?: unknown;
+          templates?: unknown;
+        })
+      : {};
+
+  const locations = (Array.isArray(source.locations) ? source.locations : [])
+    .map((item) => {
+      const value =
+        item && typeof item === "object" && !Array.isArray(item)
+          ? (item as { id?: unknown; name?: unknown; address?: unknown; active?: unknown })
+          : null;
+      if (!value) return null;
+      const name = normalizeCatalogString(value.name);
+      if (!name) return null;
+      return {
+        id: normalizeCatalogId(value.id, "location"),
+        name,
+        address: normalizeCatalogString(value.address),
+        active: value.active !== false
+      } satisfies GymLocationCatalogRecord;
+    })
+    .filter((item): item is GymLocationCatalogRecord => Boolean(item));
+
+  const validLocationIds = new Set(locations.map((location) => location.id));
+
+  const templates = (Array.isArray(source.templates) ? source.templates : [])
+    .map((item) => {
+      const value =
+        item && typeof item === "object" && !Array.isArray(item)
+          ? (item as {
+              id?: unknown;
+              name?: unknown;
+              description?: unknown;
+              locationIds?: unknown;
+              eligibleCoachUserIds?: unknown;
+              defaultCapacity?: unknown;
+              defaultDurationMinutes?: unknown;
+              active?: unknown;
+            })
+          : null;
+      if (!value) return null;
+      const name = normalizeCatalogString(value.name);
+      if (!name) return null;
+      return {
+        id: normalizeCatalogId(value.id, "template"),
+        name,
+        description: normalizeCatalogString(value.description),
+        locationIds: normalizeCatalogStringArray(value.locationIds).filter((id) => validLocationIds.has(id)),
+        eligibleCoachUserIds: normalizeCatalogStringArray(value.eligibleCoachUserIds),
+        defaultCapacity: Math.max(
+          1,
+          Math.min(200, Number.isFinite(Number(value.defaultCapacity)) ? Math.floor(Number(value.defaultCapacity)) : 20)
+        ),
+        defaultDurationMinutes: Math.max(
+          15,
+          Math.min(
+            300,
+            Number.isFinite(Number(value.defaultDurationMinutes))
+              ? Math.floor(Number(value.defaultDurationMinutes))
+              : 60
+          )
+        ),
+        active: value.active !== false
+      } satisfies ClassTemplateCatalogRecord;
+    })
+    .filter((item): item is ClassTemplateCatalogRecord => Boolean(item));
+
+  return {
+    locations,
+    templates
+  };
 }
 
 function serializeClassDescription(input: { location?: string; notes?: string }): string | null {
@@ -458,6 +585,48 @@ export async function listGymCoaches(client: SupabaseClient, gymId: string): Pro
       label: profileLabel(profileMap.get(row.user_id))
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+export async function listGymClassCatalog(
+  client: SupabaseClient,
+  gymId: string
+): Promise<GymClassCatalog> {
+  const { data, error } = await client
+    .from("gym_feature_settings")
+    .select("config")
+    .eq("gym_id", gymId)
+    .eq("feature_key", CLASS_CATALOG_FEATURE_KEY)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || "Unable to load class catalog.");
+  }
+
+  return normalizeGymClassCatalog((data as { config?: unknown } | null)?.config);
+}
+
+export async function saveGymClassCatalog(
+  client: SupabaseClient,
+  gymId: string,
+  catalog: GymClassCatalog
+): Promise<GymClassCatalog> {
+  const normalized = normalizeGymClassCatalog(catalog);
+  const { error } = await client.from("gym_feature_settings").upsert(
+    {
+      gym_id: gymId,
+      feature_key: CLASS_CATALOG_FEATURE_KEY,
+      enabled: true,
+      config: normalized,
+      note: "Class scheduling catalog"
+    },
+    { onConflict: "gym_id,feature_key" }
+  );
+
+  if (error) {
+    throw new Error(error.message || "Unable to save class catalog.");
+  }
+
+  return normalized;
 }
 
 export async function listGymClasses(client: SupabaseClient, gymId: string): Promise<GymClassRecord[]> {
