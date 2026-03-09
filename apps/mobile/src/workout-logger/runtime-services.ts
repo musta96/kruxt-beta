@@ -86,6 +86,8 @@ export function createWorkoutLoggerRuntimeServices(): WorkoutLoggerServices {
           exercises: draft.exercises.map((ex) => ({
             clientId: ex.clientId,
             exerciseId: ex.exerciseId,
+            exerciseName: ex.exerciseName,
+            blockType: ex.blockType,
             notes: ex.notes,
             targetReps: ex.targetReps,
             targetWeightKg: ex.targetWeightKg,

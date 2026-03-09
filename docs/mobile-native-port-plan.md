@@ -1,22 +1,24 @@
 # KRUXT Mobile Native Port Plan
 
 ## Current state
-`apps/mobile` is not yet an Expo/React Native app.
+`apps/mobile` now has a real Expo-native baseline.
 
 What exists today:
-- shared mobile business logic
-- flow orchestration
-- Supabase service layer
-- web-style React screens using DOM elements and CSS classes
-
-What does not exist yet:
 - Expo runtime config
-- React Native screen components
-- navigation stack
-- native auth redirect handling
-- EAS build pipeline
+- native entrypoint
+- bottom-tab navigation
+- native auth landing shell
+- native member feed/log/profile shells
+- Supabase session persistence for React Native
+- EAS config for internal/production profiles
 
-This means the current package is not App Store-ready, even though the product logic is already modeled.
+What still does not exist yet:
+- deep-link invite acceptance
+- native avatar upload
+- full exercise/sets workout submit flow
+- TestFlight/App Store release assets and review package
+
+This means the package is now structurally correct for native delivery, but it is not yet feature-complete for App Store release.
 
 ## Correct next move
 Port the current mobile flows into a true Expo app while keeping the Supabase contracts and business logic.
@@ -29,6 +31,8 @@ Port the current mobile flows into a true Expo app while keeping the Supabase co
 - Add native entrypoint and navigation container
 - Wire Supabase env handling for Expo
 
+Status: complete
+
 ### Phase 2: Auth + onboarding
 - Port welcome/auth/profile/gym/consent flow to React Native components
 - Support deep links for auth and invite acceptance
@@ -37,7 +41,14 @@ Port the current mobile flows into a true Expo app while keeping the Supabase co
 ### Phase 3: Member core
 - Port feed shell
 - Port logging flow
-- Port profile/settings and avatar upload
+- Port profile/settings
+- Add native avatar upload
+
+Status:
+- feed shell: complete
+- logging shell: complete
+- profile/settings shell: complete
+- avatar upload: pending
 
 ### Phase 4: Distribution
 - Configure EAS build profiles
@@ -55,8 +66,8 @@ Do not pretend the current `apps/mobile` code can go straight to App Store packa
 - Keep the mobile app focused on member-facing use cases
 
 ## Immediate next engineering task
-Create the Expo app shell and native navigation layer in `apps/mobile`, then port:
-1. auth shell
-2. feed shell
-3. log shell
-4. profile shell
+Finish native production hardening:
+1. invite/deep-link handling
+2. native avatar upload
+3. real workout submit flow
+4. TestFlight build and device QA

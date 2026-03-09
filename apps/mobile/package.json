@@ -2,18 +2,36 @@
   "name": "@kruxt/mobile",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
+  "main": "index.js",
   "scripts": {
-    "dev": "echo 'Configure Expo runtime and run: npx expo start'",
-    "build": "echo 'Mobile build is handled by EAS in beta pipelines'",
+    "dev": "expo start",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "web": "expo start --web",
+    "build": "eas build --platform ios --profile preview",
+    "build:ios": "eas build --platform ios --profile preview",
     "lint": "echo 'Add eslint config for mobile app'",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "echo 'Add mobile test suite (jest + react-native-testing-library)'"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.1"
+    "@react-native-async-storage/async-storage": "^1.24.0",
+    "@react-navigation/bottom-tabs": "^7.0.0",
+    "@react-navigation/native": "^7.0.0",
+    "@react-navigation/native-stack": "^7.0.0",
+    "@supabase/supabase-js": "^2.49.1",
+    "expo": "^52.0.0",
+    "expo-linking": "~7.0.0",
+    "expo-status-bar": "~2.0.0",
+    "react": "18.3.1",
+    "react-native": "0.76.0",
+    "react-native-get-random-values": "^1.11.0",
+    "react-native-safe-area-context": "^4.12.0",
+    "react-native-screens": "^4.0.0",
+    "react-native-url-polyfill": "^2.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.8.2"
+    "@types/react": "^18.3.23",
+    "typescript": "^5.9.3"
   }
 }
