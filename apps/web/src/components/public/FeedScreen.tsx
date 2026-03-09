@@ -2,10 +2,28 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactionType } from "@kruxt/types";
 
 import { MemberShell } from "@/components/public/MemberShell";
 import { usePublicSession } from "@/components/public/usePublicSession";
-import { loadPublicFeed, type PublicFeedItem } from "@/lib/public/feed";
+import {
+  createWorkoutComment,
+  deleteWorkoutComment,
+  loadPublicFeed,
+  loadWorkoutComments,
+  removeWorkoutReaction,
+  setWorkoutReaction,
+  type PublicFeedComment,
+  type PublicFeedItem
+} from "@/lib/public/feed";
+
+const REACTION_OPTIONS: Array<{ value: ReactionType; label: string }> = [
+  { value: "fist", label: "Fist" },
+  { value: "fire", label: "Fire" },
+  { value: "shield", label: "Shield" },
+  { value: "clap", label: "Clap" },
+  { value: "crown", label: "Crown" }
+];
 
 function formatDate(value: string): string {
   const parsed = new Date(value);
@@ -19,6 +37,12 @@ export function FeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingWorkoutIds, setPendingWorkoutIds] = useState<Record<string, boolean>>({});
+  const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
+  const [commentsLoading, setCommentsLoading] = useState<Record<string, boolean>>({});
+  const [commentsByWorkoutId, setCommentsByWorkoutId] = useState<Record<string, PublicFeedComment[]>>({});
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [commentSubmitting, setCommentSubmitting] = useState<Record<string, boolean>>({});
 
   const loadFeed = useCallback(async () => {
     if (!state.user) return;
@@ -51,6 +75,140 @@ export function FeedScreen() {
       visibleGyms
     };
   }, [items]);
+
+  async function handleReaction(item: PublicFeedItem, reactionType: ReactionType) {
+    if (!item.workoutId || !state.user) return;
+
+    setPendingWorkoutIds((current) => ({ ...current, [item.workoutId!]: true }));
+    setError(null);
+
+    try {
+      const isRemoving = item.viewerReaction === reactionType;
+      if (isRemoving) {
+        await removeWorkoutReaction(supabase, item.workoutId);
+      } else {
+        await setWorkoutReaction(supabase, {
+          workoutId: item.workoutId,
+          reactionType
+        });
+      }
+
+      setItems((current) =>
+        current.map((entry) => {
+          if (entry.workoutId !== item.workoutId) return entry;
+
+          const hadReaction = Boolean(entry.viewerReaction);
+          const removingCurrent = entry.viewerReaction === reactionType;
+
+          return {
+            ...entry,
+            viewerReaction: removingCurrent ? null : reactionType,
+            reactionCount: removingCurrent
+              ? Math.max(0, entry.reactionCount - 1)
+              : hadReaction
+                ? entry.reactionCount
+                : entry.reactionCount + 1
+          };
+        })
+      );
+    } catch (reactionError) {
+      setError(reactionError instanceof Error ? reactionError.message : "Unable to update reaction.");
+    } finally {
+      setPendingWorkoutIds((current) => ({ ...current, [item.workoutId!]: false }));
+    }
+  }
+
+  async function ensureCommentsLoaded(item: PublicFeedItem) {
+    if (!item.workoutId || !state.user) return;
+    if (commentsByWorkoutId[item.workoutId]) return;
+
+    setCommentsLoading((current) => ({ ...current, [item.workoutId!]: true }));
+
+    try {
+      const comments = await loadWorkoutComments(supabase, item.workoutId, state.user.id);
+      setCommentsByWorkoutId((current) => ({ ...current, [item.workoutId!]: comments }));
+    } catch (commentsError) {
+      setError(commentsError instanceof Error ? commentsError.message : "Unable to load comments.");
+    } finally {
+      setCommentsLoading((current) => ({ ...current, [item.workoutId!]: false }));
+    }
+  }
+
+  async function handleToggleComments(item: PublicFeedItem) {
+    if (!item.workoutId) return;
+
+    const nextOpen = !openComments[item.workoutId];
+    setOpenComments((current) => ({ ...current, [item.workoutId!]: nextOpen }));
+
+    if (nextOpen) {
+      await ensureCommentsLoaded(item);
+    }
+  }
+
+  async function handleSubmitComment(item: PublicFeedItem) {
+    if (!item.workoutId || !state.user) return;
+
+    const commentText = (commentDrafts[item.workoutId] ?? "").trim();
+    if (!commentText) {
+      setError("Comment cannot be empty.");
+      return;
+    }
+
+    setCommentSubmitting((current) => ({ ...current, [item.workoutId!]: true }));
+    setError(null);
+
+    try {
+      await createWorkoutComment(supabase, {
+        workoutId: item.workoutId,
+        commentText
+      });
+
+      const comments = await loadWorkoutComments(supabase, item.workoutId, state.user.id);
+      setCommentsByWorkoutId((current) => ({ ...current, [item.workoutId!]: comments }));
+      setCommentDrafts((current) => ({ ...current, [item.workoutId!]: "" }));
+      setItems((current) =>
+        current.map((entry) =>
+          entry.workoutId === item.workoutId
+            ? {
+                ...entry,
+                commentCount: entry.commentCount + 1
+              }
+            : entry
+        )
+      );
+      setOpenComments((current) => ({ ...current, [item.workoutId!]: true }));
+    } catch (commentError) {
+      setError(commentError instanceof Error ? commentError.message : "Unable to post comment.");
+    } finally {
+      setCommentSubmitting((current) => ({ ...current, [item.workoutId!]: false }));
+    }
+  }
+
+  async function handleDeleteComment(item: PublicFeedItem, commentId: string) {
+    if (!item.workoutId || !state.user) return;
+
+    setError(null);
+
+    try {
+      await deleteWorkoutComment(supabase, commentId);
+      setCommentsByWorkoutId((current) => ({
+        ...current,
+        [item.workoutId!]: (current[item.workoutId!] ?? []).filter((comment) => comment.id !== commentId)
+      }));
+      setItems((current) =>
+        current.map((entry) =>
+          entry.workoutId === item.workoutId
+            ? {
+                ...entry,
+                commentCount: Math.max(0, entry.commentCount - 1)
+              }
+            : entry
+        )
+      );
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete comment.");
+    }
+  }
 
   return (
     <MemberShell
@@ -159,6 +317,102 @@ export function FeedScreen() {
                   </dd>
                 </div>
               </dl>
+
+              {item.workoutId ? (
+                <>
+                  <div className="feed-actions-row">
+                    <div className="reaction-row">
+                      {REACTION_OPTIONS.map((reaction) => (
+                        <button
+                          key={reaction.value}
+                          type="button"
+                          className={`ghost-chip ${item.viewerReaction === reaction.value ? "is-selected" : ""}`}
+                          disabled={Boolean(pendingWorkoutIds[item.workoutId!])}
+                          onClick={() => {
+                            void handleReaction(item, reaction.value);
+                          }}
+                        >
+                          {reaction.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      className={`ghost-chip ${openComments[item.workoutId] ? "is-selected" : ""}`}
+                      onClick={() => {
+                        void handleToggleComments(item);
+                      }}
+                    >
+                      {openComments[item.workoutId] ? "Hide comments" : `Comments (${item.commentCount})`}
+                    </button>
+                  </div>
+
+                  {openComments[item.workoutId] ? (
+                    <div className="comments-panel">
+                      {commentsLoading[item.workoutId] ? (
+                        <p className="feed-body">Loading comments…</p>
+                      ) : (commentsByWorkoutId[item.workoutId] ?? []).length === 0 ? (
+                        <p className="feed-body">No comments yet. Be the first one.</p>
+                      ) : (
+                        <div className="comments-list">
+                          {(commentsByWorkoutId[item.workoutId] ?? []).map((comment) => (
+                            <div key={comment.id} className="comment-card">
+                              <div className="comment-header">
+                                <div>
+                                  <strong>{comment.actorLabel}</strong>
+                                  {comment.actorUsername ? (
+                                    <span className="feed-body comment-username">@{comment.actorUsername}</span>
+                                  ) : null}
+                                </div>
+                                <div className="comment-header-actions">
+                                  <span className="feed-meta comment-meta">{formatDate(comment.createdAt)}</span>
+                                  {comment.isOwn ? (
+                                    <button
+                                      type="button"
+                                      className="comment-delete"
+                                      onClick={() => {
+                                        void handleDeleteComment(item, comment.id);
+                                      }}
+                                    >
+                                      Delete
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <p className="feed-body comment-body">{comment.commentText}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="comment-composer">
+                        <textarea
+                          className="input comment-input"
+                          value={commentDrafts[item.workoutId] ?? ""}
+                          onChange={(event) =>
+                            setCommentDrafts((current) => ({
+                              ...current,
+                              [item.workoutId!]: event.target.value
+                            }))
+                          }
+                          placeholder="Add a comment..."
+                        />
+                        <button
+                          type="button"
+                          className="primary-cta"
+                          disabled={Boolean(commentSubmitting[item.workoutId])}
+                          onClick={() => {
+                            void handleSubmitComment(item);
+                          }}
+                        >
+                          {commentSubmitting[item.workoutId] ? "Posting..." : "Post comment"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
             </article>
           ))}
         </section>

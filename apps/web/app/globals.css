@@ -462,7 +462,9 @@ main {
 
 .feed-card-chips,
 .feed-actor-row,
-.feed-stat-row {
+.feed-stat-row,
+.feed-actions-row,
+.reaction-row {
   display: flex;
   gap: 0.7rem;
   flex-wrap: wrap;
@@ -486,6 +488,15 @@ main {
   margin: 1rem 0 0;
 }
 
+.feed-actions-row {
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+
+.reaction-row {
+  gap: 0.55rem;
+}
+
 .feed-stat-row div {
   min-width: 100px;
 }
@@ -502,6 +513,70 @@ main {
 .feed-stat-row dd {
   margin: 0;
   color: var(--text);
+}
+
+.comments-panel {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(74, 117, 171, 0.2);
+  display: grid;
+  gap: 0.85rem;
+}
+
+.comments-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.comment-card {
+  border-radius: 16px;
+  border: 1px solid rgba(74, 117, 171, 0.18);
+  background: rgba(5, 17, 33, 0.56);
+  padding: 0.85rem 0.95rem;
+}
+
+.comment-header,
+.comment-header-actions,
+.comment-composer {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.comment-header,
+.comment-header-actions {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.comment-username {
+  margin-left: 0.45rem;
+}
+
+.comment-meta {
+  margin: 0;
+}
+
+.comment-delete {
+  border: none;
+  background: transparent;
+  color: #ff9eaa;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.comment-body {
+  margin: 0.55rem 0 0;
+}
+
+.comment-composer {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.comment-input {
+  min-height: 96px;
+  resize: vertical;
+  flex: 1 1 320px;
 }
 
 .tight-panel {

@@ -34,14 +34,19 @@ type GymRow = {
 };
 
 type InteractionRow = {
+  id: string;
   workout_id: string;
+  parent_interaction_id: string | null;
   interaction_type: "reaction" | "comment";
   reaction_type: ReactionType | null;
+  comment_text: string | null;
   actor_user_id: string;
+  created_at: string;
 };
 
 export interface PublicFeedItem {
   id: string;
+  workoutId: string | null;
   actorLabel: string;
   actorUsername: string | null;
   workoutTitle: string | null;
@@ -58,6 +63,26 @@ export interface PublicFeedItem {
   commentCount: number;
   viewerReaction: ReactionType | null;
   isOwn: boolean;
+}
+
+export interface PublicFeedComment {
+  id: string;
+  workoutId: string;
+  actorUserId: string;
+  actorLabel: string;
+  actorUsername: string | null;
+  commentText: string;
+  createdAt: string;
+  isOwn: boolean;
+}
+
+async function requireUser(client: SupabaseClient): Promise<string> {
+  const { data, error } = await client.auth.getUser();
+  if (error || !data.user) {
+    throw new Error("Authentication required.");
+  }
+
+  return data.user.id;
 }
 
 export async function loadPublicFeed(
@@ -98,7 +123,7 @@ export async function loadPublicFeed(
     workoutIds.length > 0
       ? client
           .from("social_interactions")
-          .select("workout_id,interaction_type,reaction_type,actor_user_id")
+          .select("id,workout_id,parent_interaction_id,interaction_type,reaction_type,comment_text,actor_user_id,created_at")
           .in("workout_id", workoutIds)
       : Promise.resolve({ data: [] as InteractionRow[] | null, error: null })
   ]);
@@ -172,6 +197,7 @@ export async function loadPublicFeed(
 
     return {
       id: event.id,
+      workoutId: event.workout_id,
       actorLabel: actor?.display_name || actor?.username || "KRUXT Athlete",
       actorUsername: actor?.username ?? null,
       workoutTitle: workout?.title ?? null,
@@ -190,4 +216,165 @@ export async function loadPublicFeed(
       isOwn: event.user_id === viewerUserId
     };
   });
+}
+
+export async function loadWorkoutComments(
+  client: SupabaseClient,
+  workoutId: string,
+  viewerUserId: string
+): Promise<PublicFeedComment[]> {
+  const { data, error } = await client
+    .from("social_interactions")
+    .select("id,workout_id,parent_interaction_id,interaction_type,reaction_type,comment_text,actor_user_id,created_at")
+    .eq("workout_id", workoutId)
+    .eq("interaction_type", "comment")
+    .is("parent_interaction_id", null)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || "Unable to load comments.");
+  }
+
+  const comments = ((data ?? []) as InteractionRow[]) ?? [];
+  if (comments.length === 0) {
+    return [];
+  }
+
+  const actorIds = Array.from(new Set(comments.map((item) => item.actor_user_id)));
+  const { data: profilesData, error: profilesError } = await client
+    .from("profiles")
+    .select("id,display_name,username")
+    .in("id", actorIds);
+
+  if (profilesError) {
+    throw new Error(profilesError.message || "Unable to load comment authors.");
+  }
+
+  const profileMap = new Map<string, ProfileRow>(
+    ((((profilesData ?? []) as ProfileRow[]) ?? []).map((profile) => [profile.id, profile]))
+  );
+
+  return comments.map((comment) => {
+    const actor = profileMap.get(comment.actor_user_id);
+
+    return {
+      id: comment.id,
+      workoutId: comment.workout_id,
+      actorUserId: comment.actor_user_id,
+      actorLabel: actor?.display_name || actor?.username || "KRUXT Athlete",
+      actorUsername: actor?.username ?? null,
+      commentText: comment.comment_text ?? "",
+      createdAt: comment.created_at,
+      isOwn: comment.actor_user_id === viewerUserId
+    };
+  });
+}
+
+export async function setWorkoutReaction(
+  client: SupabaseClient,
+  input: {
+    workoutId: string;
+    reactionType: ReactionType;
+  }
+): Promise<void> {
+  const actorUserId = await requireUser(client);
+
+  const { data: existingData, error: existingError } = await client
+    .from("social_interactions")
+    .select("id")
+    .eq("workout_id", input.workoutId)
+    .eq("actor_user_id", actorUserId)
+    .eq("interaction_type", "reaction")
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(existingError.message || "Unable to load existing reaction.");
+  }
+
+  const existingId = (existingData as { id: string } | null)?.id ?? null;
+
+  if (existingId) {
+    const { error } = await client
+      .from("social_interactions")
+      .update({
+        reaction_type: input.reactionType,
+        comment_text: null,
+        parent_interaction_id: null
+      })
+      .eq("id", existingId);
+
+    if (error) {
+      throw new Error(error.message || "Unable to update reaction.");
+    }
+
+    return;
+  }
+
+  const { error } = await client.from("social_interactions").insert({
+    workout_id: input.workoutId,
+    actor_user_id: actorUserId,
+    interaction_type: "reaction",
+    reaction_type: input.reactionType
+  });
+
+  if (error) {
+    throw new Error(error.message || "Unable to add reaction.");
+  }
+}
+
+export async function removeWorkoutReaction(client: SupabaseClient, workoutId: string): Promise<void> {
+  const actorUserId = await requireUser(client);
+
+  const { error } = await client
+    .from("social_interactions")
+    .delete()
+    .eq("workout_id", workoutId)
+    .eq("actor_user_id", actorUserId)
+    .eq("interaction_type", "reaction");
+
+  if (error) {
+    throw new Error(error.message || "Unable to remove reaction.");
+  }
+}
+
+export async function createWorkoutComment(
+  client: SupabaseClient,
+  input: {
+    workoutId: string;
+    commentText: string;
+  }
+): Promise<void> {
+  const actorUserId = await requireUser(client);
+  const commentText = input.commentText.trim();
+
+  if (!commentText) {
+    throw new Error("Comment cannot be empty.");
+  }
+
+  const { error } = await client.from("social_interactions").insert({
+    workout_id: input.workoutId,
+    actor_user_id: actorUserId,
+    interaction_type: "comment",
+    comment_text: commentText,
+    parent_interaction_id: null
+  });
+
+  if (error) {
+    throw new Error(error.message || "Unable to post comment.");
+  }
+}
+
+export async function deleteWorkoutComment(client: SupabaseClient, commentId: string): Promise<void> {
+  const actorUserId = await requireUser(client);
+
+  const { error } = await client
+    .from("social_interactions")
+    .delete()
+    .eq("id", commentId)
+    .eq("actor_user_id", actorUserId)
+    .eq("interaction_type", "comment");
+
+  if (error) {
+    throw new Error(error.message || "Unable to delete comment.");
+  }
 }

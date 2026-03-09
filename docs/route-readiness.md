@@ -35,6 +35,17 @@ Last updated: 2026-03-09
   - gym leadership invite flow works
 - `/org/classes`
   - gym leadership class scheduling works
+- `/feed`
+  - live feed events render from Supabase
+  - reactions work
+  - comments work
+- `/log`
+  - live exercise search works
+  - minimal workout submission works through `log_workout_atomic`
+- `/guild`
+  - live home-gym / roster / upcoming class view works
+- `/rank`
+  - live leaderboards and challenge join/leave work
 
 ### Functional but still scaffold-level
 - `/admin`
@@ -43,16 +54,8 @@ Last updated: 2026-03-09
 - `/org`
   - org access works
   - overview page is still a shell, not a complete operations dashboard
-- `/feed`
-  - public member shell exists
-  - currently scaffold content, not the real live feed UI
-- `/log`
-  - public member shell exists
-  - still scaffold on web; real minimal logging now exists on native
 
 ### Not rebuilt yet in the new web app
-- `/guild`
-- `/rank`
 - any other old Lovable-only public/member routes not present under `apps/web/app`
 
 ## Native mobile app (`apps/mobile`)
@@ -78,6 +81,6 @@ No, not every page and section is ready yet.
 
 The founder/org backoffice is mostly functional.
 
-The member web surface is partially rebuilt.
+The member web surface now has a working baseline, but it still lacks richer proof/media, moderation, and deeper social flows.
 
 The native mobile surface now has a real baseline, but it is not yet feature-complete enough to call the whole product finished.
