@@ -655,7 +655,7 @@ main {
   z-index: 10;
   margin-top: 1rem;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.65rem;
   padding: 0.85rem;
   border-top: 1px solid rgba(74, 117, 171, 0.22);
@@ -685,6 +685,50 @@ main {
   color: #9aeaff;
 }
 
+.guild-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.rank-list {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgba(74, 117, 171, 0.18);
+  border-radius: 16px;
+  background: rgba(8, 20, 38, 0.52);
+}
+
+.rank-row.is-highlight {
+  border-color: rgba(53, 200, 255, 0.34);
+  background: rgba(18, 52, 86, 0.42);
+}
+
+.rank-position,
+.rank-score {
+  font-weight: 800;
+  color: #9aeaff;
+}
+
+.rank-row-body {
+  min-width: 0;
+}
+
 .mobile-nav-dot {
   width: 0.42rem;
   height: 0.42rem;
@@ -700,7 +744,9 @@ main {
   .landing-shell,
   .landing-promo,
   .hero-card,
-  .split-card {
+  .split-card,
+  .board-grid,
+  .guild-stats-grid {
     grid-template-columns: 1fr;
   }
 
