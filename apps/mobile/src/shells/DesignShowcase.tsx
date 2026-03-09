@@ -1,6 +1,22 @@
 import React from "react";
-import { Badge, StatCard, ListRow, DataTable, Avatar, Divider, StatusDot, IconButton } from "@mobile/design-system";
-import { ProgressBar, PrimaryBtn, GhostBtn, InputField, TabStrip, Spinner, SkeletonCard, BackBtn, ErrorBanner } from "@mobile/design-system";
+import {
+  Badge,
+  StatCard,
+  ListRow,
+  DataTable,
+  Avatar,
+  Divider,
+  StatusDot,
+  IconButton,
+  ProgressBar,
+  PrimaryBtn,
+  GhostBtn,
+  InputField,
+  TabStrip,
+  Spinner,
+  SkeletonCard,
+  ErrorBanner,
+} from "../design-system";
 import { Bell, ChevronRight, Flame, Trophy, Zap } from "lucide-react";
 
 const sampleData = [
@@ -124,7 +140,7 @@ export default function DesignShowcase() {
               { value: "admin" as const, label: "Admin" },
             ]}
             value={tab}
-            onChange={(v) => setTab(v as "mobile" | "admin")}
+            onChange={(value) => setTab(value)}
             ariaLabel="Shell mode"
           />
         </section>
@@ -178,7 +194,7 @@ export default function DesignShowcase() {
                 {
                   key: "status",
                   label: "Status",
-                  render: (row) => (
+                  render: (row: (typeof sampleData)[number]) => (
                     <Badge variant={row.status === "active" ? "success" : "danger"}>
                       {String(row.status)}
                     </Badge>

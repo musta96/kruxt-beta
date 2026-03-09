@@ -1,10 +1,37 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { AdminShell } from "@/components/admin/AdminShell";
 import { useAdminAccess } from "@/components/admin/useAdminAccess";
+import { listGyms, type GymRecord } from "@/lib/admin/data";
 
 export function OrgHome() {
-  const { access, signOut } = useAdminAccess();
+  const { access, signOut, supabase, allowedGymIds } = useAdminAccess();
+  const [gyms, setGyms] = useState<GymRecord[]>([]);
+
+  useEffect(() => {
+    if (access.status !== "ready" || !access.isAuthenticated) return;
+
+    let active = true;
+
+    async function loadGyms() {
+      try {
+        const rows = await listGyms(supabase, allowedGymIds);
+        if (!active) return;
+        setGyms(rows);
+      } catch {
+        if (!active) return;
+        setGyms([]);
+      }
+    }
+
+    void loadGyms();
+
+    return () => {
+      active = false;
+    };
+  }, [access.isAuthenticated, access.status, allowedGymIds, supabase]);
 
   return (
     <AdminShell
@@ -28,10 +55,13 @@ export function OrgHome() {
         <section className="panel">
           <h2 style={{ marginTop: 0 }}>Accessible Gyms</h2>
           <ul>
-            {access.staffGymIds.map((gymId) => (
-              <li key={gymId}>{gymId}</li>
+            {gyms.map((gym) => (
+              <li key={gym.id}>
+                {gym.name}
+                {gym.city ? ` · ${gym.city}` : ""}
+              </li>
             ))}
-            {access.staffGymIds.length === 0 && <li>No active gym memberships.</li>}
+            {gyms.length === 0 && <li>No active gym memberships.</li>}
           </ul>
         </section>
       </div>

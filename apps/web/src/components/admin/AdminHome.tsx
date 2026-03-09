@@ -32,7 +32,7 @@ export function AdminHome() {
             <li>/admin/gyms</li>
             <li>/admin/users</li>
             <li>/admin/invites</li>
-            <li>/admin/classes (placeholder)</li>
+            <li>/admin/classes</li>
           </ul>
         </section>
       </div>

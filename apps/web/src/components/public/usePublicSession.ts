@@ -10,6 +10,7 @@ interface ProfileSummary {
   id: string;
   displayName: string | null;
   username: string | null;
+  avatarUrl: string | null;
 }
 
 interface PublicSessionState {
@@ -23,6 +24,13 @@ function mapProfileLabel(profile: ProfileSummary | null, email: string | undefin
   if (profile?.displayName) return profile.displayName;
   if (profile?.username) return `@${profile.username}`;
   return email ?? "Member";
+}
+
+const PUBLIC_SESSION_REFRESH_EVENT = "kruxt-public-session-refresh";
+
+export function broadcastPublicSessionRefresh() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(PUBLIC_SESSION_REFRESH_EVENT));
 }
 
 export function resolvePostAuthPath(access: AdminAccessState): string {
@@ -59,7 +67,7 @@ export function usePublicSession() {
 
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("id,display_name,username")
+        .select("id,display_name,username,avatar_url")
         .eq("id", access.user.id)
         .maybeSingle();
 
@@ -73,7 +81,8 @@ export function usePublicSession() {
           ? {
               id: profileData.id as string,
               displayName: (profileData.display_name as string | null | undefined) ?? null,
-              username: (profileData.username as string | null | undefined) ?? null
+              username: (profileData.username as string | null | undefined) ?? null,
+              avatarUrl: (profileData.avatar_url as string | null | undefined) ?? null
             }
           : null
       });
@@ -85,11 +94,20 @@ export function usePublicSession() {
       void loadSession();
     });
 
+    const handleRefresh = () => {
+      if (!active) return;
+      setState((current) => ({ ...current, status: "loading" }));
+      void loadSession();
+    };
+
+    window.addEventListener(PUBLIC_SESSION_REFRESH_EVENT, handleRefresh);
+
     void loadSession();
 
     return () => {
       active = false;
       listener.data.subscription.unsubscribe();
+      window.removeEventListener(PUBLIC_SESSION_REFRESH_EVENT, handleRefresh);
     };
   }, [supabase]);
 
@@ -97,10 +115,20 @@ export function usePublicSession() {
     await supabase.auth.signOut();
   }
 
+  async function refresh() {
+    setState((current) => ({ ...current, status: "loading" }));
+    await new Promise<void>((resolve) => {
+      const handler = () => resolve();
+      broadcastPublicSessionRefresh();
+      window.setTimeout(handler, 0);
+    });
+  }
+
   return {
     supabase,
     state,
     signOut,
+    refresh,
     displayLabel: mapProfileLabel(state.profile, state.user?.email)
   };
 }
