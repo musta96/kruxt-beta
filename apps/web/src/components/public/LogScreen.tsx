@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { WorkoutType, WorkoutVisibility } from "@kruxt/types";
 
 import { MemberShell } from "@/components/public/MemberShell";
@@ -10,6 +10,7 @@ import {
   loadWorkoutLogContext,
   searchExercises,
   submitWorkout,
+  uploadWorkoutProofMedia,
   type ExerciseSearchResult,
   type WorkoutLogContext
 } from "@/lib/public/workout-log";
@@ -34,8 +35,10 @@ export function LogScreen() {
   const [rpe, setRpe] = useState("7");
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [proofFiles, setProofFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (state.status !== "ready" || !state.user) return;
@@ -137,13 +140,26 @@ export function LogScreen() {
         }
       });
 
+      let uploadedProofCount = 0;
+      if (proofFiles.length > 0) {
+        const proofUpload = await uploadWorkoutProofMedia(supabase, {
+          workoutId: result.workoutId,
+          files: proofFiles
+        });
+        uploadedProofCount = proofUpload.uploadedCount;
+      }
+
       setSuccess(
-        `Workout logged. XP ${result.xpDelta.xpBefore} -> ${result.xpDelta.xpAfter}. Chain ${result.xpDelta.chainDaysBefore} -> ${result.xpDelta.chainDaysAfter}.`
+        `Workout logged. XP ${result.xpDelta.xpBefore} -> ${result.xpDelta.xpAfter}. Chain ${result.xpDelta.chainDaysBefore} -> ${result.xpDelta.chainDaysAfter}.${uploadedProofCount > 0 ? ` Uploaded ${uploadedProofCount} proof file${uploadedProofCount === 1 ? "" : "s"}.` : ""}`
       );
       setExerciseQuery("");
       setExerciseResults([]);
       setSelectedExercise(null);
       setNotes("");
+      setProofFiles([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to log workout.");
     } finally {
@@ -243,6 +259,35 @@ export function LogScreen() {
               onChange={(event) => setNotes(event.target.value)}
               placeholder="Session notes, intent, or context."
             />
+          </div>
+
+          <div>
+            <label className="label" htmlFor="log-proof-files">Proof files</label>
+            <input
+              ref={fileInputRef}
+              id="log-proof-files"
+              className="input"
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              onChange={(event) => {
+                const nextFiles = Array.from(event.target.files ?? []).slice(0, 4);
+                setProofFiles(nextFiles);
+                setError(null);
+              }}
+            />
+            <p className="feed-body">
+              Add up to 4 images or videos. This is the Strava-style proof layer for the workout post.
+            </p>
+            {proofFiles.length > 0 ? (
+              <div className="proof-file-list">
+                {proofFiles.map((file) => (
+                  <span key={`${file.name}-${file.lastModified}`} className="ghost-chip">
+                    {file.name}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -365,6 +410,7 @@ export function LogScreen() {
           <ul className="checklist">
             <li>One exercise and one set are enough to create a real workout</li>
             <li>The workout is submitted through `log_workout_atomic`</li>
+            <li>Selected proof files upload after the workout id is created</li>
             <li>XP, level, chain, and feed events update on the same path</li>
           </ul>
           <div className="stack-actions">

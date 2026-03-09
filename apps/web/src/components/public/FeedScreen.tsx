@@ -301,6 +301,25 @@ export function FeedScreen() {
 
               {item.caption ? <p className="feed-body">{item.caption}</p> : null}
 
+              {item.proofMedia.length > 0 ? (
+                <div className="proof-media-grid">
+                  {item.proofMedia.map((media) =>
+                    media.mediaKind === "video" ? (
+                      <video key={media.id} className="proof-media-tile" controls preload="metadata">
+                        <source src={media.url} type={media.mimeType} />
+                      </video>
+                    ) : (
+                      <img
+                        key={media.id}
+                        className="proof-media-tile"
+                        src={media.url}
+                        alt={`${item.actorLabel} workout proof`}
+                      />
+                    )
+                  )}
+                </div>
+              ) : null}
+
               <dl className="feed-stat-row">
                 <div>
                   <dt>Sets</dt>

@@ -39,9 +39,11 @@ Last updated: 2026-03-09
   - live feed events render from Supabase
   - reactions work
   - comments work
+  - proof media renders when uploaded
 - `/log`
   - live exercise search works
   - minimal workout submission works through `log_workout_atomic`
+  - proof media upload works after workout creation once the storage migration is applied
 - `/guild`
   - live home-gym / roster / upcoming class view works
 - `/rank`

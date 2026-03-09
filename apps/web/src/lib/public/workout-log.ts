@@ -1,6 +1,10 @@
 import type { RankTier, WorkoutType, WorkoutVisibility } from "@kruxt/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+const WORKOUT_PROOF_BUCKET = "workout-proof-media";
+const MAX_PROOF_FILES = 4;
+const MAX_PROOF_FILE_BYTES = 50 * 1024 * 1024;
+
 export interface WorkoutLogContext {
   chainDays: number;
   rankTier: RankTier;
@@ -53,6 +57,10 @@ export interface SubmitWorkoutResult {
   };
 }
 
+export interface UploadWorkoutProofResult {
+  uploadedCount: number;
+}
+
 async function requireUser(client: SupabaseClient): Promise<{ id: string }> {
   const { data, error } = await client.auth.getUser();
   if (error || !data.user) {
@@ -60,6 +68,27 @@ async function requireUser(client: SupabaseClient): Promise<{ id: string }> {
   }
 
   return { id: data.user.id };
+}
+
+function sanitizeFileName(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  const sanitized = trimmed.replace(/[^a-z0-9._-]+/g, "-").replace(/-+/g, "-");
+  return sanitized.replace(/^-|-$/g, "") || "proof";
+}
+
+function inferMediaKind(mimeType: string): "image" | "video" | null {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  return null;
+}
+
+function isMissingWorkoutProofMediaDependency(error: { message?: string | null } | null | undefined): boolean {
+  const message = error?.message?.toLowerCase() ?? "";
+  return (
+    message.includes("workout_proof_media") ||
+    message.includes(WORKOUT_PROOF_BUCKET) ||
+    message.includes("bucket not found")
+  );
 }
 
 export async function loadWorkoutLogContext(client: SupabaseClient): Promise<WorkoutLogContext> {
@@ -245,4 +274,93 @@ export async function submitWorkout(
       rankTierAfter
     }
   };
+}
+
+export async function uploadWorkoutProofMedia(
+  client: SupabaseClient,
+  input: {
+    workoutId: string;
+    files: File[];
+  }
+): Promise<UploadWorkoutProofResult> {
+  const user = await requireUser(client);
+
+  if (input.files.length === 0) {
+    return { uploadedCount: 0 };
+  }
+
+  if (input.files.length > MAX_PROOF_FILES) {
+    throw new Error(`Upload up to ${MAX_PROOF_FILES} proof files per workout.`);
+  }
+
+  let sortOrder = 1;
+  const uploadedPaths: string[] = [];
+  let uploadedCount = 0;
+
+  try {
+    for (const file of input.files) {
+      const mediaKind = inferMediaKind(file.type);
+      if (!mediaKind) {
+        throw new Error("Only image and video proof files are supported.");
+      }
+
+      if (file.size > MAX_PROOF_FILE_BYTES) {
+        throw new Error("Each proof file must be 50 MB or smaller.");
+      }
+
+      const fileName = sanitizeFileName(file.name);
+      const objectPath = `${user.id}/${input.workoutId}/${Date.now()}-${sortOrder}-${fileName}`;
+
+      const { error: uploadError } = await client.storage.from(WORKOUT_PROOF_BUCKET).upload(objectPath, file, {
+        upsert: false,
+        contentType: file.type || "application/octet-stream",
+        cacheControl: "3600"
+      });
+
+      if (uploadError) {
+        if (isMissingWorkoutProofMediaDependency(uploadError)) {
+          throw new Error(
+            "Workout proof media storage is not ready yet. Apply the workout proof media migration in Supabase first."
+          );
+        }
+
+        throw new Error(uploadError.message || "Unable to upload proof file.");
+      }
+
+      uploadedPaths.push(objectPath);
+
+      const { error: insertError } = await client.from("workout_proof_media").insert({
+        workout_id: input.workoutId,
+        uploader_user_id: user.id,
+        storage_bucket: WORKOUT_PROOF_BUCKET,
+        storage_path: objectPath,
+        media_kind: mediaKind,
+        mime_type: file.type || "application/octet-stream",
+        file_bytes: file.size,
+        sort_order: sortOrder
+      });
+
+      if (insertError) {
+        await client.storage.from(WORKOUT_PROOF_BUCKET).remove([objectPath]);
+
+        if (isMissingWorkoutProofMediaDependency(insertError)) {
+          throw new Error(
+            "Workout proof media database contract is not ready yet. Apply the workout proof media migration in Supabase first."
+          );
+        }
+
+        throw new Error(insertError.message || "Unable to register proof media.");
+      }
+
+      uploadedCount += 1;
+      sortOrder += 1;
+    }
+  } catch (error) {
+    if (uploadedPaths.length > 0) {
+      await client.storage.from(WORKOUT_PROOF_BUCKET).remove(uploadedPaths);
+    }
+    throw error;
+  }
+
+  return { uploadedCount };
 }

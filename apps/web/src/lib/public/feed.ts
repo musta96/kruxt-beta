@@ -44,6 +44,24 @@ type InteractionRow = {
   created_at: string;
 };
 
+type WorkoutProofMediaRow = {
+  id: string;
+  workout_id: string;
+  storage_bucket: string;
+  storage_path: string;
+  media_kind: "image" | "video";
+  mime_type: string;
+  sort_order: number;
+};
+
+export interface PublicFeedProofMedia {
+  id: string;
+  mediaKind: "image" | "video";
+  mimeType: string;
+  url: string;
+  sortOrder: number;
+}
+
 export interface PublicFeedItem {
   id: string;
   workoutId: string | null;
@@ -62,6 +80,7 @@ export interface PublicFeedItem {
   reactionCount: number;
   commentCount: number;
   viewerReaction: ReactionType | null;
+  proofMedia: PublicFeedProofMedia[];
   isOwn: boolean;
 }
 
@@ -83,6 +102,11 @@ async function requireUser(client: SupabaseClient): Promise<string> {
   }
 
   return data.user.id;
+}
+
+function isMissingWorkoutProofMediaRelation(error: { message?: string | null } | null | undefined): boolean {
+  const message = error?.message?.toLowerCase() ?? "";
+  return message.includes("workout_proof_media") && (message.includes("does not exist") || message.includes("find"));
 }
 
 export async function loadPublicFeed(
@@ -110,7 +134,7 @@ export async function loadPublicFeed(
     new Set(events.map((item) => item.workout_id).filter((value): value is string => Boolean(value)))
   );
 
-  const [profilesResponse, workoutsResponse, interactionsResponse] = await Promise.all([
+  const [profilesResponse, workoutsResponse, interactionsResponse, proofMediaResponse] = await Promise.all([
     actorIds.length > 0
       ? client.from("profiles").select("id,display_name,username").in("id", actorIds)
       : Promise.resolve({ data: [] as ProfileRow[] | null, error: null }),
@@ -125,7 +149,15 @@ export async function loadPublicFeed(
           .from("social_interactions")
           .select("id,workout_id,parent_interaction_id,interaction_type,reaction_type,comment_text,actor_user_id,created_at")
           .in("workout_id", workoutIds)
-      : Promise.resolve({ data: [] as InteractionRow[] | null, error: null })
+      : Promise.resolve({ data: [] as InteractionRow[] | null, error: null }),
+    workoutIds.length > 0
+      ? client
+          .from("workout_proof_media")
+          .select("id,workout_id,storage_bucket,storage_path,media_kind,mime_type,sort_order")
+          .in("workout_id", workoutIds)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [] as WorkoutProofMediaRow[] | null, error: null })
   ]);
 
   if (profilesResponse.error) {
@@ -136,6 +168,9 @@ export async function loadPublicFeed(
   }
   if (interactionsResponse.error) {
     throw new Error(interactionsResponse.error.message || "Unable to load feed engagement.");
+  }
+  if (proofMediaResponse.error && !isMissingWorkoutProofMediaRelation(proofMediaResponse.error)) {
+    throw new Error(proofMediaResponse.error.message || "Unable to load workout proof media.");
   }
 
   const workouts = (workoutsResponse.data as WorkoutRow[] | null) ?? [];
@@ -161,6 +196,33 @@ export async function loadPublicFeed(
   );
 
   const interactions = ((interactionsResponse.data ?? []) as InteractionRow[]) ?? [];
+  const proofMediaRows = proofMediaResponse.error
+    ? []
+    : (((proofMediaResponse.data ?? []) as WorkoutProofMediaRow[]) ?? []);
+  const signedMediaUrls = new Map<string, string>();
+
+  if (proofMediaRows.length > 0) {
+    const signedResults = await Promise.all(
+      proofMediaRows.map(async (media) => {
+        const { data, error } = await client.storage.from(media.storage_bucket).createSignedUrl(media.storage_path, 3600);
+        if (error || !data?.signedUrl) {
+          return null;
+        }
+
+        return {
+          id: media.id,
+          url: data.signedUrl
+        };
+      })
+    );
+
+    for (const signed of signedResults) {
+      if (signed) {
+        signedMediaUrls.set(signed.id, signed.url);
+      }
+    }
+  }
+
   const interactionStats = new Map<
     string,
     {
@@ -189,6 +251,22 @@ export async function loadPublicFeed(
     interactionStats.set(interaction.workout_id, existing);
   }
 
+  const proofMediaByWorkoutId = new Map<string, PublicFeedProofMedia[]>();
+  for (const media of proofMediaRows) {
+    const url = signedMediaUrls.get(media.id);
+    if (!url) continue;
+
+    const next = proofMediaByWorkoutId.get(media.workout_id) ?? [];
+    next.push({
+      id: media.id,
+      mediaKind: media.media_kind,
+      mimeType: media.mime_type,
+      url,
+      sortOrder: media.sort_order
+    });
+    proofMediaByWorkoutId.set(media.workout_id, next);
+  }
+
   return events.map((event) => {
     const actor = profileMap.get(event.user_id);
     const workout = event.workout_id ? workoutMap.get(event.workout_id) : null;
@@ -213,6 +291,7 @@ export async function loadPublicFeed(
       reactionCount: engagement?.reactionCount ?? 0,
       commentCount: engagement?.commentCount ?? 0,
       viewerReaction: engagement?.viewerReaction ?? null,
+      proofMedia: event.workout_id ? proofMediaByWorkoutId.get(event.workout_id) ?? [] : [],
       isOwn: event.user_id === viewerUserId
     };
   });
