@@ -394,6 +394,11 @@ main {
   font-size: 1.65rem;
 }
 
+.metric-value-sm {
+  font-size: 1.1rem;
+  text-transform: capitalize;
+}
+
 .section-stack {
   display: grid;
   gap: 0.95rem;
@@ -455,6 +460,15 @@ main {
   align-items: flex-start;
 }
 
+.feed-card-chips,
+.feed-actor-row,
+.feed-stat-row {
+  display: flex;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .feed-meta {
   margin: 0 0 0.45rem;
   color: #7fb0d9;
@@ -466,6 +480,28 @@ main {
 .feed-title {
   margin: 0;
   font-size: 1.2rem;
+}
+
+.feed-stat-row {
+  margin: 1rem 0 0;
+}
+
+.feed-stat-row div {
+  min-width: 100px;
+}
+
+.feed-stat-row dt {
+  margin: 0 0 0.2rem;
+  color: #7fb0d9;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.feed-stat-row dd {
+  margin: 0;
+  color: var(--text);
 }
 
 .tight-panel {
@@ -481,10 +517,39 @@ main {
   gap: 1rem;
 }
 
+.form-grid {
+  display: grid;
+  gap: 1rem;
+}
+
 .profile-bio {
   min-height: 120px;
   resize: vertical;
   font: inherit;
+}
+
+.result-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.result-row {
+  width: 100%;
+  text-align: left;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(74, 117, 171, 0.22);
+  background: rgba(8, 20, 38, 0.62);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.result-row:hover {
+  border-color: rgba(53, 200, 255, 0.35);
+  background: rgba(10, 27, 49, 0.82);
 }
 
 .checklist,
