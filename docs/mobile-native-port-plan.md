@@ -8,14 +8,17 @@ What exists today:
 - native entrypoint
 - bottom-tab navigation
 - native auth landing shell
-- native member feed/log/profile shells
+- native member feed/log/profile screens
 - Supabase session persistence for React Native
+- native invite acceptance via deep-link token
+- native avatar upload/remove
+- native minimal workout submit
 - EAS config for internal/production profiles
 
 What still does not exist yet:
-- deep-link invite acceptance
-- native avatar upload
-- full exercise/sets workout submit flow
+- full onboarding flow in native UI
+- full multi-block workout submit flow
+- native proof/social interactions
 - TestFlight/App Store release assets and review package
 
 This means the package is now structurally correct for native delivery, but it is not yet feature-complete for App Store release.
@@ -38,6 +41,11 @@ Status: complete
 - Support deep links for auth and invite acceptance
 - Validate session persistence on iOS
 
+Status:
+- auth landing: complete
+- invite deep-link acceptance: complete
+- full onboarding UI: pending
+
 ### Phase 3: Member core
 - Port feed shell
 - Port logging flow
@@ -45,10 +53,11 @@ Status: complete
 - Add native avatar upload
 
 Status:
-- feed shell: complete
-- logging shell: complete
+- feed baseline: complete
+- minimal real logger submit: complete
 - profile/settings shell: complete
-- avatar upload: pending
+- avatar upload: complete
+- full logger UX: pending
 
 ### Phase 4: Distribution
 - Configure EAS build profiles
@@ -67,7 +76,7 @@ Do not pretend the current `apps/mobile` code can go straight to App Store packa
 
 ## Immediate next engineering task
 Finish native production hardening:
-1. invite/deep-link handling
-2. native avatar upload
-3. real workout submit flow
+1. full onboarding UI
+2. full proof/social UI
+3. multi-block logger UI
 4. TestFlight build and device QA

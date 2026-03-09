@@ -1,7 +1,10 @@
+import * as ExpoLinking from "expo-linking";
 import { DarkTheme, NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Text, View } from "react-native";
+import { useEffect, useState } from "react";
 
+import { AcceptInviteScreen } from "./screens/AcceptInviteScreen";
 import { AuthLandingScreen } from "./screens/AuthLandingScreen";
 import { FeedScreen } from "./screens/FeedScreen";
 import { LogScreen } from "./screens/LogScreen";
@@ -46,6 +49,25 @@ function emojiForRoute(routeName: string): string {
   return "👤";
 }
 
+function readInviteToken(url: string | null): string | null {
+  if (!url) return null;
+
+  const parsed = ExpoLinking.parse(url);
+  const rawToken = parsed.queryParams?.token;
+  const token = Array.isArray(rawToken) ? rawToken[0] : rawToken;
+  const path = parsed.path ?? "";
+
+  if (typeof token !== "string" || token.length === 0) {
+    return null;
+  }
+
+  if (path.includes("accept-invite") || url.includes("accept-invite")) {
+    return token;
+  }
+
+  return null;
+}
+
 function AuthenticatedTabs() {
   return (
     <NavigationContainer theme={navigationTheme}>
@@ -76,6 +98,15 @@ function AuthenticatedTabs() {
 
 function NativeRoot() {
   const { state } = useNativeSession();
+  const url = ExpoLinking.useURL();
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = readInviteToken(url);
+    if (token) {
+      setInviteToken(token);
+    }
+  }, [url]);
 
   if (state.status === "loading") {
     return <LoadingScreen />;
@@ -83,6 +114,10 @@ function NativeRoot() {
 
   if (!state.access.user) {
     return <AuthLandingScreen />;
+  }
+
+  if (inviteToken) {
+    return <AcceptInviteScreen token={inviteToken} onDone={() => setInviteToken(null)} />;
   }
 
   return <AuthenticatedTabs />;

@@ -5,8 +5,11 @@
 - Expo entrypoint
 - tab navigation
 - native auth landing flow
-- native member shells for feed, log, and profile
+- native member screens for feed, log, and profile
 - Supabase session persistence via AsyncStorage
+- native invite acceptance via deep-link token
+- native avatar upload/remove
+- native minimal workout submit
 - EAS config for internal and production builds
 
 ## Local prerequisites
@@ -63,16 +66,16 @@ npx eas build --platform ios --profile preview
 ## Current scope
 Native mobile is currently member-first:
 - auth landing
-- feed shell
-- log flow shell
-- profile/settings shell
+- live feed baseline
+- minimal real workout submit
+- profile/settings with avatar upload
 
 Founder and organization operations remain on web:
 - founder -> `/admin`
 - gym staff -> `/org`
 
 ## Next native slice
-1. Deep-link auth and invite acceptance
-2. Native avatar upload
-3. Real workout submit flow
+1. Full onboarding flow in native UI
+2. Full multi-block workout logger
+3. Native proof/social interactions
 4. TestFlight distribution

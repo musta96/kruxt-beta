@@ -28,6 +28,7 @@ export interface NativeProfile {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  avatarPath: string | null;
   bio: string | null;
   isPublic: boolean;
   memberships: NativeMembership[];
@@ -54,6 +55,8 @@ interface SessionContextValue {
   signUp: (input: { email: string; password: string; displayName: string; username: string }) => Promise<void>;
   signOut: () => Promise<void>;
   saveProfile: (input: { displayName: string; username: string; bio: string; isPublic: boolean }) => Promise<void>;
+  uploadAvatar: (input: { uri: string; mimeType?: string | null; fileName?: string | null }) => Promise<void>;
+  removeAvatar: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -81,6 +84,31 @@ const EMPTY_ACCESS: NativeAccessState = {
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+const PROFILE_AVATAR_BUCKET = "profile-avatars";
+
+function normalizeAvatarStoragePath(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (/^(https?:|data:)/i.test(value)) return null;
+  return value.replace(/^profile-avatars\//, "");
+}
+
+async function resolveAvatarDisplayUrl(client: SupabaseClient, avatarValue: string | null | undefined): Promise<string | null> {
+  if (!avatarValue) return null;
+  if (/^(https?:|data:)/i.test(avatarValue)) return avatarValue;
+
+  const objectPath = normalizeAvatarStoragePath(avatarValue);
+  if (!objectPath) return null;
+
+  const { data, error } = await client.storage
+    .from(PROFILE_AVATAR_BUCKET)
+    .createSignedUrl(objectPath, 60 * 60);
+
+  if (error || !data?.signedUrl) {
+    return null;
+  }
+
+  return data.signedUrl;
+}
 
 function extractGymName(value: GymMembershipRow["gyms"]): string | null {
   if (!value) return null;
@@ -198,7 +226,8 @@ async function loadProfile(client: SupabaseClient, user: User): Promise<NativePr
     id: profileData.id as string,
     username: (profileData.username as string) ?? "member",
     displayName: (profileData.display_name as string | null | undefined) ?? user.email ?? "KRUXT Member",
-    avatarUrl: (profileData.avatar_url as string | null | undefined) ?? null,
+    avatarPath: (profileData.avatar_url as string | null | undefined) ?? null,
+    avatarUrl: await resolveAvatarDisplayUrl(client, (profileData.avatar_url as string | null | undefined) ?? null),
     bio: (profileData.bio as string | null | undefined) ?? null,
     isPublic: (profileData.is_public as boolean | null | undefined) ?? true,
     memberships: ((membershipData as GymMembershipRow[] | null) ?? []).map((membership) => ({
@@ -344,6 +373,75 @@ export function NativeSessionProvider({ children }: PropsWithChildren) {
     await refresh();
   }
 
+  async function uploadAvatar(input: { uri: string; mimeType?: string | null; fileName?: string | null }) {
+    const user = state.access.user;
+    if (!user) {
+      throw new Error("Authentication required.");
+    }
+
+    const response = await fetch(input.uri);
+    const arrayBuffer = await response.arrayBuffer();
+    const extensionFromName = input.fileName?.split(".").pop()?.toLowerCase();
+    const extension =
+      extensionFromName && /^[a-z0-9]+$/.test(extensionFromName)
+        ? extensionFromName
+        : input.mimeType === "image/png"
+          ? "png"
+          : input.mimeType === "image/webp"
+            ? "webp"
+            : "jpg";
+
+    const objectPath = `${user.id}/avatar-${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from(PROFILE_AVATAR_BUCKET).upload(objectPath, arrayBuffer, {
+      upsert: true,
+      contentType: input.mimeType ?? "image/jpeg",
+      cacheControl: "3600"
+    });
+
+    if (uploadError) {
+      throw new Error(uploadError.message || "Unable to upload avatar.");
+    }
+
+    const previousObjectPath = normalizeAvatarStoragePath(state.profile?.avatarPath);
+    if (previousObjectPath && previousObjectPath !== objectPath) {
+      await supabase.storage.from(PROFILE_AVATAR_BUCKET).remove([previousObjectPath]);
+    }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({ avatar_url: objectPath })
+      .eq("id", user.id);
+
+    if (profileError) {
+      throw new Error(profileError.message || "Unable to save avatar.");
+    }
+
+    await refresh();
+  }
+
+  async function removeAvatar() {
+    const user = state.access.user;
+    if (!user) {
+      throw new Error("Authentication required.");
+    }
+
+    const previousObjectPath = normalizeAvatarStoragePath(state.profile?.avatarPath);
+    if (previousObjectPath) {
+      await supabase.storage.from(PROFILE_AVATAR_BUCKET).remove([previousObjectPath]);
+    }
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: null })
+      .eq("id", user.id);
+
+    if (error) {
+      throw new Error(error.message || "Unable to remove avatar.");
+    }
+
+    await refresh();
+  }
+
   const value: SessionContextValue = {
     supabase,
     webAppUrl,
@@ -352,6 +450,8 @@ export function NativeSessionProvider({ children }: PropsWithChildren) {
     signUp,
     signOut,
     saveProfile,
+    uploadAvatar,
+    removeAvatar,
     refresh
   };
 

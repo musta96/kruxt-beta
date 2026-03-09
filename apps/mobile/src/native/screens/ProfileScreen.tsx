@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { Linking, StyleSheet, Text, View } from "react-native";
+import { Image, Linking, StyleSheet, Text, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 
 import { Banner, Button, Card, Field, Heading, InlineButton, Pill, ScreenScroll, SectionTitle, StatGrid, SwitchRow } from "../ui";
 import { palette, spacing } from "../theme";
 import { useNativeSession } from "../session";
 
 export function ProfileScreen() {
-  const { state, saveProfile, signOut, webAppUrl } = useNativeSession();
+  const { state, saveProfile, signOut, uploadAvatar, removeAvatar, webAppUrl } = useNativeSession();
   const profile = state.profile;
 
   const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
@@ -14,6 +15,7 @@ export function ProfileScreen() {
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [isPublic, setIsPublic] = useState(profile?.isPublic ?? true);
   const [saving, setSaving] = useState(false);
+  const [avatarPending, setAvatarPending] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,6 +38,61 @@ export function ProfileScreen() {
       setError(saveError instanceof Error ? saveError.message : "Unable to save profile.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleAvatarPick() {
+    setAvatarPending(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== "granted") {
+        throw new Error("Photo library permission is required to upload an avatar.");
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      if (!asset?.uri) {
+        throw new Error("No image was selected.");
+      }
+
+      await uploadAvatar({
+        uri: asset.uri,
+        mimeType: asset.mimeType,
+        fileName: asset.fileName
+      });
+      setSuccess("Avatar updated.");
+    } catch (avatarError) {
+      setError(avatarError instanceof Error ? avatarError.message : "Unable to update avatar.");
+    } finally {
+      setAvatarPending(false);
+    }
+  }
+
+  async function handleAvatarRemove() {
+    setAvatarPending(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await removeAvatar();
+      setSuccess("Avatar removed.");
+    } catch (avatarError) {
+      setError(avatarError instanceof Error ? avatarError.message : "Unable to remove avatar.");
+    } finally {
+      setAvatarPending(false);
     }
   }
 
@@ -62,17 +119,25 @@ export function ProfileScreen() {
 
       <Card>
         <View style={styles.headerRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarLabel}>
-              {(profile?.displayName || profile?.username || "K").slice(0, 1).toUpperCase()}
-            </Text>
-          </View>
+          {profile?.avatarUrl ? (
+            <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarLabel}>
+                {(profile?.displayName || profile?.username || "K").slice(0, 1).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <View style={styles.headerCopy}>
             <Text style={styles.handle}>@{profile?.username ?? "member"}</Text>
-            <Text style={styles.note}>
-              Avatar upload will land in the next native slice. Web already supports storage-backed avatars.
-            </Text>
+            <Text style={styles.note}>Storage-backed avatar uploads are enabled on native now.</Text>
           </View>
+        </View>
+        <View style={styles.avatarActions}>
+          <Button onPress={handleAvatarPick} loading={avatarPending}>Upload avatar</Button>
+          {profile?.avatarPath ? (
+            <Button tone="secondary" onPress={handleAvatarRemove} disabled={avatarPending}>Remove avatar</Button>
+          ) : null}
         </View>
       </Card>
 
@@ -154,9 +219,19 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: "800"
   },
+  avatarImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(65, 211, 255, 0.32)"
+  },
   headerCopy: {
     flex: 1,
     gap: 4
+  },
+  avatarActions: {
+    gap: spacing.sm
   },
   handle: {
     color: palette.text,
