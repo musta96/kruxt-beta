@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Banner, Button, Card, Heading, ScreenScroll } from "../ui";
 import { palette, spacing } from "../theme";
 import { useNativeSession } from "../session";
+import { invokeMobileSupabaseFunction } from "../../services/functions";
 
 export function AcceptInviteScreen({
   token,
@@ -23,13 +24,11 @@ export function AcceptInviteScreen({
     setError(null);
 
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke("accept-invite", {
-        body: { token }
-      });
-
-      if (invokeError) {
-        throw new Error(invokeError.message || "Unable to accept invite.");
-      }
+      const data = await invokeMobileSupabaseFunction<{ ok?: boolean; error?: string }>(
+        supabase,
+        "accept-invite",
+        { token }
+      );
 
       if (!data?.ok) {
         throw new Error(typeof data?.error === "string" ? data.error : "Unable to accept invite.");

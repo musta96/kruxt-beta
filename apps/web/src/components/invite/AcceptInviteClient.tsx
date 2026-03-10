@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { invokeSupabaseFunction } from "@/lib/supabase/functions";
 
 type AuthMode = "signin" | "signup";
 
@@ -56,12 +57,11 @@ export function AcceptInviteClient() {
     setError(null);
     setSuccess(null);
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke("accept-invite", {
-        body: { token }
-      });
-      if (invokeError) {
-        throw new Error(invokeError.message || "Unable to accept invite.");
-      }
+      const data = await invokeSupabaseFunction<{ ok?: boolean; error?: string; gymId?: string }>(
+        supabase,
+        "accept-invite",
+        { token }
+      );
       if (!data?.ok) {
         throw new Error(data?.error ?? "Unable to accept invite.");
       }

@@ -21,7 +21,7 @@ function buildAuthStorageKey(url: string): string {
   }
 }
 
-function getSupabaseConfig(): { url: string; anonKey: string } {
+export function getSupabaseConfig(): { url: string; anonKey: string } {
   // Next.js client bundles require static NEXT_PUBLIC env access.
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey =

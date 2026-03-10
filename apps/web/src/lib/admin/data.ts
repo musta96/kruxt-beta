@@ -1,6 +1,8 @@
 import type { ClassStatus, GymRole, MembershipStatus, SubscriptionStatus } from "@kruxt/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { invokeSupabaseFunction } from "@/lib/supabase/functions";
+
 export interface GymRecord {
   id: string;
   slug: string;
@@ -487,18 +489,36 @@ export async function searchProfiles(
   const needle = query.trim();
   if (!needle) return [];
 
-  const { data, error } = await client
-    .from("profiles")
-    .select("id,display_name,username")
-    .or(`display_name.ilike.%${needle}%,username.ilike.%${needle}%`)
-    .order("updated_at", { ascending: false })
-    .limit(12);
+  const pattern = `%${needle.replace(/\s+/g, " ").trim()}%`;
+  const [displayNameResponse, usernameResponse] = await Promise.all([
+    client
+      .from("profiles")
+      .select("id,display_name,username,updated_at")
+      .ilike("display_name", pattern)
+      .order("updated_at", { ascending: false })
+      .limit(8),
+    client
+      .from("profiles")
+      .select("id,display_name,username,updated_at")
+      .ilike("username", pattern)
+      .order("updated_at", { ascending: false })
+      .limit(8)
+  ]);
 
-  if (error) {
-    throw new Error(error.message || "Unable to search users.");
+  const errors = [displayNameResponse.error, usernameResponse.error].filter(Boolean);
+  if (errors.length > 0) {
+    throw new Error(errors[0]?.message || "Unable to search users.");
   }
 
-  return ((data as ProfileRow[] | null) ?? []).map((profile) => ({
+  const merged = new Map<string, ProfileRow>();
+  for (const profile of [
+    ...((displayNameResponse.data as ProfileRow[] | null) ?? []),
+    ...((usernameResponse.data as ProfileRow[] | null) ?? [])
+  ]) {
+    merged.set(profile.id, profile);
+  }
+
+  return Array.from(merged.values()).map((profile) => ({
     userId: profile.id,
     label: profileLabel(profile)
   }));
@@ -843,46 +863,42 @@ export async function sendInvite(
   client: SupabaseClient,
   input: { gymId: string; email: string; role: GymRole; expiresInDays?: number }
 ): Promise<string | undefined> {
-  const { data, error } = await client.functions.invoke("send-invite", {
-    body: {
+  const data = await invokeSupabaseFunction<{ ok?: boolean; error?: string; inviteUrl?: string }>(
+    client,
+    "send-invite",
+    {
       action: "send",
       gymId: input.gymId,
       email: input.email.trim().toLowerCase(),
       role: input.role,
       expiresInDays: input.expiresInDays ?? 7
     }
-  });
-
-  if (error) throw new Error(error.message || "Unable to send invite.");
+  );
   if (!data?.ok) throw new Error(data?.error ?? "Unable to send invite.");
 
   return typeof data.inviteUrl === "string" ? data.inviteUrl : undefined;
 }
 
 export async function resendInvite(client: SupabaseClient, input: { gymId: string; inviteId: string }): Promise<string | undefined> {
-  const { data, error } = await client.functions.invoke("send-invite", {
-    body: {
+  const data = await invokeSupabaseFunction<{ ok?: boolean; error?: string; inviteUrl?: string }>(
+    client,
+    "send-invite",
+    {
       action: "resend",
       gymId: input.gymId,
       inviteId: input.inviteId
     }
-  });
-
-  if (error) throw new Error(error.message || "Unable to resend invite.");
+  );
   if (!data?.ok) throw new Error(data?.error ?? "Unable to resend invite.");
 
   return typeof data.inviteUrl === "string" ? data.inviteUrl : undefined;
 }
 
 export async function revokeInvite(client: SupabaseClient, input: { gymId: string; inviteId: string }): Promise<void> {
-  const { data, error } = await client.functions.invoke("send-invite", {
-    body: {
-      action: "revoke",
-      gymId: input.gymId,
-      inviteId: input.inviteId
-    }
+  const data = await invokeSupabaseFunction<{ ok?: boolean; error?: string }>(client, "send-invite", {
+    action: "revoke",
+    gymId: input.gymId,
+    inviteId: input.inviteId
   });
-
-  if (error) throw new Error(error.message || "Unable to revoke invite.");
   if (!data?.ok) throw new Error(data?.error ?? "Unable to revoke invite.");
 }

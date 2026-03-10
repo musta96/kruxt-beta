@@ -124,6 +124,22 @@ function normalizeSearchText(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+function isExerciseExactMatch(query: string, result: ExerciseSearchResult | null | undefined): boolean {
+  if (!result) {
+    return false;
+  }
+
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) {
+    return false;
+  }
+
+  return (
+    normalizeSearchText(result.name) === normalizedQuery ||
+    normalizeSearchText(result.slug) === normalizedQuery
+  );
+}
+
 function pickBestExerciseMatch(
   query: string,
   results: ExerciseSearchResult[]
@@ -407,7 +423,7 @@ export function LogScreen() {
     updateBlockState(clientId, (current) => ({
       ...current,
       searchQuery: value,
-      selectedExercise: current.selectedExercise?.name === value ? current.selectedExercise : null
+      selectedExercise: isExerciseExactMatch(value, current.selectedExercise) ? current.selectedExercise : null
     }));
     setError(null);
 
@@ -422,7 +438,19 @@ export function LogScreen() {
     searchTimersRef.current[clientId] = window.setTimeout(async () => {
       try {
         const results = await searchExercises(supabase, query);
-        setExerciseResults((current) => ({ ...current, [clientId]: results }));
+        const exactMatch = results.find((result) => isExerciseExactMatch(query, result)) ?? null;
+
+        if (exactMatch) {
+          updateBlockState(clientId, (current) => ({
+            ...current,
+            selectedExercise: exactMatch,
+            searchQuery: exactMatch.name,
+            stationLabel: current.stationLabel || exactMatch.name
+          }));
+          setExerciseResults((current) => ({ ...current, [clientId]: [] }));
+        } else {
+          setExerciseResults((current) => ({ ...current, [clientId]: results }));
+        }
       } catch (searchError) {
         setError(searchError instanceof Error ? searchError.message : "Unable to search exercises.");
       } finally {

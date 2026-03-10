@@ -45,7 +45,7 @@ function readEnv(candidates: string[]): string | undefined {
   return undefined;
 }
 
-export function createMobileSupabaseClient(config?: MobileSupabaseConfig): SupabaseClient {
+export function getMobileSupabaseConfig(config?: MobileSupabaseConfig): { url: string; anonKey: string } {
   const url = config?.url ?? readEnv([
     "NEXT_PUBLIC_SUPABASE_URL",
     "EXPO_PUBLIC_SUPABASE_URL",
@@ -67,6 +67,12 @@ export function createMobileSupabaseClient(config?: MobileSupabaseConfig): Supab
       "Missing Supabase mobile config. Set NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_ANON_KEY (or EXPO_PUBLIC_/VITE_ equivalents)."
     );
   }
+
+  return { url, anonKey };
+}
+
+export function createMobileSupabaseClient(config?: MobileSupabaseConfig): SupabaseClient {
+  const { url, anonKey } = getMobileSupabaseConfig(config);
 
   const cacheKey = `${url}::${anonKey}`;
   const cachedClient = getClientCache().get(cacheKey);

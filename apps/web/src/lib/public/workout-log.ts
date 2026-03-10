@@ -111,6 +111,15 @@ type WorkoutTemplateRow = {
   template_days: unknown;
 };
 
+type ExerciseRow = {
+  id: string;
+  name: string;
+  slug: string;
+  category: string;
+  movement_pattern: string | null;
+  equipment: string | null;
+};
+
 async function requireUser(client: SupabaseClient): Promise<{ id: string }> {
   const { data, error } = await client.auth.getUser();
   if (error || !data.user) {
@@ -143,6 +152,37 @@ function isMissingWorkoutProofMediaDependency(error: { message?: string | null }
 
 function isWorkoutBlockType(value: string | null | undefined): value is WorkoutBlockType {
   return WORKOUT_BLOCK_TYPES.includes((value ?? "") as WorkoutBlockType);
+}
+
+function normalizeSearchText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function mapExerciseRow(item: ExerciseRow): ExerciseSearchResult {
+  return {
+    id: item.id,
+    name: item.name,
+    slug: item.slug,
+    category: item.category,
+    movementPattern: item.movement_pattern,
+    equipment: item.equipment
+  };
+}
+
+function scoreExerciseResult(query: string, item: ExerciseSearchResult): number {
+  const normalizedQuery = normalizeSearchText(query);
+  const normalizedName = normalizeSearchText(item.name);
+  const normalizedSlug = normalizeSearchText(item.slug);
+  const normalizedCategory = normalizeSearchText(item.category);
+  const normalizedPattern = normalizeSearchText(item.movementPattern ?? "");
+  const normalizedEquipment = normalizeSearchText(item.equipment ?? "");
+
+  if (normalizedName === normalizedQuery || normalizedSlug === normalizedQuery) return 100;
+  if (normalizedName.startsWith(normalizedQuery) || normalizedSlug.startsWith(normalizedQuery)) return 80;
+  if (normalizedName.includes(normalizedQuery) || normalizedSlug.includes(normalizedQuery)) return 60;
+  if (normalizedCategory.includes(normalizedQuery) || normalizedPattern.includes(normalizedQuery)) return 40;
+  if (normalizedEquipment.includes(normalizedQuery)) return 20;
+  return 0;
 }
 
 function parseTemplateDays(input: unknown): WorkoutTemplateDay[] {
@@ -285,38 +325,82 @@ export async function searchExercises(
     return [];
   }
 
-  const { data, error } = await client
-    .from("exercises")
-    .select("id,name,slug,category,movement_pattern,equipment")
-    .or([
-      `name.ilike.%${q}%`,
-      `slug.ilike.%${q}%`,
-      `category.ilike.%${q}%`,
-      `movement_pattern.ilike.%${q}%`,
-      `equipment.ilike.%${q}%`
-    ].join(","))
-    .order("name", { ascending: true })
-    .limit(16);
+  const likePattern = `%${q.replace(/\s+/g, " ").trim()}%`;
+  const slugPattern = `%${q.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")}%`;
 
-  if (error) {
-    throw new Error(error.message || "Unable to search exercises.");
+  const [nameResponse, slugResponse, categoryResponse, patternResponse, equipmentResponse] =
+    await Promise.all([
+      client
+        .from("exercises")
+        .select("id,name,slug,category,movement_pattern,equipment")
+        .ilike("name", likePattern)
+        .order("name", { ascending: true })
+        .limit(12),
+      client
+        .from("exercises")
+        .select("id,name,slug,category,movement_pattern,equipment")
+        .ilike("slug", slugPattern || likePattern)
+        .order("name", { ascending: true })
+        .limit(8),
+      client
+        .from("exercises")
+        .select("id,name,slug,category,movement_pattern,equipment")
+        .ilike("category", likePattern)
+        .order("name", { ascending: true })
+        .limit(6),
+      client
+        .from("exercises")
+        .select("id,name,slug,category,movement_pattern,equipment")
+        .ilike("movement_pattern", likePattern)
+        .order("name", { ascending: true })
+        .limit(6),
+      client
+        .from("exercises")
+        .select("id,name,slug,category,movement_pattern,equipment")
+        .ilike("equipment", likePattern)
+        .order("name", { ascending: true })
+        .limit(6)
+    ]);
+
+  const errors = [
+    nameResponse.error,
+    slugResponse.error,
+    categoryResponse.error,
+    patternResponse.error,
+    equipmentResponse.error
+  ].filter(Boolean);
+
+  if (errors.length > 0) {
+    throw new Error(errors[0]?.message || "Unable to search exercises.");
   }
 
-  return (((data ?? []) as Array<{
-    id: string;
-    name: string;
-    slug: string;
-    category: string;
-    movement_pattern: string | null;
-    equipment: string | null;
-  }>) ?? []).map((item) => ({
-    id: item.id,
-    name: item.name,
-    slug: item.slug,
-    category: item.category,
-    movementPattern: item.movement_pattern,
-    equipment: item.equipment
-  }));
+  const merged = new Map<string, ExerciseSearchResult>();
+
+  for (const row of [
+    ...(nameResponse.data ?? []),
+    ...(slugResponse.data ?? []),
+    ...(categoryResponse.data ?? []),
+    ...(patternResponse.data ?? []),
+    ...(equipmentResponse.data ?? [])
+  ] as ExerciseRow[]) {
+    merged.set(row.id, mapExerciseRow(row));
+  }
+
+  return Array.from(merged.values())
+    .map((item) => ({
+      item,
+      score: scoreExerciseResult(q, item)
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return left.item.name.localeCompare(right.item.name);
+    })
+    .slice(0, 16)
+    .map((entry) => entry.item);
 }
 
 export async function loadExercisesBySlugs(
