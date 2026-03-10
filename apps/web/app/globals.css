@@ -651,6 +651,14 @@ main {
   background: rgba(10, 27, 49, 0.82);
 }
 
+.search-meta {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  color: #7fb0d9;
+  font-weight: 500;
+}
+
 .checklist,
 .data-list {
   margin: 0;
@@ -726,6 +734,82 @@ main {
   border: 1px solid rgba(53, 200, 255, 0.22);
   font-size: 0.88rem;
   font-weight: 700;
+}
+
+.hyrox-preset-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.85fr);
+  gap: 1rem;
+}
+
+.hyrox-note {
+  display: grid;
+  gap: 0.85rem;
+  align-content: start;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.template-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.log-block-list {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.log-block-card {
+  border: 1px solid rgba(74, 117, 171, 0.24);
+  background: rgba(6, 18, 35, 0.72);
+  border-radius: 18px;
+  padding: 1rem;
+  display: grid;
+  gap: 0.95rem;
+}
+
+.log-block-header,
+.log-block-header-main,
+.log-block-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.log-block-header {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.log-block-header-main {
+  align-items: center;
+}
+
+.log-block-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.log-block-order {
+  min-width: 3.2rem;
+  justify-content: center;
+}
+
+.log-block-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
 }
 
 .checkbox-row {
@@ -844,6 +928,8 @@ main {
   .landing-promo,
   .hero-card,
   .split-card,
+  .hyrox-preset-grid,
+  .template-grid,
   .board-grid,
   .guild-stats-grid {
     grid-template-columns: 1fr;
@@ -859,5 +945,9 @@ main {
   .checkbox-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

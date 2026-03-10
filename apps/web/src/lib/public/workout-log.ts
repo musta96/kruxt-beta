@@ -4,6 +4,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const WORKOUT_PROOF_BUCKET = "workout-proof-media";
 const MAX_PROOF_FILES = 4;
 const MAX_PROOF_FILE_BYTES = 50 * 1024 * 1024;
+const WORKOUT_BLOCK_TYPES = ["straight_set", "superset", "circuit", "emom", "amrap"] as const;
+
+export type WorkoutBlockType = (typeof WORKOUT_BLOCK_TYPES)[number];
 
 export interface WorkoutLogContext {
   chainDays: number;
@@ -20,6 +23,10 @@ export interface WorkoutLogContext {
 export interface ExerciseSearchResult {
   id: string;
   name: string;
+  slug: string;
+  category: string;
+  movementPattern: string | null;
+  equipment: string | null;
 }
 
 export interface SubmitWorkoutInput {
@@ -30,17 +37,20 @@ export interface SubmitWorkoutInput {
   gymId?: string | null;
   startedAt?: string;
   rpe?: number;
-  exercise: {
+  exercises: Array<{
     exerciseId: string;
+    blockType?: WorkoutBlockType;
     targetReps?: string;
     targetWeightKg?: number;
     notes?: string;
     set: {
       reps?: number;
       weightKg?: number;
+      distanceM?: number;
+      durationSeconds?: number;
       rpe?: number;
     };
-  };
+  }>;
 }
 
 export interface SubmitWorkoutResult {
@@ -60,6 +70,46 @@ export interface SubmitWorkoutResult {
 export interface UploadWorkoutProofResult {
   uploadedCount: number;
 }
+
+export interface WorkoutTemplateDayExercise {
+  exerciseId: string;
+  exerciseName: string;
+  exerciseSlug: string;
+  category: string;
+  equipment: string | null;
+  stationLabel: string;
+  notes: string;
+  blockType: WorkoutBlockType;
+  reps?: string;
+  weightKg?: number;
+  distanceM?: number;
+  durationSeconds?: number;
+}
+
+export interface WorkoutTemplateDay {
+  id: string;
+  label: string;
+  notes: string;
+  exercises: WorkoutTemplateDayExercise[];
+}
+
+export interface WorkoutTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  workoutType: WorkoutType;
+  source: string;
+  days: WorkoutTemplateDay[];
+}
+
+type WorkoutTemplateRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  workout_type: WorkoutType;
+  source: string;
+  template_days: unknown;
+};
 
 async function requireUser(client: SupabaseClient): Promise<{ id: string }> {
   const { data, error } = await client.auth.getUser();
@@ -89,6 +139,90 @@ function isMissingWorkoutProofMediaDependency(error: { message?: string | null }
     message.includes(WORKOUT_PROOF_BUCKET) ||
     message.includes("bucket not found")
   );
+}
+
+function isWorkoutBlockType(value: string | null | undefined): value is WorkoutBlockType {
+  return WORKOUT_BLOCK_TYPES.includes((value ?? "") as WorkoutBlockType);
+}
+
+function parseTemplateDays(input: unknown): WorkoutTemplateDay[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const days: WorkoutTemplateDay[] = [];
+
+  for (const [dayIndex, rawDay] of input.entries()) {
+    if (!rawDay || typeof rawDay !== "object") {
+      continue;
+    }
+
+    const dayRecord = rawDay as Record<string, unknown>;
+    const rawExercises = Array.isArray(dayRecord.exercises) ? dayRecord.exercises : [];
+    const exercises: WorkoutTemplateDayExercise[] = [];
+
+    for (const rawExercise of rawExercises) {
+      if (!rawExercise || typeof rawExercise !== "object") {
+        continue;
+      }
+
+      const exerciseRecord = rawExercise as Record<string, unknown>;
+      const exerciseId = typeof exerciseRecord.exerciseId === "string" ? exerciseRecord.exerciseId : "";
+      const exerciseName = typeof exerciseRecord.exerciseName === "string" ? exerciseRecord.exerciseName : "";
+      const exerciseSlug = typeof exerciseRecord.exerciseSlug === "string" ? exerciseRecord.exerciseSlug : "";
+      const category = typeof exerciseRecord.category === "string" ? exerciseRecord.category : "custom";
+      const equipment = typeof exerciseRecord.equipment === "string" ? exerciseRecord.equipment : null;
+      const stationLabel =
+        typeof exerciseRecord.stationLabel === "string" ? exerciseRecord.stationLabel : exerciseName;
+      const notes = typeof exerciseRecord.notes === "string" ? exerciseRecord.notes : "";
+      const rawBlockType = typeof exerciseRecord.blockType === "string" ? exerciseRecord.blockType : null;
+      const blockType: WorkoutBlockType = isWorkoutBlockType(rawBlockType) ? rawBlockType : "straight_set";
+
+      if (!exerciseId || !exerciseName || !exerciseSlug) {
+        continue;
+      }
+
+      exercises.push({
+        exerciseId,
+        exerciseName,
+        exerciseSlug,
+        category,
+        equipment,
+        stationLabel,
+        notes,
+        blockType,
+        reps: typeof exerciseRecord.reps === "string" ? exerciseRecord.reps : undefined,
+        weightKg:
+          typeof exerciseRecord.weightKg === "number" && Number.isFinite(exerciseRecord.weightKg)
+            ? exerciseRecord.weightKg
+            : undefined,
+        distanceM:
+          typeof exerciseRecord.distanceM === "number" && Number.isFinite(exerciseRecord.distanceM)
+            ? exerciseRecord.distanceM
+            : undefined,
+        durationSeconds:
+          typeof exerciseRecord.durationSeconds === "number" && Number.isFinite(exerciseRecord.durationSeconds)
+            ? exerciseRecord.durationSeconds
+            : undefined
+      });
+    }
+
+    if (exercises.length === 0) {
+      continue;
+    }
+
+    days.push({
+      id: typeof dayRecord.id === "string" && dayRecord.id ? dayRecord.id : `day_${dayIndex + 1}`,
+      label:
+        typeof dayRecord.label === "string" && dayRecord.label.trim()
+          ? dayRecord.label
+          : `Day ${dayIndex + 1}`,
+      notes: typeof dayRecord.notes === "string" ? dayRecord.notes : "",
+      exercises
+    });
+  }
+
+  return days;
 }
 
 export async function loadWorkoutLogContext(client: SupabaseClient): Promise<WorkoutLogContext> {
@@ -153,19 +287,173 @@ export async function searchExercises(
 
   const { data, error } = await client
     .from("exercises")
-    .select("id,name")
-    .ilike("name", `%${q}%`)
+    .select("id,name,slug,category,movement_pattern,equipment")
+    .or([
+      `name.ilike.%${q}%`,
+      `slug.ilike.%${q}%`,
+      `category.ilike.%${q}%`,
+      `movement_pattern.ilike.%${q}%`,
+      `equipment.ilike.%${q}%`
+    ].join(","))
     .order("name", { ascending: true })
-    .limit(12);
+    .limit(16);
 
   if (error) {
     throw new Error(error.message || "Unable to search exercises.");
   }
 
-  return (((data ?? []) as Array<{ id: string; name: string }>) ?? []).map((item) => ({
+  return (((data ?? []) as Array<{
+    id: string;
+    name: string;
+    slug: string;
+    category: string;
+    movement_pattern: string | null;
+    equipment: string | null;
+  }>) ?? []).map((item) => ({
     id: item.id,
-    name: item.name
+    name: item.name,
+    slug: item.slug,
+    category: item.category,
+    movementPattern: item.movement_pattern,
+    equipment: item.equipment
   }));
+}
+
+export async function loadExercisesBySlugs(
+  client: SupabaseClient,
+  slugs: string[]
+): Promise<Map<string, ExerciseSearchResult>> {
+  const uniqueSlugs = Array.from(new Set(slugs.map((value) => value.trim()).filter(Boolean)));
+  if (uniqueSlugs.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await client
+    .from("exercises")
+    .select("id,name,slug,category,movement_pattern,equipment")
+    .in("slug", uniqueSlugs);
+
+  if (error) {
+    throw new Error(error.message || "Unable to load preset exercises.");
+  }
+
+  return new Map(
+    ((((data ?? []) as Array<{
+      id: string;
+      name: string;
+      slug: string;
+      category: string;
+      movement_pattern: string | null;
+      equipment: string | null;
+    }>) ?? []).map((item) => [
+      item.slug,
+      {
+        id: item.id,
+        name: item.name,
+        slug: item.slug,
+        category: item.category,
+        movementPattern: item.movement_pattern,
+        equipment: item.equipment
+      }
+    ]))
+  );
+}
+
+export async function loadWorkoutTemplates(client: SupabaseClient): Promise<WorkoutTemplate[]> {
+  const user = await requireUser(client);
+
+  const { data, error } = await client
+    .from("user_workout_templates")
+    .select("id,name,description,workout_type,source,template_days")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || "Unable to load workout templates.");
+  }
+
+  return (((data ?? []) as WorkoutTemplateRow[]) ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    workoutType: row.workout_type,
+    source: row.source,
+    days: parseTemplateDays(row.template_days)
+  }));
+}
+
+export async function saveWorkoutTemplate(
+  client: SupabaseClient,
+  input: {
+    templateId?: string;
+    name: string;
+    description?: string;
+    workoutType: WorkoutType;
+    days: WorkoutTemplateDay[];
+  }
+): Promise<WorkoutTemplate> {
+  const user = await requireUser(client);
+  const payload = {
+    user_id: user.id,
+    name: input.name.trim(),
+    description: input.description?.trim() || null,
+    workout_type: input.workoutType,
+    source: "manual",
+    template_days: input.days,
+    is_active: true,
+    updated_at: new Date().toISOString()
+  };
+
+  if (!payload.name) {
+    throw new Error("Template name is required.");
+  }
+
+  if (input.days.length === 0) {
+    throw new Error("Add at least one day with one exercise before saving a template.");
+  }
+
+  const response = input.templateId
+    ? await client
+        .from("user_workout_templates")
+        .update(payload)
+        .eq("id", input.templateId)
+        .eq("user_id", user.id)
+        .select("id,name,description,workout_type,source,template_days")
+        .single()
+    : await client
+        .from("user_workout_templates")
+        .insert(payload)
+        .select("id,name,description,workout_type,source,template_days")
+        .single();
+
+  if (response.error) {
+    throw new Error(response.error.message || "Unable to save workout template.");
+  }
+
+  const row = response.data as WorkoutTemplateRow;
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    workoutType: row.workout_type,
+    source: row.source,
+    days: parseTemplateDays(row.template_days)
+  };
+}
+
+export async function deleteWorkoutTemplate(client: SupabaseClient, templateId: string): Promise<void> {
+  const user = await requireUser(client);
+
+  const { error } = await client
+    .from("user_workout_templates")
+    .delete()
+    .eq("id", templateId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    throw new Error(error.message || "Unable to delete workout template.");
+  }
 }
 
 export async function submitWorkout(
@@ -173,6 +461,11 @@ export async function submitWorkout(
   input: SubmitWorkoutInput
 ): Promise<SubmitWorkoutResult> {
   const user = await requireUser(client);
+  const exercises = input.exercises.filter((item) => item.exerciseId);
+
+  if (exercises.length === 0) {
+    throw new Error("Add at least one exercise block before submitting.");
+  }
 
   const { data: beforeProfile, error: beforeError } = await client
     .from("profiles")
@@ -209,28 +502,28 @@ export async function submitWorkout(
       source: "manual",
       external_activity_id: null
     },
-    p_exercises: [
-      {
-        exercise_id: input.exercise.exerciseId,
-        order_index: 1,
-        block_id: null,
-        block_type: "straight_set",
-        target_reps: input.exercise.targetReps ?? null,
-        target_weight_kg: input.exercise.targetWeightKg ?? null,
-        notes: input.exercise.notes?.trim() || null,
-        sets: [
-          {
-            set_index: 1,
-            reps: input.exercise.set.reps ?? null,
-            weight_kg: input.exercise.set.weightKg ?? null,
-            duration_seconds: null,
-            distance_m: null,
-            rpe: input.exercise.set.rpe ?? null,
-            is_pr: false
-          }
-        ]
-      }
-    ]
+    p_exercises: exercises.map((exercise, index) => ({
+      exercise_id: exercise.exerciseId,
+      order_index: index + 1,
+      block_id: null,
+      block_type: WORKOUT_BLOCK_TYPES.includes(exercise.blockType ?? "straight_set")
+        ? (exercise.blockType ?? "straight_set")
+        : "straight_set",
+      target_reps: exercise.targetReps ?? null,
+      target_weight_kg: exercise.targetWeightKg ?? null,
+      notes: exercise.notes?.trim() || null,
+      sets: [
+        {
+          set_index: 1,
+          reps: exercise.set.reps ?? null,
+          weight_kg: exercise.set.weightKg ?? null,
+          duration_seconds: exercise.set.durationSeconds ?? null,
+          distance_m: exercise.set.distanceM ?? null,
+          rpe: exercise.set.rpe ?? null,
+          is_pr: false
+        }
+      ]
+    }))
   });
 
   if (logError) {
