@@ -1,1 +1,0 @@
-drop trigger if exists trg_social_interactions_set_updated_at on public.social_interactions;

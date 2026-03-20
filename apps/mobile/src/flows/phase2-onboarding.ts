@@ -1,4 +1,6 @@
-import { createMobileSupabaseClient, Phase2OnboardingService } from "../services";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { Phase2OnboardingService } from "../services";
 import type { Phase2OnboardingInput, Phase2OnboardingResult } from "../services";
 import { type LegalTranslationKey, translateLegalText } from "@kruxt/types";
 
@@ -17,8 +19,7 @@ export const phase2OnboardingChecklist = phase2OnboardingChecklistKeys.map((key)
   translateLegalText(key)
 );
 
-export function createPhase2OnboardingFlow(options: { locale?: string | null } = {}) {
-  const supabase = createMobileSupabaseClient();
+export function createPhase2OnboardingFlow(supabase: SupabaseClient, options: { locale?: string | null } = {}) {
   const service = new Phase2OnboardingService(supabase);
   const checklist = phase2OnboardingChecklistKeys.map((key) =>
     translateLegalText(key, { locale: options.locale })

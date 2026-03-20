@@ -1,6 +1,7 @@
 import type { GuildHallSnapshot, GuildRosterMember } from "@kruxt/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { createMobileSupabaseClient, GymService } from "../services";
+import { GymService } from "../services";
 
 export interface GuildHallFlowOutput {
   snapshot: GuildHallSnapshot;
@@ -14,8 +15,7 @@ export const guildHallChecklist = [
   "Surface pending approvals for staff"
 ] as const;
 
-export function createGuildHallFlow() {
-  const supabase = createMobileSupabaseClient();
+export function createGuildHallFlow(supabase: SupabaseClient) {
   const gyms = new GymService(supabase);
 
   return {

@@ -4,16 +4,31 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "echo 'Configure Expo runtime and run: npx expo start'",
-    "build": "echo 'Mobile build is handled by EAS in beta pipelines'",
+    "dev": "expo start --port 8081",
+    "build": "eas build",
     "lint": "echo 'Add eslint config for mobile app'",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "echo 'Add mobile test suite (jest + react-native-testing-library)'"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.1"
+    "@kruxt/types": "workspace:*",
+    "@kruxt/ui": "workspace:*",
+    "@supabase/supabase-js": "^2.49.1",
+    "expo": "~52.0.0",
+    "expo-font": "~13.0.0",
+    "expo-haptics": "~14.0.0",
+    "expo-splash-screen": "~0.29.0",
+    "expo-router": "~4.0.0",
+    "expo-status-bar": "~2.0.0",
+    "immer": "^10.1.1",
+    "react": "^18.3.1",
+    "react-native": "~0.76.0",
+    "react-native-safe-area-context": "~5.0.0",
+    "react-native-screens": "~4.4.0",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@types/react": "^18.3.0",
     "typescript": "^5.8.2"
   }
 }

@@ -1,1 +1,0 @@
-drop policy if exists challenge_participants_update_self_or_creator on public.challenge_participants;

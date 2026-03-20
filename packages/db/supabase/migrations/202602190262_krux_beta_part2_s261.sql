@@ -1,1 +1,0 @@
-drop policy if exists member_subscriptions_manage_service_or_staff on public.member_subscriptions;
