@@ -7,7 +7,9 @@ import type {
   SupportTicketStatus
 } from "@kruxt/types";
 
-import { createMobileSupabaseClient, KruxtAppError, SupportService, type SupportTicketListOptions } from "../services";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { KruxtAppError, SupportService, type SupportTicketListOptions } from "../services";
 
 export type Phase10SupportCenterStep = "ticket_queue" | "ticket_create" | "conversation" | "automation_approval";
 
@@ -132,8 +134,7 @@ function resolveSelectedTicketId(
   return tickets[0]?.id;
 }
 
-export function createPhase10SupportCenterFlow() {
-  const supabase = createMobileSupabaseClient();
+export function createPhase10SupportCenterFlow(supabase: SupabaseClient) {
   const support = new SupportService(supabase);
 
   const loadSnapshot = async (

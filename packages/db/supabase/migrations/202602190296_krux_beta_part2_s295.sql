@@ -1,1 +1,0 @@
-drop policy if exists integration_webhook_events_service_only on public.integration_webhook_events;

@@ -1,1 +1,0 @@
-drop policy if exists payment_transactions_manage_service_or_staff on public.payment_transactions;

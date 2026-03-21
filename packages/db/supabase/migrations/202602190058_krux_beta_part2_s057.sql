@@ -1,1 +1,0 @@
-drop trigger if exists trg_notification_preferences_set_updated_at on public.notification_preferences;

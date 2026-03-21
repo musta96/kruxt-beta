@@ -1,1 +1,0 @@
-drop policy if exists contract_acceptances_select_self_or_staff on public.contract_acceptances;

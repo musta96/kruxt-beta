@@ -1,0 +1,101 @@
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Sora:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ────────────────────────────────────────────
+   KRUXT Admin — Light theme (default)
+   ──────────────────────────────────────────── */
+@layer base {
+  :root {
+    /* KRUXT semantic tokens (HSL without function wrapper) */
+    --kruxt-bg: 210 20% 97%;
+    --kruxt-surface: 210 14% 100%;
+    --kruxt-panel: 213 16% 95%;
+    --kruxt-accent: 193 100% 60%;
+    --kruxt-text: 215 14% 14%;
+    --kruxt-text-secondary: 217 14% 50%;
+    --kruxt-success: 157 55% 57%;
+    --kruxt-warning: 38 100% 68%;
+    --kruxt-danger: 0 100% 71%;
+    --kruxt-steel: 220 12% 61%;
+
+    /* shadcn/ui variables — light */
+    --background: 210 20% 97%;
+    --foreground: 215 14% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 14% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 14% 14%;
+    --primary: 193 100% 60%;
+    --primary-foreground: 215 30% 10%;
+    --secondary: 213 16% 93%;
+    --secondary-foreground: 215 14% 14%;
+    --muted: 213 16% 93%;
+    --muted-foreground: 217 14% 50%;
+    --accent: 213 16% 93%;
+    --accent-foreground: 215 14% 14%;
+    --destructive: 0 100% 71%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 213 16% 88%;
+    --input: 213 16% 88%;
+    --ring: 193 100% 60%;
+    --radius: 12px;
+  }
+
+  /* ────────────────────────────────────────────
+     KRUXT Admin — Dark theme
+     ──────────────────────────────────────────── */
+  .dark {
+    --kruxt-bg: 216 23% 7%;
+    --kruxt-surface: 216 21% 11%;
+    --kruxt-panel: 217 20% 15%;
+    --kruxt-accent: 193 100% 60%;
+    --kruxt-text: 210 25% 97%;
+    --kruxt-text-secondary: 217 14% 70%;
+    --kruxt-success: 157 55% 57%;
+    --kruxt-warning: 38 100% 68%;
+    --kruxt-danger: 0 100% 71%;
+    --kruxt-steel: 220 12% 61%;
+
+    /* shadcn/ui variables — dark */
+    --background: 216 23% 7%;
+    --foreground: 210 25% 97%;
+    --card: 216 21% 11%;
+    --card-foreground: 210 25% 97%;
+    --popover: 216 21% 11%;
+    --popover-foreground: 210 25% 97%;
+    --primary: 193 100% 60%;
+    --primary-foreground: 215 30% 10%;
+    --secondary: 217 20% 15%;
+    --secondary-foreground: 210 25% 97%;
+    --muted: 217 20% 15%;
+    --muted-foreground: 217 14% 70%;
+    --accent: 217 20% 15%;
+    --accent-foreground: 210 25% 97%;
+    --destructive: 0 100% 71%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 20% 20%;
+    --input: 217 20% 20%;
+    --ring: 193 100% 60%;
+  }
+
+  /* Base typography */
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background font-kruxt-body text-foreground antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-kruxt-headline;
+  }
+}

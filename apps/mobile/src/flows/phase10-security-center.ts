@@ -7,7 +7,9 @@ import type {
   UserTrustedDevice
 } from "@kruxt/types";
 
-import { createMobileSupabaseClient, KruxtAppError, SecurityService } from "../services";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { KruxtAppError, SecurityService } from "../services";
 
 export type Phase10SecurityCenterStep = "settings" | "trusted_devices" | "auth_timeline";
 
@@ -110,8 +112,7 @@ function mapUiError(error: unknown): Phase10SecurityCenterError {
   };
 }
 
-export function createPhase10SecurityCenterFlow() {
-  const supabase = createMobileSupabaseClient();
+export function createPhase10SecurityCenterFlow(supabase: SupabaseClient) {
   const security = new SecurityService(supabase);
 
   const loadSnapshot = async (

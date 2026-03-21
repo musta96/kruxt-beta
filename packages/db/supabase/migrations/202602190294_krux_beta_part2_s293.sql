@@ -1,1 +1,0 @@
-drop policy if exists external_activity_imports_manage_service on public.external_activity_imports;

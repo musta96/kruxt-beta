@@ -1,1 +1,0 @@
-drop policy if exists privacy_requests_select_self_or_service on public.privacy_requests;

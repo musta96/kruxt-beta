@@ -93,3 +93,19 @@ export function createMobileSupabaseClient(config?: MobileSupabaseConfig): Supab
   getClientCache().set(cacheKey, client);
   return client;
 }
+
+/**
+ * Returns the singleton Supabase client, creating it if necessary.
+ * Alias for `createMobileSupabaseClient()` that better communicates intent.
+ */
+export function getMobileSupabaseClient(config?: MobileSupabaseConfig): SupabaseClient {
+  return createMobileSupabaseClient(config);
+}
+
+/**
+ * Resets cached Supabase clients. Call this on logout to ensure
+ * the next session starts with a fresh client instance.
+ */
+export function resetMobileSupabaseClient(): void {
+  getClientCache().clear();
+}

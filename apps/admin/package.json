@@ -4,16 +4,29 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "echo 'Configure Next.js runtime and run: next dev'",
-    "build": "echo 'Admin build is handled by Next.js pipeline'",
-    "lint": "echo 'Add eslint config for admin app'",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "echo 'Add admin test suite (vitest/playwright)'"
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.1"
+    "@kruxt/types": "workspace:*",
+    "@kruxt/ui": "workspace:*",
+    "@supabase/supabase-js": "^2.49.1",
+    "clsx": "^2.1.1",
+    "next": "^14.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.0"
   },
   "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
     "typescript": "^5.8.2"
   }
 }

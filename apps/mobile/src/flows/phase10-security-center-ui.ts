@@ -1,4 +1,5 @@
 import type { UserAuthEvent, UserTrustedDevice } from "@kruxt/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   createPhase10SecurityCenterFlow,
@@ -218,8 +219,8 @@ function toUiMutationResult(result: Phase10SecurityCenterMutationResult): Phase1
   };
 }
 
-export function createPhase10SecurityCenterUiFlow() {
-  const runtime = createPhase10SecurityCenterFlow();
+export function createPhase10SecurityCenterUiFlow(supabase: SupabaseClient) {
+  const runtime = createPhase10SecurityCenterFlow(supabase);
 
   return {
     checklist: [...phase10SecurityCenterUiChecklist],
