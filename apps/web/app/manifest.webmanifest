@@ -1,0 +1,17 @@
+{
+  "name": "KRUXT",
+  "short_name": "KRUXT",
+  "description": "Member-facing web app, organization workspace, and founder control plane for KRUXT.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020915",
+  "theme_color": "#020915",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

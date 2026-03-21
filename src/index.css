@@ -1,0 +1,267 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── KRUXT Design Tokens ─── */
+:root {
+  /* Void/Graphite base */
+  --background: 216 25% 4%;
+  --foreground: 210 20% 94%;
+
+  /* Cards / panels (equipment-panel feel) */
+  --card: 216 20% 8%;
+  --card-foreground: 210 20% 94%;
+
+  /* Elevated panel */
+  --popover: 216 18% 11%;
+  --popover-foreground: 210 20% 94%;
+
+  /* Ion blue accent */
+  --primary: 193 100% 60%;
+  --primary-foreground: 216 25% 4%;
+
+  /* Steel secondary */
+  --secondary: 220 12% 18%;
+  --secondary-foreground: 216 15% 76%;
+
+  /* Muted surfaces */
+  --muted: 216 10% 14%;
+  --muted-foreground: 216 10% 42%;
+
+  /* Accent (ion blue) */
+  --accent: 193 100% 60%;
+  --accent-foreground: 216 25% 4%;
+
+  /* Status */
+  --destructive: 0 100% 70%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 155 60% 55%;
+  --success-foreground: 155 40% 10%;
+  --warning: 38 100% 68%;
+  --warning-foreground: 38 60% 10%;
+  --info: 193 100% 60%;
+  --info-foreground: 216 25% 4%;
+
+  /* Input / border */
+  --border: 216 15% 16%;
+  --input: 216 15% 10%;
+  --ring: 193 100% 60%;
+
+  /* Brand primitives */
+  --ion-blue: 193 100% 60%;
+  --ion-glow: 193 100% 60% / 0.15;
+  --void-dark: 216 25% 4%;
+  --graphite: 216 10% 14%;
+  --steel: 220 14% 38%;
+  --steel-light: 216 15% 76%;
+  --silver: 216 15% 86%;
+
+  /* Shape */
+  --radius: 0.75rem;
+  --radius-sm: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-panel: 1rem;
+  --radius-pill: 999px;
+
+  /* Sidebar (admin shell) */
+  --sidebar-background: 216 20% 6%;
+  --sidebar-foreground: 210 20% 94%;
+  --sidebar-primary: 193 100% 60%;
+  --sidebar-primary-foreground: 216 25% 4%;
+  --sidebar-accent: 216 12% 14%;
+  --sidebar-accent-foreground: 210 20% 94%;
+  --sidebar-border: 216 15% 14%;
+  --sidebar-ring: 193 100% 60%;
+}
+
+/* ─── Base resets ─── */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body leading-relaxed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-image:
+      radial-gradient(1200px 600px at 10% -15%, hsl(var(--primary) / 0.12), transparent 60%),
+      radial-gradient(900px 500px at 95% -5%, hsl(var(--info) / 0.08), transparent 60%),
+      linear-gradient(to bottom, hsl(var(--background)), hsl(var(--background)));
+    background-attachment: fixed;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+/* ─── Component utilities ─── */
+@layer components {
+  /* Equipment-panel card */
+  .panel {
+    @apply bg-card border border-border rounded-panel;
+    box-shadow:
+      inset 0 1px 0 hsl(var(--foreground) / 0.04),
+      0 12px 30px hsl(220 40% 2% / 0.25);
+  }
+
+  /* Panel with glow on hover */
+  .panel-interactive {
+    @apply panel transition-all duration-200;
+  }
+  .panel-interactive:hover {
+    box-shadow: 0 0 20px hsl(var(--ion-blue) / 0.1);
+    border-color: hsl(var(--ion-blue) / 0.3);
+  }
+
+  /* Ion-blue glow ring */
+  .ring-ion {
+    box-shadow: 0 0 0 2px hsl(var(--ion-blue) / 0.5);
+  }
+
+  /* Glow effect */
+  .glow-ion {
+    box-shadow: 0 0 20px hsl(var(--ion-blue) / 0.15);
+  }
+  .glow-ion-strong {
+    box-shadow: 0 0 40px hsl(var(--ion-blue) / 0.25);
+  }
+
+  /* Shimmer skeleton */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--graphite)) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    @apply animate-shimmer rounded-md;
+  }
+
+  /* Primary CTA button */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 w-full py-3 px-5 rounded-lg font-display font-semibold text-sm
+           bg-primary text-primary-foreground
+           shadow-[0_10px_24px_hsl(var(--primary)/0.2)]
+           hover:brightness-110
+           active:scale-[0.98] transition-all duration-150
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Ghost/secondary button */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-lg font-display font-semibold text-sm
+           border border-border bg-card/35 text-foreground hover:bg-muted/45
+           active:scale-[0.98] transition-all duration-150
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Compact button */
+  .btn-compact {
+    @apply inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md font-display font-semibold text-xs
+           bg-secondary/90 text-secondary-foreground border border-border/70 hover:bg-muted/60
+           active:scale-[0.98] transition-all duration-150
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Form input */
+  .input-field {
+    @apply w-full px-3.5 py-2.5 rounded-lg bg-input border border-border
+           text-foreground placeholder:text-muted-foreground
+           focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent
+           transition-colors font-body text-sm;
+  }
+
+  /* Validation error text */
+  .field-error {
+    @apply text-destructive text-xs mt-1 font-medium;
+  }
+
+  /* Screen wrapper — iOS safe-area */
+  .screen {
+    @apply min-h-screen flex flex-col px-5 pt-14 pb-10 overflow-y-auto;
+  }
+
+  /* Progress bar */
+  .progress-track {
+    @apply h-1 rounded-full bg-muted overflow-hidden;
+  }
+  .progress-fill {
+    @apply h-full rounded-full bg-primary transition-all duration-500;
+  }
+
+  /* Badge / sigil */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full
+           text-xs font-semibold font-display;
+  }
+  .badge-ion {
+    @apply badge bg-primary/15 text-primary;
+  }
+  .badge-steel {
+    @apply badge bg-secondary text-secondary-foreground;
+  }
+  .badge-success {
+    @apply badge bg-success/15 text-success;
+  }
+  .badge-warning {
+    @apply badge bg-warning/15 text-warning;
+  }
+  .badge-danger {
+    @apply badge bg-destructive/15 text-destructive;
+  }
+
+  /* List row */
+  .list-row {
+    @apply flex items-center gap-3 px-4 py-3 border-b border-border
+           transition-colors;
+  }
+  .list-row:active {
+    @apply bg-muted/50;
+  }
+
+  /* Data table */
+  .data-table {
+    @apply w-full text-sm border-separate border-spacing-0;
+  }
+  .data-table thead {
+    @apply border-b border-border;
+  }
+  .data-table th {
+    @apply text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em]
+           px-4 py-2.5 font-display;
+  }
+  .data-table td {
+    @apply px-4 py-3 border-b border-border/50 text-foreground align-middle;
+  }
+  .data-table tbody tr:nth-child(even) td {
+    @apply bg-muted/10;
+  }
+  .data-table tr:hover td {
+    @apply bg-muted/35;
+  }
+
+  /* Tab strip */
+  .tab-strip {
+    @apply flex panel p-1 gap-1;
+  }
+  .tab-item {
+    @apply flex-1 py-2 px-4 rounded-md text-sm font-semibold font-display
+           transition-colors text-muted-foreground;
+  }
+  .tab-item[aria-selected="true"] {
+    @apply bg-primary text-primary-foreground;
+  }
+
+  /* Stat display (monospaced) */
+  .stat-value {
+    @apply font-mono text-2xl font-bold text-foreground tabular-nums;
+  }
+  .stat-label {
+    @apply text-xs font-semibold text-muted-foreground uppercase tracking-wider font-display;
+  }
+}

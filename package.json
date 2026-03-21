@@ -5,9 +5,18 @@
   "description": "KRUXT monorepo (mobile, admin, db, shared types)",
   "packageManager": "pnpm@10.6.5",
   "scripts": {
-    "build": "turbo run build",
-    "build:dev": "node -e \"console.log('build:dev check: monorepo scaffold ready')\"",
-    "dev": "turbo run dev --parallel",
+    "build": "npm run web:build",
+    "build:packages": "turbo run build",
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build",
+    "web:start": "npm --prefix apps/web run start",
+    "web:typecheck": "npm --prefix apps/web run typecheck",
+    "mobile:dev": "npm --prefix apps/mobile run dev",
+    "mobile:ios": "npm --prefix apps/mobile run ios",
+    "mobile:android": "npm --prefix apps/mobile run android",
+    "mobile:typecheck": "npm --prefix apps/mobile run typecheck",
+    "build:dev": "npm run web:build",
+    "dev": "npm run web:dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
@@ -15,6 +24,23 @@
   },
   "devDependencies": {
     "turbo": "^2.4.4",
-    "typescript": "^5.8.2"
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.97.0",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react-swc": "^4.2.3",
+    "autoprefixer": "^10.4.24",
+    "framer-motion": "^11.18.2",
+    "lovable-tagger": "^1.1.13",
+    "lucide-react": "^0.575.0",
+    "postcss": "^8.5.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.3",
+    "tailwindcss": "^3.4.19",
+    "vite": "^5.4.21",
+    "zod": "^4.3.6"
   }
 }

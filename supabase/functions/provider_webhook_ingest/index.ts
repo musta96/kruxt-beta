@@ -1,5 +1,8 @@
 import { parseJson, jsonResponse } from "../_shared/http.ts";
 import { serviceClient } from "../_shared/supabase.ts";
+import { requireAuth, isAuthResult } from "../_shared/auth.ts";
+import { safeErrorResponse } from "../_shared/errors.ts";
+import { z } from "npm:zod@3";
 import {
   asRecord,
   asString,
@@ -8,19 +11,20 @@ import {
   isProviderEnabled,
   normalizeWebhookEventId,
   sha256Hex,
+  INTEGRATION_PROVIDERS,
   type IntegrationProvider
 } from "../_shared/integrations.ts";
 
-interface WebhookPayload {
-  provider: IntegrationProvider;
-  providerEventId?: string;
-  eventType: string;
-  payload?: Record<string, unknown>;
-  payloadHash?: string;
-  userId?: string;
-  connectionId?: string;
-  providerUserId?: string;
-}
+const WebhookPayloadSchema = z.object({
+  provider: z.enum(INTEGRATION_PROVIDERS),
+  providerEventId: z.string().max(500).optional(),
+  eventType: z.string().min(1).max(200),
+  payload: z.record(z.unknown()).optional(),
+  payloadHash: z.string().max(128).optional(),
+  userId: z.string().uuid().optional(),
+  connectionId: z.string().uuid().optional(),
+  providerUserId: z.string().max(500).optional(),
+});
 
 type WebhookEventRow = {
   id: string;
@@ -146,17 +150,20 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
+  const auth = await requireAuth(request);
+  if (!isAuthResult(auth)) return auth;
+
   try {
-    const body = await parseJson<WebhookPayload>(request);
-    if (!isIntegrationProvider(body.provider)) {
-      return jsonResponse({ accepted: false, error: "Unsupported provider." }, 400);
+    const raw = await parseJson<unknown>(request);
+    const parsed = WebhookPayloadSchema.safeParse(raw);
+    if (!parsed.success) {
+      return jsonResponse({
+        error: "Validation failed",
+        issues: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      }, 400);
     }
 
-    const eventType = asString(body.eventType);
-    if (!eventType) {
-      return jsonResponse({ accepted: false, error: "eventType is required." }, 400);
-    }
-
+    const body = parsed.data;
     const payload = asRecord(body.payload);
     const payloadHash = asString(body.payloadHash) ?? (await sha256Hex(payload));
     const providerEventId = normalizeWebhookEventId(body.provider, asString(body.providerEventId), payloadHash);
@@ -165,7 +172,7 @@ Deno.serve(async (request) => {
     const webhookRow = {
       provider: body.provider,
       provider_event_id: providerEventId,
-      event_type: eventType,
+      event_type: body.eventType,
       payload_hash: payloadHash,
       payload_json: payload,
       processing_status: providerEnabled ? "pending" : "ignored",
@@ -290,6 +297,6 @@ Deno.serve(async (request) => {
       webhookEventId: webhookEvent.id
     });
   } catch (error) {
-    return jsonResponse({ accepted: false, error: String(error) }, 500);
+    return safeErrorResponse(error, "provider_webhook_ingest");
   }
 });

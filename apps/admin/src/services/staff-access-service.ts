@@ -40,7 +40,27 @@ export class StaffAccessService {
     throwIfAdminError(error, "ADMIN_STAFF_ACCESS_CHECK_FAILED", "Unable to validate staff access.");
 
     if (!data) {
-      throw new KruxtAdminError("ADMIN_STAFF_ACCESS_DENIED", "Gym staff access is required.");
+      const { data: founderData, error: founderError } = await this.supabase
+        .from("platform_operator_accounts")
+        .select("role,is_active")
+        .eq("user_id", resolvedUserId)
+        .eq("role", "founder")
+        .eq("is_active", true)
+        .maybeSingle();
+
+      throwIfAdminError(founderError, "ADMIN_STAFF_ACCESS_CHECK_FAILED", "Unable to validate staff access.");
+
+      if (!founderData) {
+        throw new KruxtAdminError("ADMIN_STAFF_ACCESS_DENIED", "Gym staff access is required.");
+      }
+
+      return {
+        id: "founder-override",
+        gym_id: gymId,
+        user_id: resolvedUserId,
+        role: "leader",
+        membership_status: "active"
+      };
     }
 
     return data as MembershipRow;

@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "KRUXT",
+    "slug": "kruxt-mobile",
+    "scheme": "kruxt",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kruxt.mobile"
+    },
+    "android": {
+      "package": "com.kruxt.mobile"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

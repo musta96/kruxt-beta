@@ -1,15 +1,42 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export interface MobileSupabaseConfig {
   url?: string;
   anonKey?: string;
 }
 
+const GLOBAL_CLIENT_CACHE_KEY = "__kruxtSupabaseBrowserClients";
+
+function getClientCache(): Map<string, SupabaseClient> {
+  const scope = globalThis as typeof globalThis & {
+    [GLOBAL_CLIENT_CACHE_KEY]?: Map<string, SupabaseClient>;
+  };
+
+  if (!scope[GLOBAL_CLIENT_CACHE_KEY]) {
+    scope[GLOBAL_CLIENT_CACHE_KEY] = new Map<string, SupabaseClient>();
+  }
+
+  return scope[GLOBAL_CLIENT_CACHE_KEY];
+}
+
+function buildAuthStorageKey(url: string): string {
+  try {
+    return `kruxt-auth:${new URL(url).host}`;
+  } catch {
+    return "kruxt-auth";
+  }
+}
+
 function readEnv(candidates: string[]): string | undefined {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  const viteEnv =
+    typeof import.meta !== "undefined"
+      ? ((import.meta as { env?: Record<string, string | undefined> }).env ?? undefined)
+      : undefined;
 
   for (const key of candidates) {
-    const value = env?.[key];
+    const value = env?.[key] ?? viteEnv?.[key];
     if (value && value.length > 0) {
       return value;
     }
@@ -18,42 +45,53 @@ function readEnv(candidates: string[]): string | undefined {
   return undefined;
 }
 
-let _singleton: SupabaseClient | null = null;
-let _singletonConfig: { url: string; anonKey: string } | null = null;
-
-function resolveConfig(config?: MobileSupabaseConfig): { url: string; anonKey: string } {
-  const url = config?.url ?? readEnv(["EXPO_PUBLIC_SUPABASE_URL", "SUPABASE_URL"]);
-  const anonKey = config?.anonKey ?? readEnv(["EXPO_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY"]);
+export function getMobileSupabaseConfig(config?: MobileSupabaseConfig): { url: string; anonKey: string } {
+  const url = config?.url ?? readEnv([
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "EXPO_PUBLIC_SUPABASE_URL",
+    "VITE_SUPABASE_URL",
+    "SUPABASE_URL"
+  ]);
+  const anonKey = config?.anonKey ?? readEnv([
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY",
+    "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "VITE_SUPABASE_ANON_KEY",
+    "VITE_SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_ANON_KEY"
+  ]);
 
   if (!url || !anonKey) {
-    throw new Error("Missing Supabase mobile config. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.");
+    throw new Error(
+      "Missing Supabase mobile config. Set NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_ANON_KEY (or EXPO_PUBLIC_/VITE_ equivalents)."
+    );
   }
 
   return { url, anonKey };
 }
 
-/**
- * Creates or returns the singleton Supabase client for the mobile app.
- * If called multiple times, returns the same instance (singleton pattern).
- * Pass `config` only on first call or after `resetMobileSupabaseClient()`.
- */
 export function createMobileSupabaseClient(config?: MobileSupabaseConfig): SupabaseClient {
-  if (_singleton) {
-    return _singleton;
+  const { url, anonKey } = getMobileSupabaseConfig(config);
+
+  const cacheKey = `${url}::${anonKey}`;
+  const cachedClient = getClientCache().get(cacheKey);
+  if (cachedClient) {
+    return cachedClient;
   }
 
-  const resolved = resolveConfig(config);
-  _singletonConfig = resolved;
-
-  _singleton = createClient(resolved.url, resolved.anonKey, {
+  const client = createClient(url, anonKey, {
     auth: {
+      storage: AsyncStorage,
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false
+      detectSessionInUrl: false,
+      storageKey: buildAuthStorageKey(url)
     }
   });
 
-  return _singleton;
+  getClientCache().set(cacheKey, client);
+  return client;
 }
 
 /**
@@ -65,10 +103,9 @@ export function getMobileSupabaseClient(config?: MobileSupabaseConfig): Supabase
 }
 
 /**
- * Resets the singleton Supabase client. Call this on logout to ensure
+ * Resets cached Supabase clients. Call this on logout to ensure
  * the next session starts with a fresh client instance.
  */
 export function resetMobileSupabaseClient(): void {
-  _singleton = null;
-  _singletonConfig = null;
+  getClientCache().clear();
 }

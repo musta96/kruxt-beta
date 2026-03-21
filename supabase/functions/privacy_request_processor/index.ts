@@ -1,5 +1,22 @@
 import { jsonResponse, parseJsonOr } from "../_shared/http.ts";
 import { serviceClient } from "../_shared/supabase.ts";
+import { requireAuth, isAuthResult } from "../_shared/auth.ts";
+import { safeErrorResponse } from "../_shared/errors.ts";
+import { z } from "npm:zod@3";
+
+const PrivacyQueueSchema = z.object({
+  triageLimit: z.number().int().min(1).max(200).optional(),
+  overdueLimit: z.number().int().min(1).max(500).optional(),
+  exportQueueLimit: z.number().int().min(1).max(200).optional(),
+  exportClaimLimit: z.number().int().min(1).max(50).optional(),
+  exportUrlTtlSeconds: z.number().int().min(300).max(3600).optional(),
+  exportRetryDelaySeconds: z.number().int().min(60).max(86400).optional(),
+  exportMaxRetries: z.number().int().min(1).max(20).optional(),
+  deleteQueueLimit: z.number().int().min(1).max(200).optional(),
+  deleteClaimLimit: z.number().int().min(1).max(50).optional(),
+  deleteRetryDelaySeconds: z.number().int().min(60).max(86400).optional(),
+  deleteMaxRetries: z.number().int().min(1).max(20).optional(),
+});
 
 interface PrivacyQueuePayload {
   triageLimit?: number;
@@ -86,14 +103,26 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
+  const auth = await requireAuth(request);
+  if (!isAuthResult(auth)) return auth;
+
   try {
+    const raw = await parseJsonOr<unknown>(request, {});
+    const parsed = PrivacyQueueSchema.safeParse(raw);
+    if (!parsed.success) {
+      return jsonResponse({
+        error: "Validation failed",
+        issues: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      }, 400);
+    }
+
     const supabase = serviceClient();
-    const payload = await parseJsonOr<PrivacyQueuePayload>(request, {});
+    const payload = parsed.data;
     const triageLimit = clamp(payload.triageLimit, 1, 200, 25);
     const overdueLimit = clamp(payload.overdueLimit, 1, 500, 100);
     const exportQueueLimit = clamp(payload.exportQueueLimit, 1, 200, 40);
     const exportClaimLimit = clamp(payload.exportClaimLimit, 1, 50, 8);
-    const exportUrlTtlSeconds = clamp(payload.exportUrlTtlSeconds, 300, 604800, 86400);
+    const exportUrlTtlSeconds = clamp(payload.exportUrlTtlSeconds, 300, 3600, 3600);
     const exportRetryDelaySeconds = clamp(payload.exportRetryDelaySeconds, 60, 86400, 900);
     const exportMaxRetries = clamp(payload.exportMaxRetries, 1, 20, 5);
     const deleteQueueLimit = clamp(payload.deleteQueueLimit, 1, 200, 25);
@@ -379,6 +408,6 @@ Deno.serve(async (request) => {
       deleteErrors
     });
   } catch (error) {
-    return jsonResponse({ error: String(error) }, 500);
+    return safeErrorResponse(error, "privacy_request_processor");
   }
 });

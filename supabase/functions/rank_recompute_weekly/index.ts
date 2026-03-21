@@ -1,18 +1,19 @@
 import { jsonResponse, parseJsonOr } from "../_shared/http.ts";
 import { serviceClient } from "../_shared/supabase.ts";
+import { requireAuth, isAuthResult } from "../_shared/auth.ts";
+import { safeErrorResponse } from "../_shared/errors.ts";
+import { z } from "npm:zod@3";
 
-type RecomputeTimeframe = "daily" | "weekly" | "monthly" | "all_time";
-
-interface RecomputeInput {
-  timeframe?: RecomputeTimeframe;
-  leaderboardIds?: string[];
-  limit?: number;
-  determinismProbeCount?: number;
-}
+const RecomputeInputSchema = z.object({
+  timeframe: z.enum(["daily", "weekly", "monthly", "all_time"]).optional(),
+  leaderboardIds: z.array(z.string().uuid()).max(200).optional(),
+  limit: z.number().int().min(1).max(500).optional(),
+  determinismProbeCount: z.number().int().min(0).max(25).optional(),
+});
 
 interface LeaderboardRow {
   id: string;
-  timeframe: RecomputeTimeframe;
+  timeframe: "daily" | "weekly" | "monthly" | "all_time";
   starts_at: string;
   ends_at: string;
 }
@@ -80,13 +81,21 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
+  const auth = await requireAuth(request);
+  if (!isAuthResult(auth)) return auth;
+
   try {
-    const body = await parseJsonOr<RecomputeInput>(request, {});
-    const timeframe = body.timeframe ?? "weekly";
-    if (!["daily", "weekly", "monthly", "all_time"].includes(timeframe)) {
-      return jsonResponse({ error: "Invalid timeframe." }, 400);
+    const raw = await parseJsonOr<unknown>(request, {});
+    const parsed = RecomputeInputSchema.safeParse(raw);
+    if (!parsed.success) {
+      return jsonResponse({
+        error: "Validation failed",
+        issues: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      }, 400);
     }
 
+    const body = parsed.data;
+    const timeframe = body.timeframe ?? "weekly";
     const limit = Math.min(Math.max(body.limit ?? 100, 1), 500);
     const requestedDeterminismProbeCount = Math.min(Math.max(body.determinismProbeCount ?? 0, 0), 25);
     const supabase = serviceClient();
@@ -194,6 +203,6 @@ Deno.serve(async (request) => {
       determinismFailures
     });
   } catch (error) {
-    return jsonResponse({ error: String(error) }, 500);
+    return safeErrorResponse(error, "rank_recompute_weekly");
   }
 });
