@@ -64,6 +64,13 @@ export function createAdminSupabaseClient(config?: AdminSupabaseConfig): Supabas
     ]);
 
   if (!url || !anonKey) {
+    // During Next.js static generation / build, env vars may not be available.
+    // Return a placeholder client that will be replaced on the real client-side render.
+    const placeholder = "https://placeholder.supabase.co";
+    const placeholderKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder";
+    if (typeof window === "undefined") {
+      return createClient(placeholder, placeholderKey);
+    }
     throw new Error(
       "Missing Supabase admin config. Set NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_ANON_KEY (or EXPO_PUBLIC_/VITE_ equivalents)."
     );

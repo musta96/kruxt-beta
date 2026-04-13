@@ -5,28 +5,13 @@ import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorBanner } from "@/components/error-banner";
 import { PageSkeleton } from "@/components/loading-skeleton";
+import { useGym } from "@/contexts/gym-context";
+import { useServices } from "@/hooks/use-services";
+import { useAsync } from "@/hooks/use-async";
 
-interface CheckinEntry {
-  id: string;
-  memberName: string;
-  memberEmail: string;
-  method: "nfc" | "qr" | "manual" | "kiosk";
-  timestamp: string;
-  className: string | null;
-}
-
-const mockCheckins: CheckinEntry[] = [
-  { id: "1", memberName: "Mia Zhang", memberEmail: "mia.z@email.com", method: "nfc", timestamp: "10:15 AM", className: "Strength Foundations" },
-  { id: "2", memberName: "Luna Martinez", memberEmail: "luna.m@email.com", method: "manual", timestamp: "09:02 AM", className: null },
-  { id: "3", memberName: "Marcus Rivera", memberEmail: "marcus@email.com", method: "nfc", timestamp: "08:30 AM", className: "HIIT Blast" },
-  { id: "4", memberName: "Jake Thompson", memberEmail: "jake.t@email.com", method: "qr", timestamp: "07:15 AM", className: null },
-  { id: "5", memberName: "David Kim", memberEmail: "david.kim@email.com", method: "kiosk", timestamp: "06:00 AM", className: "HIIT Blast" },
-  { id: "6", memberName: "Aisha Johnson", memberEmail: "aisha.j@email.com", method: "nfc", timestamp: "06:02 AM", className: "HIIT Blast" },
-  { id: "7", memberName: "Elena Park", memberEmail: "elena.park@email.com", method: "qr", timestamp: "05:55 AM", className: null },
-];
-
-const methodBadge: Record<CheckinEntry["method"], { label: string; variant: "default" | "success" | "info" | "warning" }> = {
+const methodBadge: Record<string, { label: string; variant: "default" | "success" | "info" | "warning" }> = {
   nfc: { label: "NFC", variant: "default" },
   qr: { label: "QR", variant: "info" },
   manual: { label: "Manual", variant: "warning" },
@@ -34,19 +19,33 @@ const methodBadge: Record<CheckinEntry["method"], { label: string; variant: "def
 };
 
 export default function CheckinsPage() {
-  const [loading] = useState(false);
+  const { gymId } = useGym();
+  const { ops } = useServices();
   const [search, setSearch] = useState("");
 
-  if (loading) {
-    return <PageSkeleton />;
+  const { status, data, error, refetch } = useAsync(
+    () => ops.listRecentCheckins(gymId),
+    [gymId]
+  );
+
+  if (status === "loading" || status === "idle") return <PageSkeleton />;
+
+  if (status === "error") {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Check-ins" description="Live check-in feed and today's attendance." />
+        <ErrorBanner message={error} onRetry={refetch} />
+      </div>
+    );
   }
 
-  const filtered = mockCheckins.filter(
-    (c) =>
-      !search ||
-      c.memberName.toLowerCase().includes(search.toLowerCase()) ||
-      c.memberEmail.toLowerCase().includes(search.toLowerCase())
-  );
+  const checkins = data ?? [];
+
+  const filtered = checkins.filter((c) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (c.userId ?? "").toLowerCase().includes(q);
+  });
 
   return (
     <div className="space-y-6">
@@ -58,24 +57,21 @@ export default function CheckinsPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
           label="Today's Check-ins"
-          value={47}
-          trend={{ value: "+8%", positive: true }}
-          subtext="vs yesterday"
+          value={checkins.length}
           accent="success"
         />
         <StatCard
-          label="Peak Hour"
-          value="6-7 AM"
-          subtext="14 check-ins"
+          label="Methods Used"
+          value={new Set(checkins.map((c) => c.sourceChannel)).size}
+          subtext="distinct methods"
         />
         <StatCard
-          label="Avg Daily"
-          value={42}
-          subtext="last 30 days"
+          label="Total Records"
+          value={checkins.length}
+          subtext="last 200"
         />
       </div>
 
-      {/* Live feed */}
       <div className="rounded-card border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-3">
@@ -109,44 +105,41 @@ export default function CheckinsPage() {
           <div className="px-5 py-12">
             <EmptyState
               title="No check-ins found"
-              description="No check-ins match your search criteria."
+              description={checkins.length === 0 ? "No check-ins recorded yet." : "No check-ins match your search."}
             />
           </div>
         ) : (
           <div className="divide-y divide-border">
             {filtered.map((checkin) => {
-              const badge = methodBadge[checkin.method];
+              const badge = methodBadge[checkin.sourceChannel ?? "manual"] ?? methodBadge.manual;
               return (
                 <div
                   key={checkin.id}
                   className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-kruxt-panel/30"
                 >
-                  {/* Avatar */}
                   <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-kruxt-accent/15 text-xs font-bold text-kruxt-accent">
-                    {checkin.memberName
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
+                    CI
                   </div>
-
-                  {/* Info */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-foreground">
-                        {checkin.memberName}
+                        {checkin.userId ?? "Unknown"}
                       </p>
                       <StatusBadge label={badge.label} variant={badge.variant} />
                     </div>
-                    {checkin.className && (
+                    {checkin.classId && (
                       <p className="text-xs text-muted-foreground">
-                        Class: {checkin.className}
+                        Class: {checkin.classId}
                       </p>
                     )}
                   </div>
-
-                  {/* Time */}
                   <span className="text-sm tabular-nums text-muted-foreground font-kruxt-mono">
-                    {checkin.timestamp}
+                    {checkin.checkedInAt
+                      ? new Date(checkin.checkedInAt).toLocaleTimeString("en-US", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "—"}
                   </span>
                 </div>
               );

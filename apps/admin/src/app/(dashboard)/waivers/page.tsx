@@ -1,111 +1,95 @@
 "use client";
 
-import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { DataTable, type Column } from "@/components/data-table";
 import { StatusBadge, statusToVariant } from "@/components/status-badge";
+import { ErrorBanner } from "@/components/error-banner";
 import { PageSkeleton } from "@/components/loading-skeleton";
+import { useGym } from "@/contexts/gym-context";
+import { useServices } from "@/hooks/use-services";
+import { useAsync } from "@/hooks/use-async";
+import type { Waiver } from "@kruxt/types";
 
-interface WaiverRecord {
-  id: string;
-  memberName: string;
-  memberEmail: string;
-  waiverType: string;
-  status: "signed" | "pending" | "expired" | "revoked";
-  signedAt: string | null;
-  expiresAt: string | null;
-}
-
-interface WaiverTemplate {
-  id: string;
-  name: string;
-  version: string;
-  lastUpdated: string;
-  signedCount: number;
-}
-
-const mockTemplates: WaiverTemplate[] = [
-  { id: "t1", name: "Liability Waiver", version: "v2.3", lastUpdated: "2026-02-15", signedCount: 312 },
-  { id: "t2", name: "Health Questionnaire", version: "v1.8", lastUpdated: "2026-01-20", signedCount: 298 },
-  { id: "t3", name: "Photo Release", version: "v1.0", lastUpdated: "2025-11-10", signedCount: 245 },
-  { id: "t4", name: "Auto-Renewal Agreement", version: "v3.1", lastUpdated: "2026-03-01", signedCount: 189 },
-];
-
-const mockWaivers: WaiverRecord[] = [
-  { id: "w1", memberName: "Sarah Chen", memberEmail: "sarah.chen@email.com", waiverType: "Liability Waiver", status: "pending", signedAt: null, expiresAt: null },
-  { id: "w2", memberName: "Elena Park", memberEmail: "elena.park@email.com", waiverType: "Health Questionnaire", status: "signed", signedAt: "2026-03-17", expiresAt: "2027-03-17" },
-  { id: "w3", memberName: "Marcus Rivera", memberEmail: "marcus@email.com", waiverType: "Liability Waiver", status: "signed", signedAt: "2025-09-15", expiresAt: "2026-09-15" },
-  { id: "w4", memberName: "Tom Reeves", memberEmail: "tom.r@email.com", waiverType: "Photo Release", status: "expired", signedAt: "2025-03-01", expiresAt: "2026-03-01" },
-  { id: "w5", memberName: "Sarah Chen", memberEmail: "sarah.chen@email.com", waiverType: "Health Questionnaire", status: "pending", signedAt: null, expiresAt: null },
-  { id: "w6", memberName: "Jake Thompson", memberEmail: "jake.t@email.com", waiverType: "Auto-Renewal Agreement", status: "signed", signedAt: "2026-03-05", expiresAt: null },
-  { id: "w7", memberName: "Ryan Okafor", memberEmail: "ryan.o@email.com", waiverType: "Liability Waiver", status: "revoked", signedAt: "2025-10-20", expiresAt: null },
-  { id: "w8", memberName: "Mia Zhang", memberEmail: "mia.z@email.com", waiverType: "Liability Waiver", status: "signed", signedAt: "2026-01-05", expiresAt: "2027-01-05" },
-];
-
-const columns: Column<WaiverRecord>[] = [
+const columns: Column<Waiver>[] = [
   {
-    key: "member",
-    header: "Member",
+    key: "title",
+    header: "Waiver",
     sortable: true,
     render: (row) => (
       <div>
-        <p className="font-medium text-foreground">{row.memberName}</p>
-        <p className="text-xs text-muted-foreground">{row.memberEmail}</p>
+        <p className="font-medium text-foreground">{row.title}</p>
+        <p className="text-xs text-muted-foreground">{row.languageCode}</p>
       </div>
     ),
   },
   {
-    key: "waiverType",
-    header: "Waiver Type",
+    key: "policyVersion",
+    header: "Version",
     render: (row) => (
-      <span className="text-sm text-muted-foreground">{row.waiverType}</span>
+      <StatusBadge label={row.policyVersion ?? "v1"} variant="default" />
     ),
   },
   {
-    key: "status",
+    key: "isActive",
     header: "Status",
     render: (row) => (
-      <StatusBadge label={row.status} variant={statusToVariant(row.status)} dot />
+      <StatusBadge label={row.isActive ? "active" : "inactive"} variant={row.isActive ? "success" : "default"} dot />
     ),
   },
   {
-    key: "signedAt",
-    header: "Signed Date",
+    key: "createdAt",
+    header: "Created",
     sortable: true,
-    render: (row) =>
-      row.signedAt ? (
-        <span className="text-sm tabular-nums text-muted-foreground font-kruxt-mono">
-          {row.signedAt}
-        </span>
-      ) : (
-        <span className="text-xs text-muted-foreground">--</span>
-      ),
+    render: (row) => (
+      <span className="text-sm tabular-nums text-muted-foreground font-kruxt-mono">
+        {row.createdAt
+          ? new Date(row.createdAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })
+          : "—"}
+      </span>
+    ),
   },
   {
-    key: "expiresAt",
-    header: "Expires",
-    render: (row) =>
-      row.expiresAt ? (
-        <span className="text-sm tabular-nums text-muted-foreground font-kruxt-mono">
-          {row.expiresAt}
-        </span>
-      ) : (
-        <span className="text-xs text-muted-foreground">N/A</span>
-      ),
+    key: "actions",
+    header: "",
+    className: "w-12",
+    render: () => (
+      <button className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-kruxt-panel hover:text-foreground">
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+        </svg>
+      </button>
+    ),
   },
 ];
 
 export default function WaiversPage() {
-  const [loading] = useState(false);
+  const { gymId } = useGym();
+  const { ops } = useServices();
 
-  if (loading) {
-    return <PageSkeleton />;
+  const { status, data, error, refetch } = useAsync(
+    () => ops.listWaivers(gymId),
+    [gymId]
+  );
+
+  if (status === "loading" || status === "idle") return <PageSkeleton />;
+
+  if (status === "error") {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Waivers & Contracts" description="Manage waiver templates, signatures, and compliance." />
+        <ErrorBanner message={error} onRetry={refetch} />
+      </div>
+    );
   }
 
-  const pendingCount = mockWaivers.filter((w) => w.status === "pending").length;
-  const signedCount = mockWaivers.filter((w) => w.status === "signed").length;
-  const expiredCount = mockWaivers.filter((w) => w.status === "expired").length;
+  const waivers = data ?? [];
+  const activeCount = waivers.filter((w) => w.isActive).length;
+  const draftCount = waivers.filter((w) => !w.isActive).length;
 
   return (
     <div className="space-y-6">
@@ -120,47 +104,24 @@ export default function WaiversPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Pending Signatures" value={pendingCount} accent="warning" />
-        <StatCard label="Active Signed" value={signedCount} accent="success" />
-        <StatCard label="Expired" value={expiredCount} accent="danger" />
+        <StatCard label="Active Waivers" value={activeCount} accent="success" />
+        <StatCard label="Drafts" value={draftCount} accent="warning" />
+        <StatCard label="Total Templates" value={waivers.length} accent="default" />
       </div>
 
-      {/* Templates */}
-      <div className="rounded-card border border-border bg-card">
-        <div className="border-b border-border px-5 py-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground font-kruxt-headline">
-            Waiver Templates
-          </h2>
+      {waivers.length === 0 ? (
+        <div className="rounded-card border border-border bg-card p-8 text-center">
+          <p className="text-sm text-muted-foreground">No waiver templates yet. Create your first template.</p>
         </div>
-        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
-          {mockTemplates.map((tpl) => (
-            <div
-              key={tpl.id}
-              className="rounded-lg border border-border bg-kruxt-panel p-4 transition-colors hover:border-kruxt-accent/30"
-            >
-              <p className="text-sm font-medium text-foreground">{tpl.name}</p>
-              <div className="mt-2 flex items-center gap-2">
-                <StatusBadge label={tpl.version} variant="default" />
-                <span className="text-xs text-muted-foreground">
-                  {tpl.signedCount} signed
-                </span>
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Updated {tpl.lastUpdated}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Waiver records */}
-      <DataTable
-        columns={columns}
-        data={mockWaivers}
-        keyExtractor={(row) => row.id}
-        searchable
-        searchPlaceholder="Search waivers..."
-      />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={waivers}
+          keyExtractor={(row) => row.id}
+          searchable
+          searchPlaceholder="Search waivers..."
+        />
+      )}
     </div>
   );
 }
