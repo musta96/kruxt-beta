@@ -6,30 +6,12 @@ import { StatCard } from "@/components/stat-card";
 import { DataTable, type Column } from "@/components/data-table";
 import { StatusBadge, statusToVariant } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorBanner } from "@/components/error-banner";
 import { PageSkeleton } from "@/components/loading-skeleton";
-
-interface Member {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  status: string;
-  joinedAt: string;
-  lastCheckin: string | null;
-}
-
-const mockMembers: Member[] = [
-  { id: "1", name: "Marcus Rivera", email: "marcus@email.com", role: "member", status: "active", joinedAt: "2025-09-15", lastCheckin: "2026-03-18 08:30" },
-  { id: "2", name: "Sarah Chen", email: "sarah.chen@email.com", role: "member", status: "pending", joinedAt: "2026-03-17", lastCheckin: null },
-  { id: "3", name: "Jake Thompson", email: "jake.t@email.com", role: "member", status: "active", joinedAt: "2025-11-02", lastCheckin: "2026-03-18 07:15" },
-  { id: "4", name: "Elena Park", email: "elena.park@email.com", role: "member", status: "trial", joinedAt: "2026-03-10", lastCheckin: "2026-03-17 16:45" },
-  { id: "5", name: "David Kim", email: "david.kim@email.com", role: "coach", status: "active", joinedAt: "2025-06-20", lastCheckin: "2026-03-18 06:00" },
-  { id: "6", name: "Aisha Johnson", email: "aisha.j@email.com", role: "member", status: "active", joinedAt: "2025-08-14", lastCheckin: "2026-03-16 19:30" },
-  { id: "7", name: "Tom Reeves", email: "tom.r@email.com", role: "member", status: "suspended", joinedAt: "2025-04-01", lastCheckin: "2026-02-28 10:00" },
-  { id: "8", name: "Luna Martinez", email: "luna.m@email.com", role: "admin", status: "active", joinedAt: "2025-01-15", lastCheckin: "2026-03-18 09:00" },
-  { id: "9", name: "Ryan Okafor", email: "ryan.o@email.com", role: "member", status: "cancelled", joinedAt: "2025-10-20", lastCheckin: "2026-01-15 14:30" },
-  { id: "10", name: "Mia Zhang", email: "mia.z@email.com", role: "member", status: "active", joinedAt: "2026-01-05", lastCheckin: "2026-03-18 10:15" },
-];
+import { useGym } from "@/contexts/gym-context";
+import { useServices } from "@/hooks/use-services";
+import { useAsync } from "@/hooks/use-async";
+import type { GymMembership } from "@kruxt/types";
 
 type StatusFilter = "all" | "active" | "pending" | "trial" | "suspended" | "cancelled";
 
@@ -42,15 +24,17 @@ const statusFilters: { value: StatusFilter; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
-const columns: Column<Member>[] = [
+const columns: Column<GymMembership>[] = [
   {
     key: "name",
-    header: "Name",
+    header: "Member",
     sortable: true,
     render: (row) => (
       <div>
-        <p className="font-medium text-foreground">{row.name}</p>
-        <p className="text-xs text-muted-foreground">{row.email}</p>
+        <p className="font-medium text-foreground">
+          {row.userId.slice(0, 8)}
+        </p>
+        <p className="text-xs text-muted-foreground">{row.userId}</p>
       </div>
     ),
   },
@@ -62,36 +46,46 @@ const columns: Column<Member>[] = [
     ),
   },
   {
-    key: "status",
+    key: "membershipStatus",
     header: "Status",
     render: (row) => (
       <StatusBadge
-        label={row.status}
-        variant={statusToVariant(row.status)}
+        label={row.membershipStatus}
+        variant={statusToVariant(row.membershipStatus)}
         dot
       />
     ),
   },
   {
-    key: "joinedAt",
-    header: "Joined",
+    key: "startedAt",
+    header: "Started",
     sortable: true,
     render: (row) => (
       <span className="text-sm tabular-nums text-muted-foreground font-kruxt-mono">
-        {row.joinedAt}
+        {row.startedAt
+          ? new Date(row.startedAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })
+          : "—"}
       </span>
     ),
   },
   {
-    key: "lastCheckin",
-    header: "Last Check-in",
+    key: "endsAt",
+    header: "Ends",
     render: (row) =>
-      row.lastCheckin ? (
+      row.endsAt ? (
         <span className="text-sm tabular-nums text-muted-foreground font-kruxt-mono">
-          {row.lastCheckin}
+          {new Date(row.endsAt).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}
         </span>
       ) : (
-        <span className="text-xs text-muted-foreground">Never</span>
+        <span className="text-xs text-muted-foreground">—</span>
       ),
   },
   {
@@ -109,23 +103,43 @@ const columns: Column<Member>[] = [
 ];
 
 export default function MembersPage() {
-  const [loading] = useState(false);
+  const { gymId } = useGym();
+  const { gym } = useServices();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
 
-  if (loading) {
+  const { status, data, error, refetch } = useAsync(
+    () => gym.listGymMemberships(gymId),
+    [gymId]
+  );
+
+  if (status === "loading" || status === "idle") {
     return <PageSkeleton />;
   }
 
-  const filtered = mockMembers.filter((m) => {
-    if (statusFilter !== "all" && m.status !== statusFilter) return false;
-    if (search && !m.name.toLowerCase().includes(search.toLowerCase()) && !m.email.toLowerCase().includes(search.toLowerCase())) return false;
+  if (status === "error") {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Members" description="Manage gym memberships, roles, and access." />
+        <ErrorBanner message={error} onRetry={refetch} />
+      </div>
+    );
+  }
+
+  const members = data ?? [];
+
+  const filtered = members.filter((m) => {
+    if (statusFilter !== "all" && m.membershipStatus !== statusFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!m.userId.toLowerCase().includes(q) && !m.role.toLowerCase().includes(q)) return false;
+    }
     return true;
   });
 
-  const activeCount = mockMembers.filter((m) => m.status === "active").length;
-  const pendingCount = mockMembers.filter((m) => m.status === "pending").length;
-  const trialCount = mockMembers.filter((m) => m.status === "trial").length;
+  const activeCount = members.filter((m) => m.membershipStatus === "active").length;
+  const pendingCount = members.filter((m) => m.membershipStatus === "pending").length;
+  const trialCount = members.filter((m) => m.membershipStatus === "trial").length;
 
   return (
     <div className="space-y-6">
@@ -182,7 +196,11 @@ export default function MembersPage() {
       {filtered.length === 0 ? (
         <EmptyState
           title="No members found"
-          description="Try adjusting your filters or add a new member."
+          description={
+            members.length === 0
+              ? "Your gym doesn't have any members yet. Add your first member to get started."
+              : "Try adjusting your filters or search terms."
+          }
           icon={
             <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
