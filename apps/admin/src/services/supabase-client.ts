@@ -1,14 +1,35 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 function readEnv(candidates: string[]): string | undefined {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
-  const viteEnv =
-    typeof import.meta !== "undefined"
-      ? ((import.meta as { env?: Record<string, string | undefined> }).env ?? undefined)
+  // CRITICAL: Next.js's webpack DefinePlugin only inlines `process.env.NAME`
+  // when it sees that EXACT static reference at build time. Dynamic accesses
+  // like `process.env[someVar]` are NOT replaced, so client bundles end up
+  // with `undefined` for any NEXT_PUBLIC_* vars looked up dynamically.
+  // We explicitly reference every supported key statically below so each one
+  // gets inlined into the client bundle.
+  const staticEnv: Record<string, string | undefined> = {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+    EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+    EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,
+    VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY,
+    VITE_SUPABASE_PUBLISHABLE_KEY: process.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+  };
+
+  // On the server we still want to fall back to dynamic process.env (in case
+  // a key isn't in the static list above).
+  const dynamicEnv =
+    typeof window === "undefined"
+      ? (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
       : undefined;
 
   for (const key of candidates) {
-    const value = env?.[key] ?? viteEnv?.[key];
+    const value = staticEnv[key] ?? dynamicEnv?.[key];
     if (value && value.length > 0) {
       return value;
     }
