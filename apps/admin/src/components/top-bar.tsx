@@ -1,13 +1,46 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
+import { useGym } from "@/contexts/gym-context";
 
 interface TopBarProps {
   sidebarCollapsed: boolean;
   onMenuToggle: () => void;
 }
 
+function avatarInitials(email: string | null | undefined): string {
+  if (!email) return "?";
+  const namePart = email.split("@")[0];
+  const segments = namePart.split(/[._-]/).filter(Boolean);
+  if (segments.length >= 2) {
+    return (segments[0][0] + segments[1][0]).toUpperCase();
+  }
+  return namePart.slice(0, 2).toUpperCase();
+}
+
 export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
+  const { user, signOut } = useAuth();
+  const { gymId, gymName } = useGym();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close the user menu when clicking outside.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
+  const initials = avatarInitials(user?.email);
+  const shortGymId = gymId ? gymId.slice(0, 8) : "—";
+
   return (
     <header
       className={cn(
@@ -29,9 +62,11 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
 
         <div>
           <h2 className="text-sm font-semibold text-foreground font-kruxt-headline tracking-wide">
-            Iron Temple Fitness
+            {gymName || "Loading…"}
           </h2>
-          <p className="text-xs text-muted-foreground">Gym ID: gym_01</p>
+          <p className="text-xs text-muted-foreground font-kruxt-mono">
+            Gym ID: {shortGymId}
+          </p>
         </div>
       </div>
 
@@ -60,10 +95,36 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
           <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-kruxt-danger" />
         </button>
 
-        {/* User avatar */}
-        <button className="flex h-8 w-8 items-center justify-center rounded-full bg-kruxt-accent/20 text-xs font-bold text-kruxt-accent">
-          AD
-        </button>
+        {/* User avatar + dropdown */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen((m) => !m)}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-kruxt-accent/20 text-xs font-bold text-kruxt-accent transition-colors hover:bg-kruxt-accent/30"
+            aria-label="Account menu"
+            aria-expanded={menuOpen}
+          >
+            {initials}
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-10 w-64 rounded-card border border-border bg-kruxt-surface p-2 shadow-2xl">
+              <div className="border-b border-border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Signed in as</p>
+                <p className="truncate text-sm font-medium text-foreground">
+                  {user?.email ?? "Unknown"}
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  setMenuOpen(false);
+                  await signOut();
+                }}
+                className="mt-1 w-full rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-kruxt-panel"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
