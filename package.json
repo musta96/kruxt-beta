@@ -20,6 +20,9 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "clean:local": "node scripts/clean-local-caches.mjs",
+    "clean:local:dry": "node scripts/clean-local-caches.mjs --dry-run",
+    "clean:local:deps": "node scripts/clean-local-caches.mjs --include-node-modules",
     "db:test": "bash packages/db/tests/run_smoke.sh"
   },
   "devDependencies": {

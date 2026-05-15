@@ -50,9 +50,13 @@ export default function TenantsPage() {
     return true;
   });
 
-  const counts = {
+  const counts: Record<TenantStatus | "all", number> = {
     all: mockTenants.length,
-    ...Object.fromEntries(statusFilters.map((s) => [s, mockTenants.filter((t) => t.status === s).length])),
+    active: mockTenants.filter((t) => t.status === "active").length,
+    trial: mockTenants.filter((t) => t.status === "trial").length,
+    onboarding: mockTenants.filter((t) => t.status === "onboarding").length,
+    suspended: mockTenants.filter((t) => t.status === "suspended").length,
+    churned: mockTenants.filter((t) => t.status === "churned").length,
   };
 
   return (

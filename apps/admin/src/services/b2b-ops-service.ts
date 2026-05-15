@@ -275,6 +275,76 @@ type GymMembershipLinkRow = {
   user_id: string;
 };
 
+type ProfileRow = {
+  id: string;
+  display_name: string | null;
+  username: string | null;
+};
+
+const MANUAL_BILLING_FEATURE_KEY = "manual_billing";
+
+export interface BillingProfileSummary {
+  userId: string;
+  displayName: string;
+  username: string;
+  label: string;
+}
+
+export interface MemberSubscriptionDirectoryItem extends MemberSubscription {
+  profile?: BillingProfileSummary;
+  membershipPlan?: GymMembershipPlan | null;
+}
+
+export interface RecordManualInvoicePaymentInput {
+  invoiceId: string;
+  amountCents?: number | null;
+  paymentMethodType?: string | null;
+  reference?: string | null;
+  note?: string | null;
+  capturedAt?: string | null;
+}
+
+export interface ManualBillingSettings {
+  instructions: string;
+  bankAccountLabel: string;
+  accountHolder: string;
+  iban: string;
+  paymentReferenceFormat: string;
+  cashDeskNote: string;
+  externalPaymentUrl: string;
+}
+
+const emptyManualBillingSettings: ManualBillingSettings = {
+  instructions: "",
+  bankAccountLabel: "",
+  accountHolder: "",
+  iban: "",
+  paymentReferenceFormat: "",
+  cashDeskNote: "",
+  externalPaymentUrl: ""
+};
+
+function compactText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeManualBillingSettings(config: unknown): ManualBillingSettings {
+  const row =
+    config && typeof config === "object" && !Array.isArray(config)
+      ? (config as Record<string, unknown>)
+      : {};
+
+  return {
+    instructions: compactText(row.instructions),
+    bankAccountLabel: compactText(row.bankAccountLabel),
+    accountHolder: compactText(row.accountHolder),
+    iban: compactText(row.iban),
+    paymentReferenceFormat: compactText(row.paymentReferenceFormat),
+    cashDeskNote: compactText(row.cashDeskNote),
+    externalPaymentUrl: compactText(row.externalPaymentUrl)
+  };
+}
+
 function mapPlan(row: GymMembershipPlanRow): GymMembershipPlan {
   return {
     id: row.id,
@@ -291,6 +361,20 @@ function mapPlan(row: GymMembershipPlanRow): GymMembershipPlan {
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+function profileLabel(profile?: ProfileRow | null): BillingProfileSummary | undefined {
+  if (!profile) return undefined;
+
+  const displayName = profile.display_name?.trim() || profile.username?.trim() || profile.id.slice(0, 8);
+  const username = profile.username?.trim() || "";
+
+  return {
+    userId: profile.id,
+    displayName,
+    username,
+    label: username ? `${displayName} (@${username})` : displayName
   };
 }
 
@@ -1259,6 +1343,50 @@ export class B2BOpsService {
     return mapAccessLog(data as AccessLogRow);
   }
 
+  async getManualBillingSettings(gymId: string): Promise<ManualBillingSettings> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase
+      .from("gym_feature_settings")
+      .select("config")
+      .eq("gym_id", gymId)
+      .eq("feature_key", MANUAL_BILLING_FEATURE_KEY)
+      .maybeSingle();
+
+    throwIfAdminError(error, "ADMIN_MANUAL_BILLING_SETTINGS_READ_FAILED", "Unable to load billing instructions.");
+
+    return data ? normalizeManualBillingSettings((data as { config?: unknown }).config) : emptyManualBillingSettings;
+  }
+
+  async upsertManualBillingSettings(
+    gymId: string,
+    input: ManualBillingSettings
+  ): Promise<ManualBillingSettings> {
+    const staff = await this.access.requireGymStaff(gymId);
+    const config = normalizeManualBillingSettings(input);
+
+    const { data, error } = await this.supabase
+      .from("gym_feature_settings")
+      .upsert(
+        {
+          gym_id: gymId,
+          feature_key: MANUAL_BILLING_FEATURE_KEY,
+          enabled: true,
+          rollout_percentage: 100,
+          config,
+          note: "Manual payment instructions shown to members with open invoices.",
+          updated_by: staff.user_id
+        },
+        { onConflict: "gym_id,feature_key" }
+      )
+      .select("config")
+      .single();
+
+    throwIfAdminError(error, "ADMIN_MANUAL_BILLING_SETTINGS_SAVE_FAILED", "Unable to save billing instructions.");
+
+    return normalizeManualBillingSettings((data as { config?: unknown }).config);
+  }
+
   async listMemberSubscriptions(gymId: string, limit = 200): Promise<MemberSubscription[]> {
     await this.access.requireGymStaff(gymId);
 
@@ -1272,6 +1400,62 @@ export class B2BOpsService {
     throwIfAdminError(error, "ADMIN_SUBSCRIPTIONS_READ_FAILED", "Unable to load member subscriptions.");
 
     return ((data as MemberSubscriptionRow[]) ?? []).map(mapSubscription);
+  }
+
+  async listMemberSubscriptionDirectory(gymId: string, limit = 200): Promise<MemberSubscriptionDirectoryItem[]> {
+    const subscriptions = await this.listMemberSubscriptions(gymId, limit);
+
+    if (subscriptions.length === 0) {
+      return [];
+    }
+
+    const userIds = Array.from(new Set(subscriptions.map((subscription) => subscription.userId)));
+    const planIds = Array.from(
+      new Set(
+        subscriptions
+          .map((subscription) => subscription.membershipPlanId)
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+
+    const [profilesResponse, plansResponse] = await Promise.all([
+      userIds.length > 0
+        ? this.supabase.from("profiles").select("id,display_name,username").in("id", userIds)
+        : Promise.resolve({ data: [], error: null }),
+      planIds.length > 0
+        ? this.supabase.from("gym_membership_plans").select("*").eq("gym_id", gymId).in("id", planIds)
+        : Promise.resolve({ data: [], error: null })
+    ]);
+
+    throwIfAdminError(
+      profilesResponse.error,
+      "ADMIN_SUBSCRIPTION_PROFILES_READ_FAILED",
+      "Unable to load subscription member profiles."
+    );
+    throwIfAdminError(
+      plansResponse.error,
+      "ADMIN_SUBSCRIPTION_PLANS_READ_FAILED",
+      "Unable to load subscription plans."
+    );
+
+    const profileMap = new Map<string, BillingProfileSummary>();
+    for (const profile of ((profilesResponse.data as ProfileRow[]) ?? [])) {
+      const mapped = profileLabel(profile);
+      if (mapped) {
+        profileMap.set(profile.id, mapped);
+      }
+    }
+
+    const planMap = new Map<string, GymMembershipPlan>();
+    for (const plan of ((plansResponse.data as GymMembershipPlanRow[]) ?? [])) {
+      planMap.set(plan.id, mapPlan(plan));
+    }
+
+    return subscriptions.map((subscription) => ({
+      ...subscription,
+      profile: profileMap.get(subscription.userId),
+      membershipPlan: subscription.membershipPlanId ? planMap.get(subscription.membershipPlanId) ?? null : null
+    }));
   }
 
   async upsertMemberSubscription(
@@ -1363,6 +1547,35 @@ export class B2BOpsService {
     throwIfAdminError(error, "ADMIN_INVOICE_UPDATE_FAILED", "Unable to update invoice.");
 
     return mapInvoice(data as InvoiceRow);
+  }
+
+  async recordManualInvoicePayment(
+    gymId: string,
+    input: RecordManualInvoicePaymentInput
+  ): Promise<PaymentTransaction> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data: paymentId, error: rpcError } = await this.supabase.rpc("record_manual_invoice_payment", {
+      p_invoice_id: input.invoiceId,
+      p_amount_cents: input.amountCents ?? null,
+      p_payment_method_type: input.paymentMethodType ?? "manual",
+      p_reference: input.reference ?? null,
+      p_note: input.note ?? null,
+      p_captured_at: input.capturedAt ?? new Date().toISOString()
+    });
+
+    throwIfAdminError(rpcError, "ADMIN_MANUAL_PAYMENT_CREATE_FAILED", "Unable to record manual payment.");
+
+    const { data, error } = await this.supabase
+      .from("payment_transactions")
+      .select("*")
+      .eq("id", String(paymentId))
+      .eq("gym_id", gymId)
+      .single();
+
+    throwIfAdminError(error, "ADMIN_MANUAL_PAYMENT_READ_FAILED", "Unable to load recorded payment.");
+
+    return mapPayment(data as PaymentTransactionRow);
   }
 
   async listPaymentTransactions(gymId: string, limit = 200): Promise<PaymentTransaction[]> {

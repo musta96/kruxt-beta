@@ -4,11 +4,13 @@ node_modules
 .env
 .env.*
 .next
+.turbo
 .expo
 .expo-shared
 dist
 build
 coverage
 supabase/.temp
+packages/db/supabase/migrations_archive/
 
 *.tsbuildinfo
