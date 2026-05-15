@@ -17,6 +17,28 @@ import {
   type MemberProfileDetails
 } from "@/lib/public/profile";
 
+function formatMoney(cents: number, currency: string): string {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: currency || "USD",
+    maximumFractionDigits: 2
+  }).format(cents / 100);
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function statusTone(status: string): string {
+  if (["active", "trialing", "paid"].includes(status)) return "status-success";
+  if (["open", "pending", "incomplete", "past_due"].includes(status)) return "status-warning";
+  if (["failed", "unpaid", "canceled", "cancelled"].includes(status)) return "status-danger";
+  return "";
+}
+
 export function ProfileScreen() {
   const { state, displayLabel, supabase } = usePublicSession();
   const [profile, setProfile] = useState<MemberProfileDetails | null>(null);
@@ -36,6 +58,9 @@ export function ProfileScreen() {
   const backofficePath = state.access ? resolvePostAuthPath(state.access) : null;
   const showBackofficeLink = backofficePath === "/admin" || backofficePath === "/org";
   const avatarInitial = useMemo(() => displayLabel.trim().charAt(0).toUpperCase() || "K", [displayLabel]);
+  const openInvoices = (profile?.invoices ?? []).filter((invoice) => invoice.status !== "paid");
+  const amountDue = openInvoices.reduce((sum, invoice) => sum + invoice.amountDueCents, 0);
+  const billingCurrency = openInvoices[0]?.currency ?? profile?.invoices[0]?.currency ?? "USD";
 
   useEffect(() => {
     const currentUser = state.user;
@@ -202,7 +227,170 @@ export function ProfileScreen() {
                 <div>
                   <strong>No linked gyms yet</strong>
                   <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
-                    Accept an invite or get added by a gym admin to unlock organization access.
+                    Request access from a public gym, accept an invite, or get added by a gym admin.
+                  </p>
+                </div>
+                <Link href="/gyms" className="secondary-cta">
+                  Find gyms
+                </Link>
+              </li>
+            )}
+          </ul>
+        </article>
+      </section>
+
+      <section className="glass-panel">
+        <div className="profile-form-header">
+          <div>
+            <p className="eyebrow">BILLING</p>
+            <h2 className="section-title">Subscriptions and invoices</h2>
+          </div>
+          <span className={`ghost-chip ${amountDue > 0 ? "is-selected" : ""}`}>
+            {amountDue > 0 ? `${formatMoney(amountDue, billingCurrency)} due` : "No balance due"}
+          </span>
+        </div>
+
+        <div className="split-card" style={{ marginTop: 16 }}>
+          <article>
+            <p className="field-label">Subscriptions</p>
+            <ul className="membership-list">
+              {(profile?.subscriptions ?? []).map((subscription) => (
+                <li key={subscription.id} className="membership-item">
+                  <div>
+                    <strong>{subscription.membershipPlanName ?? "Manual subscription"}</strong>
+                    <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
+                      {subscription.gymName} · {subscription.provider}
+                    </p>
+                    <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
+                      {formatDate(subscription.currentPeriodStart)} → {formatDate(subscription.currentPeriodEnd)}
+                    </p>
+                  </div>
+                  <span className={`billing-status ${statusTone(subscription.status)}`}>{subscription.status}</span>
+                </li>
+              ))}
+              {(profile?.subscriptions.length ?? 0) === 0 && (
+                <li className="membership-item">
+                  <div>
+                    <strong>No subscriptions yet</strong>
+                    <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
+                      Approved paid gym access will appear here.
+                    </p>
+                  </div>
+                </li>
+              )}
+            </ul>
+          </article>
+
+          <article>
+            <p className="field-label">Invoices</p>
+            <ul className="membership-list">
+              {(profile?.invoices ?? []).slice(0, 5).map((invoice) => {
+                const billingInstructions =
+                  invoice.status !== "paid" ? profile?.manualBillingByGymId[invoice.gymId] : undefined;
+
+                return (
+                  <li key={invoice.id} className="membership-item invoice-item">
+                    <div>
+                      <strong>{formatMoney(invoice.totalCents, invoice.currency)}</strong>
+                      <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
+                        {invoice.gymName} · due {formatDate(invoice.dueAt)}
+                      </p>
+                      {invoice.invoicePdfUrl ? (
+                        <a href={invoice.invoicePdfUrl} className="search-meta" target="_blank" rel="noreferrer">
+                          View invoice PDF
+                        </a>
+                      ) : null}
+
+                      {billingInstructions ? (
+                        <div className="billing-instructions">
+                          {billingInstructions.instructions ? (
+                            <p className="feed-body" style={{ margin: 0 }}>
+                              {billingInstructions.instructions}
+                            </p>
+                          ) : null}
+                          <dl className="billing-instruction-grid">
+                            {billingInstructions.accountHolder ? (
+                              <div>
+                                <dt>Holder</dt>
+                                <dd>{billingInstructions.accountHolder}</dd>
+                              </div>
+                            ) : null}
+                            {billingInstructions.iban ? (
+                              <div>
+                                <dt>IBAN</dt>
+                                <dd>{billingInstructions.iban}</dd>
+                              </div>
+                            ) : null}
+                            {billingInstructions.paymentReferenceFormat ? (
+                              <div>
+                                <dt>Reference</dt>
+                                <dd>{billingInstructions.paymentReferenceFormat}</dd>
+                              </div>
+                            ) : null}
+                            <div>
+                              <dt>Invoice code</dt>
+                              <dd>{invoice.id.slice(0, 8)}</dd>
+                            </div>
+                          </dl>
+                          {billingInstructions.bankAccountLabel ? (
+                            <span className="search-meta">{billingInstructions.bankAccountLabel}</span>
+                          ) : null}
+                          {billingInstructions.cashDeskNote ? (
+                            <span className="search-meta">{billingInstructions.cashDeskNote}</span>
+                          ) : null}
+                          {billingInstructions.externalPaymentUrl ? (
+                            <a
+                              href={billingInstructions.externalPaymentUrl}
+                              className="secondary-cta billing-payment-link"
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open payment link
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                    <span className={`billing-status ${statusTone(invoice.status)}`}>{invoice.status}</span>
+                  </li>
+                );
+              })}
+              {(profile?.invoices.length ?? 0) === 0 && (
+                <li className="membership-item">
+                  <div>
+                    <strong>No invoices yet</strong>
+                    <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
+                      Staff-created invoices for gym plans will show up here.
+                    </p>
+                  </div>
+                </li>
+              )}
+            </ul>
+          </article>
+        </div>
+
+        <article style={{ marginTop: 16 }}>
+          <p className="field-label">Payment history</p>
+          <ul className="membership-list">
+            {(profile?.payments ?? []).slice(0, 6).map((payment) => (
+              <li key={payment.id} className="membership-item">
+                <div>
+                  <strong>{formatMoney(payment.amountCents, payment.currency)}</strong>
+                  <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
+                    {payment.gymName} · {payment.paymentMethodType ?? payment.provider} · {formatDate(payment.capturedAt ?? payment.createdAt)}
+                  </p>
+                  {payment.reference ? <span className="search-meta">Reference: {payment.reference}</span> : null}
+                  {payment.note ? <span className="search-meta">{payment.note}</span> : null}
+                </div>
+                <span className={`billing-status ${statusTone(payment.status)}`}>{payment.status}</span>
+              </li>
+            ))}
+            {(profile?.payments.length ?? 0) === 0 && (
+              <li className="membership-item">
+                <div>
+                  <strong>No payments recorded yet</strong>
+                  <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
+                    Cash, POS, bank transfer, and future online payments will appear here once recorded.
                   </p>
                 </div>
               </li>

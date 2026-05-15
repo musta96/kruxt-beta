@@ -8,6 +8,7 @@ import { resolvePostAuthPath, usePublicSession } from "@/components/public/usePu
 const MEMBER_NAV = [
   { href: "/feed", label: "Feed" },
   { href: "/log", label: "Log" },
+  { href: "/gyms", label: "Gyms" },
   { href: "/guild", label: "Guild" },
   { href: "/rank", label: "Rank" },
   { href: "/profile", label: "Profile" }
