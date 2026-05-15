@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { TopBar } from "@/components/top-bar";
+import { GymOnboardingForm } from "@/components/gym-onboarding-form";
 import { useAuth } from "@/contexts/auth-context";
 import { useGym } from "@/contexts/gym-context";
 import { cn } from "@/lib/utils";
@@ -33,56 +34,13 @@ function FullPageLoader({ label }: { label?: string }) {
   );
 }
 
-function NoGymOnboarding({ onRefresh }: { onRefresh: () => void }) {
-  const { signOut, user } = useAuth();
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-kruxt-bg p-6">
-      <div className="w-full max-w-md rounded-card border border-border bg-card p-8">
-        <h1 className="text-xl font-bold text-foreground font-kruxt-headline">
-          No gym linked yet
-        </h1>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Your account ({user?.email}) isn&apos;t linked to a gym yet. To get
-          started, create a gym row in Supabase and add yourself to{" "}
-          <code className="rounded bg-kruxt-panel px-1 py-0.5 text-xs">
-            gym_memberships
-          </code>{" "}
-          with role <code className="rounded bg-kruxt-panel px-1 py-0.5 text-xs">leader</code>{" "}
-          and status{" "}
-          <code className="rounded bg-kruxt-panel px-1 py-0.5 text-xs">active</code>.
-        </p>
-        <ol className="mt-4 list-inside list-decimal space-y-1 text-xs text-muted-foreground">
-          <li>Open Supabase → Table Editor → <code>gyms</code></li>
-          <li>Insert a new row (note the generated <code>id</code>)</li>
-          <li>Open <code>gym_memberships</code> and insert a row with <code>gym_id</code> = your new gym, <code>user_id</code> = {user?.id ?? "your auth user id"}, <code>role</code> = <code>leader</code>, <code>membership_status</code> = <code>active</code></li>
-          <li>Click Refresh below</li>
-        </ol>
-        <div className="mt-6 flex gap-3">
-          <button
-            onClick={onRefresh}
-            className="flex-1 rounded-button bg-kruxt-accent px-4 py-2 text-sm font-semibold text-kruxt-bg transition-opacity hover:opacity-90"
-          >
-            Refresh
-          </button>
-          <button
-            onClick={() => signOut()}
-            className="rounded-button border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-kruxt-panel"
-          >
-            Sign out
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const { user, loading: authLoading } = useAuth();
-  const { loading: gymLoading, noGymFound, refresh } = useGym();
+  const { loading: gymLoading, noGymFound } = useGym();
   const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -109,7 +67,7 @@ export default function DashboardLayout({
 
   // 4) Auth'd but no gym linked
   if (noGymFound) {
-    return <NoGymOnboarding onRefresh={refresh} />;
+    return <GymOnboardingForm />;
   }
 
   // 5) All set — render the dashboard

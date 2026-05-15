@@ -68,6 +68,7 @@ export function statusToVariant(
     case "succeeded":
     case "connected":
     case "approved":
+    case "paid":
       return "success";
     case "pending":
     case "triaged":
@@ -75,6 +76,9 @@ export function statusToVariant(
     case "waiting_approval":
     case "queued":
     case "retry_scheduled":
+    case "open":
+    case "incomplete":
+    case "past_due":
       return "warning";
     case "cancelled":
     case "expired":
@@ -84,11 +88,15 @@ export function statusToVariant(
     case "overdue":
     case "error":
     case "critical":
+    case "unpaid":
+    case "canceled":
       return "danger";
     case "trial":
+    case "trialing":
     case "in_progress":
     case "running":
     case "scheduled":
+    case "draft":
       return "info";
     case "inactive":
     case "suspended":

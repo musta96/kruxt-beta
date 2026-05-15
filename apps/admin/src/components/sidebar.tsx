@@ -22,6 +22,7 @@ const navigation: NavGroup[] = [
     items: [
       { label: "Overview", href: "/", icon: "grid" },
       { label: "Members", href: "/members", icon: "users" },
+      { label: "Staff", href: "/staff", icon: "briefcase" },
       { label: "Classes", href: "/classes", icon: "calendar" },
       { label: "Check-ins", href: "/checkins", icon: "check" },
     ],
@@ -73,6 +74,11 @@ const iconMap: Record<string, JSX.Element> = {
   "credit-card": (
     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+    </svg>
+  ),
+  briefcase: (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.1A2.25 2.25 0 0118 20.5H6a2.25 2.25 0 01-2.25-2.25v-4.1m16.5 0A2.25 2.25 0 0022.5 11.9V8.25A2.25 2.25 0 0020.25 6H15V4.75A2.25 2.25 0 0012.75 2.5h-1.5A2.25 2.25 0 009 4.75V6H3.75A2.25 2.25 0 001.5 8.25v3.65a2.25 2.25 0 002.25 2.25m16.5 0H3.75m16.5 0v-.25a2.25 2.25 0 00-2.25-2.25H6a2.25 2.25 0 00-2.25 2.25v.25M9 6h6" />
     </svg>
   ),
   link: (

@@ -1,13 +1,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  CreateGymInviteCodeInput,
+  CreateMemberWorkoutPlanInput,
+  CreateStaffShiftInput,
   ConsentRecord,
+  GymInviteCode,
+  GymJoinRequest,
+  GymJoinRequestSource,
+  GymJoinRequestStatus,
   GymMembership,
   GymOpsSummary,
   GymRole,
   IncidentStatus,
+  MemberWorkoutPlan,
+  MemberWorkoutPlanStatus,
   MembershipStatus,
   PolicyVersion,
-  PrivacyRequestStatus
+  PrivacyRequestStatus,
+  ReviewGymJoinRequestInput,
+  StaffShift,
+  StaffShiftStatus,
+  UpdateGymInviteCodeInput,
+  UpdateStaffShiftInput
 } from "@kruxt/types";
 
 import { KruxtAdminError, throwIfAdminError } from "./errors";
@@ -19,17 +33,25 @@ type MembershipRow = {
   id: string;
   gym_id: string;
   user_id: string;
+  coach_user_id?: string | null;
   role: GymRole;
   membership_status: MembershipStatus;
   membership_plan_id: string | null;
   started_at: string | null;
   ends_at: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 type ProfileRow = {
   id: string;
-  display_name: string;
-  username: string;
+  display_name: string | null;
+  username: string | null;
+};
+
+type MembershipPlanRow = {
+  id: string;
+  name: string;
 };
 
 type ConsentRow = {
@@ -119,6 +141,73 @@ type GymClassRow = {
   starts_at: string;
   ends_at: string;
   capacity: number;
+};
+
+type StaffShiftRow = {
+  id: string;
+  gym_id: string;
+  staff_user_id: string;
+  created_by: string | null;
+  title: string;
+  shift_role: string | null;
+  starts_at: string;
+  ends_at: string;
+  status: StaffShiftStatus;
+  hourly_rate_cents: number | null;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+type MemberWorkoutPlanRow = {
+  id: string;
+  gym_id: string;
+  member_user_id: string;
+  coach_user_id: string | null;
+  title: string;
+  goal: string | null;
+  status: MemberWorkoutPlanStatus;
+  starts_at: string | null;
+  ends_at: string | null;
+  plan_json: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type GymInviteCodeRow = {
+  id: string;
+  gym_id: string;
+  code: string;
+  label: string | null;
+  role: GymRole;
+  membership_status: MembershipStatus;
+  membership_plan_id: string | null;
+  max_redemptions: number | null;
+  redeemed_count: number;
+  expires_at: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+type GymJoinRequestRow = {
+  id: string;
+  gym_id: string;
+  user_id: string;
+  requested_membership_plan_id: string | null;
+  source: GymJoinRequestSource;
+  invite_code_id: string | null;
+  status: GymJoinRequestStatus;
+  note: string | null;
+  staff_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type SecurityIncidentRow = {
@@ -212,16 +301,127 @@ export interface StaffProfileOption {
   label: string;
 }
 
+export interface MemberProfileSummary {
+  userId: string;
+  displayName: string;
+  username: string;
+  label: string;
+}
+
+export interface GymMemberDirectoryItem extends GymMembership {
+  profile?: MemberProfileSummary;
+  coachProfile?: MemberProfileSummary | null;
+  membershipPlanName?: string | null;
+  latestWorkoutPlan?: MemberWorkoutPlan | null;
+}
+
+export interface GymJoinRequestDirectoryItem extends GymJoinRequest {
+  profile?: MemberProfileSummary;
+  membershipPlanName?: string | null;
+  inviteLabel?: string | null;
+}
+
 function mapMembership(row: MembershipRow): GymMembership {
   return {
     id: row.id,
     gymId: row.gym_id,
     userId: row.user_id,
+    coachUserId: row.coach_user_id ?? null,
     role: row.role,
     membershipStatus: row.membership_status,
     membershipPlanId: row.membership_plan_id,
     startedAt: row.started_at,
     endsAt: row.ends_at
+  };
+}
+
+function profileLabel(profile?: ProfileRow | null): MemberProfileSummary | undefined {
+  if (!profile) {
+    return undefined;
+  }
+
+  const displayName = profile.display_name?.trim() || "Unnamed member";
+  const username = profile.username?.trim() || "";
+  return {
+    userId: profile.id,
+    displayName,
+    username,
+    label: username ? `${displayName} (@${username})` : displayName
+  };
+}
+
+function mapStaffShift(row: StaffShiftRow): StaffShift {
+  return {
+    id: row.id,
+    gymId: row.gym_id,
+    staffUserId: row.staff_user_id,
+    createdBy: row.created_by,
+    title: row.title,
+    shiftRole: row.shift_role,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    status: row.status,
+    hourlyRateCents: row.hourly_rate_cents,
+    notes: row.notes,
+    metadata: row.metadata ?? {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function mapMemberWorkoutPlan(row: MemberWorkoutPlanRow): MemberWorkoutPlan {
+  return {
+    id: row.id,
+    gymId: row.gym_id,
+    memberUserId: row.member_user_id,
+    coachUserId: row.coach_user_id,
+    title: row.title,
+    goal: row.goal,
+    status: row.status,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    planJson: row.plan_json ?? {},
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function mapGymInviteCode(row: GymInviteCodeRow): GymInviteCode {
+  return {
+    id: row.id,
+    gymId: row.gym_id,
+    code: row.code,
+    label: row.label,
+    role: row.role,
+    membershipStatus: row.membership_status,
+    membershipPlanId: row.membership_plan_id,
+    maxRedemptions: row.max_redemptions,
+    redeemedCount: row.redeemed_count,
+    expiresAt: row.expires_at,
+    isActive: row.is_active,
+    createdBy: row.created_by,
+    metadata: row.metadata ?? {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function mapGymJoinRequest(row: GymJoinRequestRow): GymJoinRequest {
+  return {
+    id: row.id,
+    gymId: row.gym_id,
+    userId: row.user_id,
+    requestedMembershipPlanId: row.requested_membership_plan_id,
+    source: row.source,
+    inviteCodeId: row.invite_code_id,
+    status: row.status,
+    note: row.note,
+    staffNote: row.staff_note,
+    reviewedBy: row.reviewed_by,
+    reviewedAt: row.reviewed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
   };
 }
 
@@ -266,6 +466,23 @@ function mapPolicyVersion(row: PolicyVersionRow): PolicyVersion {
   };
 }
 
+function generateInviteCode(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint8Array(10);
+  globalThis.crypto?.getRandomValues(bytes);
+
+  const chars = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]);
+  return `KRUXT-${chars.slice(0, 5).join("")}-${chars.slice(5).join("")}`;
+}
+
+function normalizeInviteCode(code: string): string {
+  return code
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, "")
+    .slice(0, 64);
+}
+
 export class GymAdminService {
   private readonly access: StaffAccessService;
 
@@ -285,6 +502,90 @@ export class GymAdminService {
     throwIfAdminError(error, "ADMIN_MEMBERSHIP_LIST_FAILED", "Unable to list gym memberships.");
 
     return (data as MembershipRow[]).map(mapMembership);
+  }
+
+  async listGymMemberDirectory(gymId: string): Promise<GymMemberDirectoryItem[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase
+      .from("gym_memberships")
+      .select("*")
+      .eq("gym_id", gymId)
+      .order("created_at", { ascending: false });
+
+    throwIfAdminError(error, "ADMIN_MEMBERSHIP_LIST_FAILED", "Unable to list gym memberships.");
+
+    const rows = (data as MembershipRow[]) ?? [];
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const userIds = Array.from(
+      new Set(
+        rows
+          .flatMap((row) => [row.user_id, row.coach_user_id])
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+    const planIds = Array.from(
+      new Set(rows.map((row) => row.membership_plan_id).filter((value): value is string => Boolean(value)))
+    );
+
+    const profileMap = new Map<string, MemberProfileSummary>();
+    if (userIds.length > 0) {
+      const { data: profiles, error: profileError } = await this.supabase
+        .from("profiles")
+        .select("id,display_name,username")
+        .in("id", userIds);
+
+      throwIfAdminError(profileError, "ADMIN_PROFILE_LIST_FAILED", "Unable to load member profiles.");
+
+      for (const profile of (profiles as ProfileRow[]) ?? []) {
+        const mapped = profileLabel(profile);
+        if (mapped) {
+          profileMap.set(mapped.userId, mapped);
+        }
+      }
+    }
+
+    const planMap = new Map<string, string>();
+    if (planIds.length > 0) {
+      const { data: plans, error: planError } = await this.supabase
+        .from("gym_membership_plans")
+        .select("id,name")
+        .eq("gym_id", gymId)
+        .in("id", planIds);
+
+      throwIfAdminError(planError, "ADMIN_PLAN_LIST_FAILED", "Unable to load membership plan labels.");
+
+      for (const plan of (plans as MembershipPlanRow[]) ?? []) {
+        planMap.set(plan.id, plan.name);
+      }
+    }
+
+    const latestPlanMap = new Map<string, MemberWorkoutPlan>();
+    const { data: workoutPlans, error: workoutPlanError } = await this.supabase
+      .from("gym_member_workout_plans")
+      .select("*")
+      .eq("gym_id", gymId)
+      .in("member_user_id", rows.map((row) => row.user_id))
+      .order("updated_at", { ascending: false });
+
+    if (!workoutPlanError) {
+      for (const plan of (workoutPlans as MemberWorkoutPlanRow[]) ?? []) {
+        if (!latestPlanMap.has(plan.member_user_id)) {
+          latestPlanMap.set(plan.member_user_id, mapMemberWorkoutPlan(plan));
+        }
+      }
+    }
+
+    return rows.map((row) => ({
+      ...mapMembership(row),
+      profile: profileMap.get(row.user_id),
+      coachProfile: row.coach_user_id ? profileMap.get(row.coach_user_id) ?? null : null,
+      membershipPlanName: row.membership_plan_id ? planMap.get(row.membership_plan_id) ?? null : null,
+      latestWorkoutPlan: latestPlanMap.get(row.user_id) ?? null
+    }));
   }
 
   async listPendingMemberships(gymId: string): Promise<GymMembership[]> {
@@ -334,6 +635,26 @@ export class GymAdminService {
       .single();
 
     throwIfAdminError(error, "ADMIN_ROLE_ASSIGN_FAILED", "Unable to assign gym role.");
+
+    return mapMembership(data as MembershipRow);
+  }
+
+  async assignMembershipCoach(
+    gymId: string,
+    membershipId: string,
+    coachUserId: string | null
+  ): Promise<GymMembership> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase
+      .from("gym_memberships")
+      .update({ coach_user_id: coachUserId?.trim() || null })
+      .eq("id", membershipId)
+      .eq("gym_id", gymId)
+      .select("*")
+      .single();
+
+    throwIfAdminError(error, "ADMIN_COACH_ASSIGN_FAILED", "Unable to assign personal trainer.");
 
     return mapMembership(data as MembershipRow);
   }
@@ -401,12 +722,360 @@ export class GymAdminService {
     const { data, error } = await query;
     throwIfAdminError(error, "ADMIN_PROFILE_SEARCH_FAILED", "Unable to search member profiles.");
 
-    return ((data as ProfileRow[]) ?? []).map((profile) => ({
-      userId: profile.id,
-      displayName: profile.display_name,
-      username: profile.username,
-      label: `${profile.display_name} (@${profile.username})`
+    return ((data as ProfileRow[]) ?? []).flatMap((profile) => {
+      const mapped = profileLabel(profile);
+      return mapped ? [mapped] : [];
+    });
+  }
+
+  async listGymInviteCodes(gymId: string): Promise<GymInviteCode[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase
+      .from("gym_invite_codes")
+      .select("*")
+      .eq("gym_id", gymId)
+      .order("created_at", { ascending: false });
+
+    throwIfAdminError(error, "ADMIN_INVITE_CODE_LIST_FAILED", "Unable to load invite codes.");
+
+    return ((data as GymInviteCodeRow[]) ?? []).map(mapGymInviteCode);
+  }
+
+  async createGymInviteCode(gymId: string, input: CreateGymInviteCodeInput = {}): Promise<GymInviteCode> {
+    const staff = await this.access.requireGymStaff(gymId);
+    const code = normalizeInviteCode(input.code || generateInviteCode());
+
+    if (code.length < 4) {
+      throw new KruxtAdminError("ADMIN_INVITE_CODE_INVALID", "Invite code must be at least 4 characters.");
+    }
+
+    if (input.membershipPlanId) {
+      const { data: plan, error: planError } = await this.supabase
+        .from("gym_membership_plans")
+        .select("id")
+        .eq("id", input.membershipPlanId)
+        .eq("gym_id", gymId)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      throwIfAdminError(planError, "ADMIN_INVITE_PLAN_READ_FAILED", "Unable to validate invite membership plan.");
+      if (!plan) {
+        throw new KruxtAdminError("ADMIN_INVITE_PLAN_INVALID", "Invite membership plan must belong to this gym.");
+      }
+    }
+
+    const { data, error } = await this.supabase
+      .from("gym_invite_codes")
+      .insert({
+        gym_id: gymId,
+        code,
+        label: input.label?.trim() || null,
+        role: input.role ?? "member",
+        membership_status: input.membershipStatus ?? "active",
+        membership_plan_id: input.membershipPlanId ?? null,
+        max_redemptions: input.maxRedemptions ?? null,
+        expires_at: input.expiresAt ?? null,
+        is_active: true,
+        created_by: staff.user_id,
+        metadata: input.metadata ?? {}
+      })
+      .select("*")
+      .single();
+
+    throwIfAdminError(error, "ADMIN_INVITE_CODE_CREATE_FAILED", "Unable to create invite code.");
+
+    return mapGymInviteCode(data as GymInviteCodeRow);
+  }
+
+  async updateGymInviteCode(
+    gymId: string,
+    inviteCodeId: string,
+    input: UpdateGymInviteCodeInput
+  ): Promise<GymInviteCode> {
+    await this.access.requireGymStaff(gymId);
+
+    const payload: Record<string, unknown> = {};
+    if (input.code !== undefined) payload.code = normalizeInviteCode(input.code);
+    if (input.label !== undefined) payload.label = input.label?.trim() || null;
+    if (input.role !== undefined) payload.role = input.role;
+    if (input.membershipStatus !== undefined) payload.membership_status = input.membershipStatus;
+    if (input.membershipPlanId !== undefined) payload.membership_plan_id = input.membershipPlanId;
+    if (input.maxRedemptions !== undefined) payload.max_redemptions = input.maxRedemptions;
+    if (input.expiresAt !== undefined) payload.expires_at = input.expiresAt;
+    if (input.isActive !== undefined) payload.is_active = input.isActive;
+    if (input.metadata !== undefined) payload.metadata = input.metadata;
+
+    const { data, error } = await this.supabase
+      .from("gym_invite_codes")
+      .update(payload)
+      .eq("id", inviteCodeId)
+      .eq("gym_id", gymId)
+      .select("*")
+      .single();
+
+    throwIfAdminError(error, "ADMIN_INVITE_CODE_UPDATE_FAILED", "Unable to update invite code.");
+
+    return mapGymInviteCode(data as GymInviteCodeRow);
+  }
+
+  async listGymJoinRequests(
+    gymId: string,
+    status: GymJoinRequestStatus | "all" = "pending"
+  ): Promise<GymJoinRequestDirectoryItem[]> {
+    await this.access.requireGymStaff(gymId);
+
+    let query = this.supabase
+      .from("gym_join_requests")
+      .select("*")
+      .eq("gym_id", gymId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (status !== "all") {
+      query = query.eq("status", status);
+    }
+
+    const { data, error } = await query;
+    throwIfAdminError(error, "ADMIN_JOIN_REQUEST_LIST_FAILED", "Unable to load gym join requests.");
+
+    const rows = ((data as GymJoinRequestRow[]) ?? []).map(mapGymJoinRequest);
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const userIds = Array.from(new Set(rows.map((row) => row.userId)));
+    const planIds = Array.from(
+      new Set(rows.map((row) => row.requestedMembershipPlanId).filter((value): value is string => Boolean(value)))
+    );
+    const inviteIds = Array.from(
+      new Set(rows.map((row) => row.inviteCodeId).filter((value): value is string => Boolean(value)))
+    );
+
+    const profileMap = new Map<string, MemberProfileSummary>();
+    const { data: profiles, error: profileError } = await this.supabase
+      .from("profiles")
+      .select("id,display_name,username")
+      .in("id", userIds);
+
+    throwIfAdminError(profileError, "ADMIN_JOIN_REQUEST_PROFILE_LIST_FAILED", "Unable to load join request profiles.");
+
+    for (const profile of (profiles as ProfileRow[]) ?? []) {
+      const mapped = profileLabel(profile);
+      if (mapped) {
+        profileMap.set(mapped.userId, mapped);
+      }
+    }
+
+    const planMap = new Map<string, string>();
+    if (planIds.length > 0) {
+      const { data: plans, error: planError } = await this.supabase
+        .from("gym_membership_plans")
+        .select("id,name")
+        .eq("gym_id", gymId)
+        .in("id", planIds);
+
+      throwIfAdminError(planError, "ADMIN_JOIN_REQUEST_PLAN_LIST_FAILED", "Unable to load join request plans.");
+
+      for (const plan of (plans as MembershipPlanRow[]) ?? []) {
+        planMap.set(plan.id, plan.name);
+      }
+    }
+
+    const inviteMap = new Map<string, string>();
+    if (inviteIds.length > 0) {
+      const { data: invites, error: inviteError } = await this.supabase
+        .from("gym_invite_codes")
+        .select("id,label,code")
+        .eq("gym_id", gymId)
+        .in("id", inviteIds);
+
+      throwIfAdminError(inviteError, "ADMIN_JOIN_REQUEST_INVITE_LIST_FAILED", "Unable to load join request invites.");
+
+      for (const invite of (invites as Array<{ id: string; label: string | null; code: string }>) ?? []) {
+        inviteMap.set(invite.id, invite.label || invite.code);
+      }
+    }
+
+    return rows.map((row) => ({
+      ...row,
+      profile: profileMap.get(row.userId),
+      membershipPlanName: row.requestedMembershipPlanId ? planMap.get(row.requestedMembershipPlanId) ?? null : null,
+      inviteLabel: row.inviteCodeId ? inviteMap.get(row.inviteCodeId) ?? null : null
     }));
+  }
+
+  async reviewGymJoinRequest(gymId: string, input: ReviewGymJoinRequestInput): Promise<string> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase.rpc("review_gym_join_request", {
+      p_request_id: input.requestId,
+      p_next_status: input.nextStatus,
+      p_staff_note: input.staffNote ?? null
+    });
+
+    throwIfAdminError(error, "ADMIN_JOIN_REQUEST_REVIEW_FAILED", "Unable to review join request.");
+
+    return String(data);
+  }
+
+  async listStaffProfileOptions(gymId: string): Promise<StaffProfileOption[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data: memberships, error: membershipError } = await this.supabase
+      .from("gym_memberships")
+      .select("user_id")
+      .eq("gym_id", gymId)
+      .in("membership_status", ["trial", "active"])
+      .in("role", ["leader", "officer", "coach"]);
+
+    throwIfAdminError(membershipError, "ADMIN_STAFF_LIST_FAILED", "Unable to load staff members.");
+
+    const userIds = Array.from(new Set(((memberships as Array<{ user_id: string }>) ?? []).map((row) => row.user_id)));
+    if (userIds.length === 0) {
+      return [];
+    }
+
+    const { data: profiles, error: profileError } = await this.supabase
+      .from("profiles")
+      .select("id,display_name,username")
+      .in("id", userIds);
+
+    throwIfAdminError(profileError, "ADMIN_STAFF_PROFILE_LIST_FAILED", "Unable to load staff profiles.");
+
+    return ((profiles as ProfileRow[]) ?? [])
+      .flatMap((profile) => {
+        const mapped = profileLabel(profile);
+        return mapped ? [mapped] : [];
+      })
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }
+
+  async listMemberWorkoutPlans(gymId: string, memberUserId: string): Promise<MemberWorkoutPlan[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase
+      .from("gym_member_workout_plans")
+      .select("*")
+      .eq("gym_id", gymId)
+      .eq("member_user_id", memberUserId)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    throwIfAdminError(error, "ADMIN_WORKOUT_PLAN_LIST_FAILED", "Unable to load workout plans.");
+
+    return ((data as MemberWorkoutPlanRow[]) ?? []).map(mapMemberWorkoutPlan);
+  }
+
+  async createMemberWorkoutPlan(
+    gymId: string,
+    input: CreateMemberWorkoutPlanInput
+  ): Promise<MemberWorkoutPlan> {
+    const staff = await this.access.requireGymStaff(gymId);
+
+    const title = input.title.trim();
+    if (!title) {
+      throw new KruxtAdminError("ADMIN_WORKOUT_PLAN_TITLE_REQUIRED", "Workout plan title is required.");
+    }
+
+    const { data, error } = await this.supabase
+      .from("gym_member_workout_plans")
+      .insert({
+        gym_id: gymId,
+        member_user_id: input.memberUserId,
+        coach_user_id: input.coachUserId ?? null,
+        title,
+        goal: input.goal?.trim() || null,
+        status: input.status ?? "active",
+        starts_at: input.startsAt ?? null,
+        ends_at: input.endsAt ?? null,
+        plan_json: input.planJson ?? {},
+        created_by: staff.user_id
+      })
+      .select("*")
+      .single();
+
+    throwIfAdminError(error, "ADMIN_WORKOUT_PLAN_CREATE_FAILED", "Unable to create workout plan.");
+
+    return mapMemberWorkoutPlan(data as MemberWorkoutPlanRow);
+  }
+
+  async listStaffShifts(gymId: string, limit = 100): Promise<StaffShift[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase
+      .from("staff_shifts")
+      .select("*")
+      .eq("gym_id", gymId)
+      .order("starts_at", { ascending: true })
+      .limit(Math.min(Math.max(limit, 1), 250));
+
+    throwIfAdminError(error, "ADMIN_STAFF_SHIFT_LIST_FAILED", "Unable to load staff schedule.");
+
+    return ((data as StaffShiftRow[]) ?? []).map(mapStaffShift);
+  }
+
+  async createStaffShift(gymId: string, input: CreateStaffShiftInput): Promise<StaffShift> {
+    const staff = await this.access.requireGymStaff(gymId);
+
+    if (!input.staffUserId.trim()) {
+      throw new KruxtAdminError("ADMIN_STAFF_SHIFT_USER_REQUIRED", "Staff member is required.");
+    }
+
+    const startsAt = new Date(input.startsAt);
+    const endsAt = new Date(input.endsAt);
+    if (!Number.isFinite(startsAt.valueOf()) || !Number.isFinite(endsAt.valueOf()) || endsAt <= startsAt) {
+      throw new KruxtAdminError("ADMIN_STAFF_SHIFT_TIME_INVALID", "Shift end must be after shift start.");
+    }
+
+    const { data, error } = await this.supabase
+      .from("staff_shifts")
+      .insert({
+        gym_id: gymId,
+        staff_user_id: input.staffUserId,
+        created_by: staff.user_id,
+        title: input.title?.trim() || "Shift",
+        shift_role: input.shiftRole?.trim() || null,
+        starts_at: input.startsAt,
+        ends_at: input.endsAt,
+        status: input.status ?? "scheduled",
+        hourly_rate_cents: input.hourlyRateCents ?? null,
+        notes: input.notes?.trim() || null,
+        metadata: input.metadata ?? {}
+      })
+      .select("*")
+      .single();
+
+    throwIfAdminError(error, "ADMIN_STAFF_SHIFT_CREATE_FAILED", "Unable to create staff shift.");
+
+    return mapStaffShift(data as StaffShiftRow);
+  }
+
+  async updateStaffShift(gymId: string, shiftId: string, input: UpdateStaffShiftInput): Promise<StaffShift> {
+    await this.access.requireGymStaff(gymId);
+
+    const payload: Record<string, unknown> = {};
+    if (input.staffUserId !== undefined) payload.staff_user_id = input.staffUserId;
+    if (input.title !== undefined) payload.title = input.title.trim() || "Shift";
+    if (input.shiftRole !== undefined) payload.shift_role = input.shiftRole?.trim() || null;
+    if (input.startsAt !== undefined) payload.starts_at = input.startsAt;
+    if (input.endsAt !== undefined) payload.ends_at = input.endsAt;
+    if (input.status !== undefined) payload.status = input.status;
+    if (input.hourlyRateCents !== undefined) payload.hourly_rate_cents = input.hourlyRateCents;
+    if (input.notes !== undefined) payload.notes = input.notes?.trim() || null;
+    if (input.metadata !== undefined) payload.metadata = input.metadata;
+
+    const { data, error } = await this.supabase
+      .from("staff_shifts")
+      .update(payload)
+      .eq("id", shiftId)
+      .eq("gym_id", gymId)
+      .select("*")
+      .single();
+
+    throwIfAdminError(error, "ADMIN_STAFF_SHIFT_UPDATE_FAILED", "Unable to update staff shift.");
+
+    return mapStaffShift(data as StaffShiftRow);
   }
 
   async getGymOpsSummary(gymId: string): Promise<GymOpsSummary> {
