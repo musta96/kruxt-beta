@@ -13,10 +13,14 @@ export interface AvatarProps {
   theme: KruxtTheme;
   /** Size preset */
   size?: AvatarSize;
-  /** Image URI – when absent, initials are rendered */
+  /** Image URI; when absent, initials are rendered */
   imageUri?: string;
+  /** Compatibility alias for imageUri */
+  uri?: string | null;
   /** Initials (1-2 chars) shown when no image */
   initials?: string;
+  /** Display name used to derive initials */
+  name?: string;
   /** Show an online indicator dot */
   online?: boolean;
   /** Show accent ring (rank / achievement highlight) */
@@ -60,7 +64,9 @@ export function Avatar({
   theme,
   size = "md",
   imageUri,
+  uri,
   initials,
+  name,
   online,
   ring = false,
   style,
@@ -69,6 +75,15 @@ export function Avatar({
   const dim = SIZE_MAP[size];
   const half = dim / 2;
   const dotDim = DOT_SIZE_MAP[size];
+  const resolvedImageUri = imageUri ?? uri ?? undefined;
+  const resolvedInitials =
+    initials ??
+    name
+      ?.split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("");
 
   const containerStyle: ViewStyle = {
     width: dim,
@@ -87,11 +102,11 @@ export function Avatar({
     <View
       style={[containerStyle, style]}
       accessibilityRole="image"
-      accessibilityLabel={accessibilityLabel ?? initials ?? "Avatar"}
+      accessibilityLabel={accessibilityLabel ?? name ?? resolvedInitials ?? "Avatar"}
     >
-      {imageUri ? (
+      {resolvedImageUri ? (
         <Image
-          source={{ uri: imageUri }}
+          source={{ uri: resolvedImageUri }}
           style={{ width: dim, height: dim, borderRadius: half }}
           resizeMode="cover"
         />
@@ -107,7 +122,7 @@ export function Avatar({
           ]}
           numberOfLines={1}
         >
-          {initials?.toUpperCase() ?? "?"}
+          {resolvedInitials?.toUpperCase() ?? "?"}
         </Text>
       )}
 

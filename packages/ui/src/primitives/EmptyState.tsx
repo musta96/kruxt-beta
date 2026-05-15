@@ -18,6 +18,8 @@ export interface EmptyStateProps {
   message?: string;
   /** Optional CTA button label */
   ctaLabel?: string;
+  /** Compatibility alias for ctaLabel */
+  actionLabel?: string;
   /** CTA press handler */
   onCtaPress?: () => void;
   /** Override container style */
@@ -34,6 +36,7 @@ export function EmptyState({
   title,
   message,
   ctaLabel,
+  actionLabel,
   onCtaPress,
   style,
 }: EmptyStateProps) {
@@ -65,10 +68,10 @@ export function EmptyState({
         </Text>
       )}
 
-      {ctaLabel && onCtaPress && (
+      {(ctaLabel ?? actionLabel) && onCtaPress && (
         <Button
           theme={theme}
-          label={ctaLabel}
+          label={ctaLabel ?? actionLabel ?? ""}
           onPress={onCtaPress}
           variant="primary"
           size="md"

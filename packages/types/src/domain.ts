@@ -121,6 +121,10 @@ export type MembershipStatus =
   | "paused"
   | "cancelled";
 
+export type GymJoinRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
+
+export type GymJoinRequestSource = "public_request" | "invite_code" | "staff_created";
+
 export type StaffShiftStatus =
   | "scheduled"
   | "confirmed"
@@ -320,11 +324,46 @@ export interface GymMembership {
   id: string;
   gymId: string;
   userId: string;
+  coachUserId?: string | null;
   role: GymRole;
   membershipStatus: MembershipStatus;
   membershipPlanId?: string | null;
   startedAt?: string | null;
   endsAt?: string | null;
+}
+
+export interface GymInviteCode {
+  id: string;
+  gymId: string;
+  code: string;
+  label?: string | null;
+  role: GymRole;
+  membershipStatus: MembershipStatus;
+  membershipPlanId?: string | null;
+  maxRedemptions?: number | null;
+  redeemedCount: number;
+  expiresAt?: string | null;
+  isActive: boolean;
+  createdBy?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GymJoinRequest {
+  id: string;
+  gymId: string;
+  userId: string;
+  requestedMembershipPlanId?: string | null;
+  source: GymJoinRequestSource;
+  inviteCodeId?: string | null;
+  status: GymJoinRequestStatus;
+  note?: string | null;
+  staffNote?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface GymPermissionCatalogEntry {
@@ -1762,6 +1801,24 @@ export interface DunningEvent {
   result?: string | null;
   note?: string | null;
   metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MemberWorkoutPlanStatus = "draft" | "active" | "paused" | "completed" | "archived";
+
+export interface MemberWorkoutPlan {
+  id: string;
+  gymId: string;
+  memberUserId: string;
+  coachUserId?: string | null;
+  title: string;
+  goal?: string | null;
+  status: MemberWorkoutPlanStatus;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  planJson: Record<string, unknown>;
+  createdBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }

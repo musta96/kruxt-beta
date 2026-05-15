@@ -18,14 +18,22 @@ export interface ListRowProps {
   /** Theme object */
   theme: KruxtTheme;
   /** Title text */
-  title: string;
+  title?: string;
+  /** Compatibility alias for title */
+  label?: string;
   /** Optional subtitle */
   subtitle?: string;
+  /** Compact trailing value */
+  value?: string;
+  /** Show a chevron when there is no custom trailing element */
+  chevron?: boolean;
+  /** Override title/label text style */
+  labelStyle?: TextStyle;
   /** Leading icon / avatar element */
   leading?: React.ReactNode;
   /** Trailing element (chevron, toggle, badge, etc.) */
   trailing?: React.ReactNode;
-  /** Press handler – makes the row pressable */
+  /** Press handler; makes the row pressable */
   onPress?: (e: GestureResponderEvent) => void;
   /** Show bottom divider */
   divider?: boolean;
@@ -42,24 +50,43 @@ export interface ListRowProps {
 export function ListRow({
   theme,
   title,
+  label,
   subtitle,
+  value,
+  chevron = false,
   leading,
   trailing,
   onPress,
   divider = false,
   style,
+  labelStyle,
   accessibilityLabel,
 }: ListRowProps) {
+  const resolvedTitle = title ?? label ?? "";
+  const resolvedTrailing =
+    trailing ??
+    (value ? (
+      <Text style={[styles.value, { color: theme.colors.textSecondary, fontFamily: theme.typography.body }]}>
+        {value}
+      </Text>
+    ) : chevron ? (
+      <Text style={[styles.chevron, { color: theme.colors.textSecondary }]}>{"\u203A"}</Text>
+    ) : null);
+
   const inner = (
     <>
       {leading && <View style={styles.leading}>{leading}</View>}
 
       <View style={styles.content}>
         <Text
-          style={[styles.title, { color: theme.colors.textPrimary, fontFamily: theme.typography.body }]}
+          style={[
+            styles.title,
+            { color: theme.colors.textPrimary, fontFamily: theme.typography.body },
+            labelStyle,
+          ]}
           numberOfLines={1}
         >
-          {title}
+          {resolvedTitle}
         </Text>
         {subtitle && (
           <Text
@@ -71,7 +98,7 @@ export function ListRow({
         )}
       </View>
 
-      {trailing && <View style={styles.trailing}>{trailing}</View>}
+      {resolvedTrailing && <View style={styles.trailing}>{resolvedTrailing}</View>}
     </>
   );
 
@@ -86,7 +113,7 @@ export function ListRow({
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel ?? title}
+        accessibilityLabel={accessibilityLabel ?? resolvedTitle}
         style={({ pressed }) => [...containerStyles, pressed && styles.pressed]}
       >
         {inner}
@@ -95,7 +122,7 @@ export function ListRow({
   }
 
   return (
-    <View style={containerStyles} accessibilityLabel={accessibilityLabel ?? title}>
+    <View style={containerStyles} accessibilityLabel={accessibilityLabel ?? resolvedTitle}>
       {inner}
     </View>
   );
@@ -127,6 +154,14 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 13,
     marginTop: 2,
+  } as TextStyle,
+  value: {
+    fontSize: 13,
+    fontWeight: "500",
+  } as TextStyle,
+  chevron: {
+    fontSize: 26,
+    lineHeight: 28,
   } as TextStyle,
   trailing: {
     marginLeft: 12,

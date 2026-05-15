@@ -12,6 +12,8 @@ export interface ErrorStateProps {
   theme: KruxtTheme;
   /** Error icon element */
   icon?: React.ReactNode;
+  /** Error title */
+  title?: string;
   /** Error message */
   message: string;
   /** Retry button handler */
@@ -29,6 +31,7 @@ export interface ErrorStateProps {
 export function ErrorState({
   theme,
   icon,
+  title = "Something went wrong",
   message,
   onRetry,
   retryLabel = "Retry",
@@ -48,7 +51,7 @@ export function ErrorState({
           { color: theme.colors.danger, fontFamily: theme.typography.headline },
         ]}
       >
-        Something went wrong
+        {title}
       </Text>
 
       <Text
