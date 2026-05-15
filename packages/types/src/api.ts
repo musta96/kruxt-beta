@@ -38,6 +38,7 @@ import type {
   LeaderboardTimeframe,
   ReportTargetType,
   StaffShiftStatus,
+  MemberWorkoutPlanStatus,
   SupportAccessGrantStatus,
   SupportAccessSessionStatus,
   StaffTimeEntryStatus,
@@ -48,6 +49,7 @@ import type {
   WorkoutType,
   WorkoutVisibility,
   GymRole,
+  GymJoinRequestStatus,
   MembershipStatus,
   IncidentNotificationChannel,
   IncidentSeverity,
@@ -164,6 +166,38 @@ export interface UpdateMembershipInput {
   membershipId: string;
   membershipStatus?: MembershipStatus;
   role?: GymRole;
+}
+
+export interface RequestGymMembershipInput {
+  gymId: string;
+  membershipPlanId?: string | null;
+  note?: string | null;
+}
+
+export interface RedeemGymInviteCodeInput {
+  code: string;
+  note?: string | null;
+}
+
+export interface CreateGymInviteCodeInput {
+  code?: string;
+  label?: string | null;
+  role?: GymRole;
+  membershipStatus?: MembershipStatus;
+  membershipPlanId?: string | null;
+  maxRedemptions?: number | null;
+  expiresAt?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateGymInviteCodeInput extends Partial<CreateGymInviteCodeInput> {
+  isActive?: boolean;
+}
+
+export interface ReviewGymJoinRequestInput {
+  requestId: string;
+  nextStatus: Exclude<GymJoinRequestStatus, "pending">;
+  staffNote?: string | null;
 }
 
 export interface UpsertGymRolePermissionInput {
@@ -381,6 +415,19 @@ export interface CreateStaffShiftInput {
 }
 
 export interface UpdateStaffShiftInput extends Partial<CreateStaffShiftInput> {}
+
+export interface CreateMemberWorkoutPlanInput {
+  memberUserId: string;
+  coachUserId?: string | null;
+  title: string;
+  goal?: string | null;
+  status?: MemberWorkoutPlanStatus;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  planJson?: Record<string, unknown>;
+}
+
+export interface UpdateMemberWorkoutPlanInput extends Partial<CreateMemberWorkoutPlanInput> {}
 
 export interface CreateStaffTimeEntryInput {
   shiftId?: string | null;

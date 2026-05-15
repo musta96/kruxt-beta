@@ -71,7 +71,7 @@ export function Modal({
             paddingBottom: bottomInset,
           },
         ]}
-        accessibilityRole="dialog"
+        accessibilityViewIsModal
         accessibilityLabel={title}
       >
         {/* Handle */}

@@ -52,6 +52,9 @@ export const kruxtTheme = {
     md: 12,
     lg: 14,       // card default
     xl: 16,       // panel
+    button: 8,
+    badge: 999,
+    card: 14,
     pill: 999,    // badges / sigils
   },
 

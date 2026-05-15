@@ -38,7 +38,19 @@ export interface KruxtTheme {
 
 export const darkTheme: KruxtTheme = {
   mode: "dark",
-  colors: { ...kruxtTheme.colors },
+  colors: {
+    baseBackground: kruxtTheme.colors.base,
+    baseSurface: kruxtTheme.colors.surface,
+    basePanel: kruxtTheme.colors.panel,
+    textPrimary: kruxtTheme.colors.textPrimary,
+    textSecondary: kruxtTheme.colors.textSecondary,
+    accentPrimary: kruxtTheme.colors.ionBlue,
+    accentMuted: kruxtTheme.colors.ionBlueMuted,
+    success: kruxtTheme.colors.success,
+    warning: kruxtTheme.colors.warning,
+    danger: kruxtTheme.colors.danger,
+    steel: kruxtTheme.colors.steel,
+  },
   radii: { ...kruxtTheme.radii },
   typography: { ...kruxtTheme.typography },
   spacing: { ...kruxtTheme.spacing },

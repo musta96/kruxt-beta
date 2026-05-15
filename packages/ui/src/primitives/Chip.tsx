@@ -24,6 +24,8 @@ export interface ChipProps {
   onPress?: () => void;
   /** Show a close "x" button */
   closeable?: boolean;
+  /** Size preset */
+  size?: "sm" | "md" | "lg" | string;
   /** Close handler (only relevant when closeable) */
   onClose?: () => void;
   /** Override container style */
@@ -41,6 +43,7 @@ export function Chip({
   onPress,
   closeable = false,
   onClose,
+  size = "md",
   style,
 }: ChipProps) {
   const bg = selected ? `${theme.colors.accentPrimary}26` : `${theme.colors.steel}1A`;
@@ -55,6 +58,7 @@ export function Chip({
       accessibilityState={{ selected }}
       style={({ pressed }) => [
         styles.container,
+        size === "sm" && styles.containerSmall,
         {
           backgroundColor: bg,
           borderColor: border,
@@ -67,6 +71,7 @@ export function Chip({
       <Text
         style={[
           styles.label,
+          size === "sm" && styles.labelSmall,
           { color: fg, fontFamily: theme.typography.body },
         ]}
         numberOfLines={1}
@@ -101,9 +106,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignSelf: "flex-start",
   } as ViewStyle,
+  containerSmall: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  } as ViewStyle,
   label: {
     fontSize: 13,
     fontWeight: "500",
+  } as TextStyle,
+  labelSmall: {
+    fontSize: 11,
   } as TextStyle,
   close: {
     fontSize: 11,
