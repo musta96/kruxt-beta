@@ -293,10 +293,76 @@ main {
   font-weight: 600;
 }
 
+.billing-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84px;
+  border-radius: 999px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.invoice-item {
+  align-items: flex-start;
+}
+
+.invoice-item > div {
+  min-width: 0;
+}
+
+.billing-instructions {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.8rem;
+  border-left: 2px solid rgba(53, 200, 255, 0.42);
+  padding-left: 0.85rem;
+}
+
+.billing-instruction-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 1rem;
+  margin: 0;
+}
+
+.billing-instruction-grid div {
+  min-width: 0;
+}
+
+.billing-instruction-grid dt {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #7fb0d9;
+  text-transform: uppercase;
+}
+
+.billing-instruction-grid dd {
+  margin: 0.15rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.billing-payment-link {
+  width: fit-content;
+  margin-top: 0.1rem;
+}
+
 .status-danger {
   border: 1px solid rgba(255, 107, 124, 0.34);
   background: rgba(88, 20, 31, 0.36);
   color: #ff9eaa;
+}
+
+.status-warning {
+  border: 1px solid rgba(245, 194, 102, 0.3);
+  background: rgba(103, 70, 13, 0.34);
+  color: #ffd88a;
 }
 
 .status-success {
@@ -406,6 +472,15 @@ main {
 
 .feed-card {
   padding: 1rem;
+}
+
+.gym-card-banner {
+  width: 100%;
+  height: 148px;
+  margin-bottom: 1rem;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 1px solid rgba(74, 117, 171, 0.22);
 }
 
 .profile-avatar-row,
@@ -945,6 +1020,10 @@ main {
   .checkbox-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .billing-instruction-grid {
+    grid-template-columns: 1fr;
   }
 
   .metric-grid {

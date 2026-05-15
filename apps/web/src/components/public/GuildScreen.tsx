@@ -67,6 +67,9 @@ export function GuildScreen() {
               Join a gym or accept an invite to unlock guild hall, roster visibility, classes, and rank surfaces.
             </p>
             <div className="stack-actions">
+              <Link href="/gyms" className="primary-cta">
+                Find a gym
+              </Link>
               <Link href="/profile" className="secondary-cta">
                 Open profile
               </Link>
