@@ -245,21 +245,21 @@ export class GymService {
       return existing;
     }
 
+    const { data: membershipId, error: requestError } = await this.supabase.rpc("request_gym_membership", {
+      p_gym_id: input.gymId,
+      p_membership_plan_id: null,
+      p_note: null
+    });
+
+    throwIfError(requestError, "GYM_JOIN_FAILED", "Unable to request gym membership.");
+
     const { data, error } = await this.supabase
       .from("gym_memberships")
-      .upsert(
-        {
-          gym_id: input.gymId,
-          user_id: userId,
-          role: existing?.role ?? "member",
-          membership_status: "pending"
-        },
-        { onConflict: "gym_id,user_id" }
-      )
       .select("*")
+      .eq("id", String(membershipId))
       .single();
 
-    throwIfError(error, "GYM_JOIN_FAILED", "Unable to request gym membership.");
+    throwIfError(error, "GYM_JOIN_READ_FAILED", "Unable to load gym membership request.");
 
     return mapMembership(data as GymMembershipRow);
   }
