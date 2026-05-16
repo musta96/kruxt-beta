@@ -25,15 +25,15 @@ const theme = darkTheme;
 
 const WORKOUT_TYPES = [
   { key: "strength" as const, label: "Strength", icon: "\u{1F4AA}" },
-  { key: "cardio" as const, label: "Cardio", icon: "\u{1F3C3}" },
-  { key: "flexibility" as const, label: "Flexibility", icon: "\u{1F9D8}" },
-  { key: "sport" as const, label: "Sport", icon: "\u26BD" },
-  { key: "other" as const, label: "Other", icon: "\u{1F3AF}" },
+  { key: "conditioning" as const, label: "Conditioning", icon: "\u{1F3C3}" },
+  { key: "functional" as const, label: "Functional", icon: "\u{1F3AF}" },
+  { key: "hyrox" as const, label: "HYROX", icon: "\u26A1" },
+  { key: "custom" as const, label: "Custom", icon: "\u{1F9E9}" },
 ];
 
 const VISIBILITY_OPTIONS = [
   { key: "public" as const, label: "Public", icon: "\u{1F30D}" },
-  { key: "guild_only" as const, label: "Guild Only", icon: "\u{1F6E1}\uFE0F" },
+  { key: "gym" as const, label: "Gym", icon: "\u{1F6E1}\uFE0F" },
   { key: "private" as const, label: "Private", icon: "\u{1F512}" },
 ];
 

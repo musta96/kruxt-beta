@@ -115,11 +115,9 @@ export function ProofFeedScreen() {
         );
       }
 
-      const { actor, workout, reactionCounts, commentCount } = item.item;
-      const totalReactions = Object.values(reactionCounts ?? {}).reduce(
-        (sum: number, v: number) => sum + v,
-        0,
-      );
+      const { actor, workout, engagement, createdAt } = item.item;
+      const totalReactions = engagement.reactionCount;
+      const commentCount = engagement.commentCount;
 
       return (
         <Card theme={theme} style={styles.card}>
@@ -136,10 +134,10 @@ export function ProofFeedScreen() {
                 {actor.displayName ?? "Athlete"}
               </Text>
               <Text style={styles.timestamp}>
-                {formatTimeAgo(workout.createdAt)}
+                {formatTimeAgo(createdAt)}
               </Text>
             </View>
-            {workout.visibility === "guild_only" && (
+            {workout.visibility === "gym" && (
               <Badge theme={theme} label="Guild" variant="info" />
             )}
           </View>
@@ -160,22 +158,11 @@ export function ProofFeedScreen() {
               </View>
               <View style={styles.stat}>
                 <Text style={styles.statValue}>
-                  {workout.durationMinutes ?? "--"}
+                  {"--"}
                 </Text>
                 <Text style={styles.statLabel}>min</Text>
               </View>
-              {workout.rpe && (
-                <View style={styles.stat}>
-                  <Text style={styles.statValue}>{workout.rpe}</Text>
-                  <Text style={styles.statLabel}>RPE</Text>
-                </View>
-              )}
             </View>
-            {workout.notes ? (
-              <Text style={styles.notes} numberOfLines={2}>
-                {workout.notes}
-              </Text>
-            ) : null}
           </View>
 
           {/* Reaction bar */}
@@ -188,10 +175,8 @@ export function ProofFeedScreen() {
                 accessibilityLabel={`React with ${r.type}`}
               >
                 <Text style={styles.reactionEmoji}>{r.emoji}</Text>
-                {(reactionCounts?.[r.type] ?? 0) > 0 && (
-                  <Text style={styles.reactionCount}>
-                    {reactionCounts[r.type]}
-                  </Text>
+                {totalReactions > 0 && r.type === "fist" && (
+                  <Text style={styles.reactionCount}>{totalReactions}</Text>
                 )}
               </Pressable>
             ))}
