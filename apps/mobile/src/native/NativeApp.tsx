@@ -7,8 +7,10 @@ import { useEffect, useState } from "react";
 import { AcceptInviteScreen } from "./screens/AcceptInviteScreen";
 import { AuthLandingScreen } from "./screens/AuthLandingScreen";
 import { FeedScreen } from "./screens/FeedScreen";
+import { GymsScreen } from "./screens/GymsScreen";
 import { LogScreen } from "./screens/LogScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
+import { WorkModeScreen } from "./screens/WorkModeScreen";
 import { NativeSessionProvider, useNativeSession } from "./session";
 import { palette } from "./theme";
 
@@ -45,7 +47,9 @@ function LoadingScreen() {
 
 function emojiForRoute(routeName: string): string {
   if (routeName === "Feed") return "🔥";
+  if (routeName === "Gyms") return "G";
   if (routeName === "Log") return "✍️";
+  if (routeName === "Work") return "W";
   return "👤";
 }
 
@@ -69,6 +73,9 @@ function readInviteToken(url: string | null): string | null {
 }
 
 function AuthenticatedTabs() {
+  const { state } = useNativeSession();
+  const hasWorkAccess = Boolean(state.access.platformRole || state.access.staffGymIds.length > 0);
+
   return (
     <NavigationContainer theme={navigationTheme}>
       <Tabs.Navigator
@@ -89,7 +96,9 @@ function AuthenticatedTabs() {
         })}
       >
         <Tabs.Screen name="Feed" component={FeedScreen} />
+        <Tabs.Screen name="Gyms" component={GymsScreen} />
         <Tabs.Screen name="Log" component={LogScreen} />
+        {hasWorkAccess ? <Tabs.Screen name="Work" component={WorkModeScreen} /> : null}
         <Tabs.Screen name="Profile" component={ProfileScreen} />
       </Tabs.Navigator>
     </NavigationContainer>

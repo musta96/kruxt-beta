@@ -195,8 +195,8 @@ export function ProfileScreen() {
             <div>
               <dt>Role</dt>
               <dd>
-                {state.access?.platformRole === "founder"
-                  ? "Founder"
+                {state.access?.platformRole
+                  ? "Platform"
                   : state.access?.staffGymIds.length
                   ? "Gym staff"
                   : "Member"}
@@ -438,7 +438,7 @@ export function ProfileScreen() {
           </div>
           {showBackofficeLink && (
             <Link href={backofficePath} className="secondary-cta">
-              Open {backofficePath === "/admin" ? "founder console" : "organization workspace"}
+              Open {backofficePath === "/admin" ? "platform console" : "organization workspace"}
             </Link>
           )}
         </div>

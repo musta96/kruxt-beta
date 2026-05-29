@@ -2,11 +2,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 import { useGym } from "@/contexts/gym-context";
 import { useServices } from "@/hooks/use-services";
 import type { GymJoinRequestDirectoryItem } from "@/services";
+import { createAdminSupabaseClient } from "@/services";
 
 interface TopBarProps {
   sidebarCollapsed: boolean;
@@ -24,13 +26,15 @@ function avatarInitials(email: string | null | undefined): string {
 }
 
 export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
-  const { user, signOut } = useAuth();
-  const { gymId, gymName } = useGym();
+  const { user, platformRole, signOut } = useAuth();
+  const { gymId, gymName, supportSessionId, clearSupportSession } = useGym();
   const { gym } = useServices();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<GymJoinRequestDirectoryItem[]>([]);
   const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [endingSession, setEndingSession] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
 
@@ -80,6 +84,35 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
 
   const initials = avatarInitials(user?.email);
   const shortGymId = gymId ? gymId.slice(0, 8) : "—";
+  const platformUrl = process.env.NEXT_PUBLIC_PLATFORM_APP_URL ?? "http://localhost:3100";
+  const manageHref = gymId ? `/?gymId=${encodeURIComponent(gymId)}` : "/";
+  const previewHref = gymId ? `/preview?gymId=${encodeURIComponent(gymId)}` : "/preview";
+  const isPreview = pathname.startsWith("/preview");
+
+  async function endPlatformSession() {
+    if (!supportSessionId) {
+      window.location.href = platformUrl;
+      return;
+    }
+
+    setEndingSession(true);
+    try {
+      const supabase = createAdminSupabaseClient();
+      await supabase
+        .from("gym_support_access_sessions")
+        .update({
+          session_status: "ended",
+          ended_at: new Date().toISOString(),
+          terminated_reason: "KRUXT operator returned to platform.",
+        })
+        .eq("id", supportSessionId);
+    } catch (error) {
+      console.warn("[TopBar] failed to end support session:", error);
+    } finally {
+      clearSupportSession();
+      window.location.href = platformUrl;
+    }
+  }
 
   return (
     <header
@@ -111,6 +144,44 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-3">
+        {platformRole && (
+          <button
+            type="button"
+            onClick={() => void endPlatformSession()}
+            disabled={endingSession}
+            className="hidden rounded-md border border-kruxt-platform/40 px-3 py-1.5 text-xs font-semibold text-kruxt-platform transition-colors hover:bg-kruxt-platform/10 md:inline-flex"
+          >
+            {endingSession ? "Ending..." : "Back to Platform"}
+          </button>
+        )}
+
+        {platformRole && supportSessionId && (
+          <span className="hidden rounded-md bg-kruxt-platform/10 px-2 py-1 font-kruxt-mono text-[10px] text-kruxt-platform lg:inline-flex">
+            Session {supportSessionId.slice(0, 8)}
+          </span>
+        )}
+
+        <div className="hidden gap-1 rounded-lg border border-border bg-kruxt-panel p-1 sm:flex">
+          <Link
+            href={manageHref}
+            className={cn(
+              "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+              !isPreview ? "bg-kruxt-accent/15 text-kruxt-accent" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Manage
+          </Link>
+          <Link
+            href={previewHref}
+            className={cn(
+              "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+              isPreview ? "bg-kruxt-accent/15 text-kruxt-accent" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Preview
+          </Link>
+        </div>
+
         {/* Search */}
         <div className="hidden items-center gap-2 rounded-lg border border-border bg-kruxt-panel px-3 py-1.5 md:flex">
           <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -211,6 +282,15 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
               >
                 Sign out
               </button>
+              {platformRole && (
+                <button
+                  type="button"
+                  onClick={() => void endPlatformSession()}
+                  className="mt-1 block rounded-md px-3 py-2 text-sm text-kruxt-platform transition-colors hover:bg-kruxt-panel"
+                >
+                  Back to Platform
+                </button>
+              )}
             </div>
           )}
         </div>

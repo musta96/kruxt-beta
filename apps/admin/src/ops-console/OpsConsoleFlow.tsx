@@ -383,10 +383,11 @@ export function OpsConsoleFlow({ services, gymId, defaultTab = "classes" }: OpsC
 
       {/* Tab bar */}
       <div className="px-4 pt-4">
-        <div className="tab-strip">
+        <div className="tab-strip" role="tablist">
           {TABS.map((t) => (
             <button
               key={t.key}
+              role="tab"
               className="tab-item"
               aria-selected={tab === t.key}
               onClick={() => setTab(t.key)}

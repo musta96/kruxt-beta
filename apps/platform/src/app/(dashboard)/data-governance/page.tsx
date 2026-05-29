@@ -17,7 +17,7 @@ interface DataRelease {
 const mockReleases: DataRelease[] = [
   { id: "dr_01", gym: "CrossFit Apex", partner: "FitMetrics Analytics", dataType: "Aggregated workout stats", recordCount: 45000, status: "pending_approval", requestedAt: "2026-03-20T14:00:00Z", anonymized: true },
   { id: "dr_02", gym: "Peak Performance", partner: "GymInsure Co.", dataType: "Waiver completion rates", recordCount: 1200, status: "pending_approval", requestedAt: "2026-03-19T10:30:00Z", anonymized: true },
-  { id: "dr_03", gym: "Iron Temple Fitness", partner: "EquipTrack", dataType: "Equipment usage patterns", recordCount: 8500, status: "approved", requestedAt: "2026-03-15T09:00:00Z", anonymized: true },
+  { id: "dr_03", gym: "BZone Fitness", partner: "EquipTrack", dataType: "Equipment usage patterns", recordCount: 8500, status: "approved", requestedAt: "2026-03-15T09:00:00Z", anonymized: true },
   { id: "dr_04", gym: "Urban Fit Lab", partner: "HealthSync", dataType: "Member activity summaries", recordCount: 23000, status: "released", requestedAt: "2026-03-10T11:00:00Z", anonymized: true },
   { id: "dr_05", gym: "Summit Training Co.", partner: "FitMetrics Analytics", dataType: "Class attendance patterns", recordCount: 5600, status: "denied", requestedAt: "2026-03-08T16:00:00Z", anonymized: false },
 ];

@@ -12,14 +12,14 @@ const kpis = [
 
 const alerts = [
   { id: 1, severity: "critical" as const, title: "3 support access grants pending approval", time: "2m ago" },
-  { id: 2, severity: "warning" as const, title: "Iron Temple Fitness — billing retry failed (3rd attempt)", time: "18m ago" },
+  { id: 2, severity: "warning" as const, title: "BZone Fitness — billing retry failed (3rd attempt)", time: "18m ago" },
   { id: 3, severity: "warning" as const, title: "2 data export requests awaiting release approval", time: "1h ago" },
   { id: 4, severity: "info" as const, title: "New gym onboarded: PowerHouse Athletics (Denver, CO)", time: "3h ago" },
   { id: 5, severity: "info" as const, title: "Partner revenue settlement completed — $12,847 recognized", time: "6h ago" },
 ];
 
 const recentTenants = [
-  { name: "Iron Temple Fitness", plan: "Pro", members: 342, mrr: 2899, status: "active" as const },
+  { name: "BZone Fitness", plan: "Pro", members: 342, mrr: 2899, status: "active" as const },
   { name: "CrossFit Apex", plan: "Enterprise", members: 890, mrr: 7499, status: "active" as const },
   { name: "Flex Zone Studio", plan: "Starter", members: 64, mrr: 499, status: "trial" as const },
   { name: "PowerHouse Athletics", plan: "Pro", members: 0, mrr: 0, status: "onboarding" as const },

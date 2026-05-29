@@ -110,9 +110,9 @@ export function FeedScreen() {
     void loadFeed();
   }, [loadFeed]);
 
-  const hasWebWorkspace = state.access.platformRole === "founder" || state.access.staffGymIds.length > 0;
-  const workspaceLabel = state.access.platformRole === "founder" ? "Open founder workspace" : "Open org workspace";
-  const workspacePath = state.access.platformRole === "founder" ? "/admin" : "/org";
+  const hasWebWorkspace = Boolean(state.access.platformRole || state.access.staffGymIds.length > 0);
+  const workspaceLabel = state.access.platformRole ? "Open platform workspace" : "Open org workspace";
+  const workspacePath = state.access.platformRole ? "/admin" : "/org";
 
   if (loading) {
     return (
@@ -140,13 +140,13 @@ export function FeedScreen() {
       {hasWebWorkspace ? (
         <Card>
           <View style={styles.workspaceHeader}>
-            <Pill tone="primary">{state.access.platformRole === "founder" ? "Founder" : "Gym staff"}</Pill>
+            <Pill tone="primary">{state.access.platformRole ? "Platform" : "Gym staff"}</Pill>
             <InlineButton onPress={() => void Linking.openURL(`${webAppUrl}${workspacePath}`)}>
               {workspaceLabel}
             </InlineButton>
           </View>
           <Text style={styles.note}>
-            Founder and organization operations remain on web. Mobile keeps the member-facing flow focused.
+            Platform and organization operations remain on web. Mobile keeps the member-facing flow focused.
           </Text>
         </Card>
       ) : null}

@@ -14,13 +14,26 @@ type PlatformOperatorRole =
   | "read_only";
 
 type GymMembershipRole = "leader" | "officer" | "coach" | "member";
-type GymMembershipStatus = "trial" | "active" | "paused" | "canceled";
+type GymMembershipStatus = "pending" | "trial" | "active" | "paused" | "cancelled";
 
 export interface NativeMembership {
   gymId: string;
   gymName: string | null;
   role: GymMembershipRole;
   membershipStatus: GymMembershipStatus;
+}
+
+export interface NativeWorkoutPlan {
+  id: string;
+  gymId: string;
+  gymName: string | null;
+  title: string;
+  goal: string | null;
+  status: "draft" | "active" | "paused" | "completed" | "archived";
+  startsAt: string | null;
+  endsAt: string | null;
+  notes: string | null;
+  updatedAt: string;
 }
 
 export interface NativeProfile {
@@ -32,6 +45,7 @@ export interface NativeProfile {
   bio: string | null;
   isPublic: boolean;
   memberships: NativeMembership[];
+  workoutPlans: NativeWorkoutPlan[];
 }
 
 export interface NativeAccessState {
@@ -76,6 +90,19 @@ type GymMembershipRow = {
   gyms: { name: string | null } | Array<{ name: string | null }> | null;
 };
 
+type WorkoutPlanRow = {
+  id: string;
+  gym_id: string;
+  title: string;
+  goal: string | null;
+  status: NativeWorkoutPlan["status"];
+  starts_at: string | null;
+  ends_at: string | null;
+  plan_json: Record<string, unknown> | null;
+  updated_at: string;
+  gyms: { name: string | null } | Array<{ name: string | null }> | null;
+};
+
 const EMPTY_ACCESS: NativeAccessState = {
   isAuthenticated: false,
   user: null,
@@ -117,6 +144,11 @@ function extractGymName(value: GymMembershipRow["gyms"]): string | null {
   }
 
   return value.name ?? null;
+}
+
+function extractPlanNotes(value: Record<string, unknown> | null): string | null {
+  const notes = value?.notes;
+  return typeof notes === "string" && notes.trim() ? notes.trim() : null;
 }
 
 async function resolveNativeAccess(client: SupabaseClient): Promise<NativeAccessState> {
@@ -212,14 +244,26 @@ async function loadProfile(client: SupabaseClient, user: User): Promise<NativePr
     }
   }
 
-  const { data: membershipData, error: membershipError } = await client
-    .from("gym_memberships")
-    .select("gym_id,role,membership_status,gyms(name)")
-    .eq("user_id", user.id)
-    .order("started_at", { ascending: false });
+  const [membershipResponse, workoutPlansResponse] = await Promise.all([
+    client
+      .from("gym_memberships")
+      .select("gym_id,role,membership_status,gyms(name)")
+      .eq("user_id", user.id)
+      .order("started_at", { ascending: false }),
+    client
+      .from("gym_member_workout_plans")
+      .select("id,gym_id,title,goal,status,starts_at,ends_at,plan_json,updated_at,gyms(name)")
+      .eq("member_user_id", user.id)
+      .in("status", ["draft", "active", "paused"])
+      .order("updated_at", { ascending: false })
+      .limit(10)
+  ]);
 
-  if (membershipError) {
-    throw new Error(membershipError.message || "Unable to load memberships.");
+  if (membershipResponse.error) {
+    throw new Error(membershipResponse.error.message || "Unable to load memberships.");
+  }
+  if (workoutPlansResponse.error) {
+    throw new Error(workoutPlansResponse.error.message || "Unable to load workout plans.");
   }
 
   return {
@@ -230,11 +274,23 @@ async function loadProfile(client: SupabaseClient, user: User): Promise<NativePr
     avatarUrl: await resolveAvatarDisplayUrl(client, (profileData.avatar_url as string | null | undefined) ?? null),
     bio: (profileData.bio as string | null | undefined) ?? null,
     isPublic: (profileData.is_public as boolean | null | undefined) ?? true,
-    memberships: ((membershipData as GymMembershipRow[] | null) ?? []).map((membership) => ({
+    memberships: ((membershipResponse.data as GymMembershipRow[] | null) ?? []).map((membership) => ({
       gymId: membership.gym_id,
       gymName: extractGymName(membership.gyms),
       role: membership.role,
       membershipStatus: membership.membership_status
+    })),
+    workoutPlans: ((workoutPlansResponse.data as WorkoutPlanRow[] | null) ?? []).map((plan) => ({
+      id: plan.id,
+      gymId: plan.gym_id,
+      gymName: extractGymName(plan.gyms),
+      title: plan.title,
+      goal: plan.goal,
+      status: plan.status,
+      startsAt: plan.starts_at,
+      endsAt: plan.ends_at,
+      notes: extractPlanNotes(plan.plan_json),
+      updatedAt: plan.updated_at
     }))
   };
 }

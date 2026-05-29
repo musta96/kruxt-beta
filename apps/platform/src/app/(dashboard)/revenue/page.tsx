@@ -17,7 +17,7 @@ const mockEvents: RevenueEvent[] = [
   { id: "rev_01", partner: "EquipTrack", gym: "CrossFit Apex", type: "commission", amount: 48700, status: "pending", date: "2026-03-21" },
   { id: "rev_02", partner: "FitMetrics Analytics", gym: "Peak Performance", type: "subscription", amount: 19900, status: "pending", date: "2026-03-20" },
   { id: "rev_03", partner: "HealthSync", gym: "Urban Fit Lab", type: "usage", amount: 8400, status: "recognized", date: "2026-03-18" },
-  { id: "rev_04", partner: "GymInsure Co.", gym: "Iron Temple Fitness", type: "commission", amount: 32500, status: "recognized", date: "2026-03-15" },
+  { id: "rev_04", partner: "GymInsure Co.", gym: "BZone Fitness", type: "commission", amount: 32500, status: "recognized", date: "2026-03-15" },
   { id: "rev_05", partner: "FitMetrics Analytics", gym: "Summit Training Co.", type: "subscription", amount: 19900, status: "settled", date: "2026-03-10" },
   { id: "rev_06", partner: "EquipTrack", gym: "Atlas Barbell Club", type: "commission", amount: 15200, status: "settled", date: "2026-03-08" },
   { id: "rev_07", partner: "HealthSync", gym: "CrossFit Apex", type: "usage", amount: 12100, status: "disputed", date: "2026-03-05" },

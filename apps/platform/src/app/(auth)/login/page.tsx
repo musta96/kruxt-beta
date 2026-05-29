@@ -1,23 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { usePlatformAuth } from "@/contexts/platform-auth-context";
 
 export default function PlatformLoginPage() {
+  const router = useRouter();
+  const { signIn, platformRole, loading: authLoading } = usePlatformAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!authLoading && platformRole) {
+      router.replace("/");
+    }
+  }, [authLoading, platformRole, router]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    // TODO: Wire up Supabase auth with platform-operator role check
-    setTimeout(() => {
+    try {
+      const result = await signIn(email, password);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.replace("/");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Authentication failed.");
+    } finally {
       setLoading(false);
-      window.location.href = "/";
-    }, 800);
+    }
   }
 
   return (

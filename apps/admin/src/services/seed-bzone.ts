@@ -9,10 +9,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  */
 
 export interface SeedResult {
+  gymUpdated: boolean;
   plansUpserted: number;
   classesCreated: number;
   classesSkipped: boolean;
   waiverUpserted: boolean;
+  brandSettingsUpserted: boolean;
   billingSettingsUpserted: boolean;
 }
 
@@ -23,6 +25,40 @@ interface PlanSeed {
   currency: string;
   cancel_policy: string;
 }
+
+const BZONE_GYM_PROFILE = {
+  slug: "bzone-fitness-pavia",
+  name: "BZone Fitness",
+  motto: "La Palestra del Borgo",
+  description:
+    "BZONE Fitness a Borgo Ticino, Pavia: sala pesi, corsi fitness, personal training e percorsi per il benessere personale.",
+  city: "Pavia",
+  countryCode: "IT",
+  timezone: "Europe/Rome"
+};
+
+const BZONE_BRAND_SETTINGS = {
+  app_display_name: "BZone Fitness",
+  primary_color: "#35D0FF",
+  accent_color: "#8BE9C7",
+  background_color: "#0E1116",
+  surface_color: "#171C24",
+  text_color: "#F5F7FA",
+  launch_screen_message: "La salute e il bene piu importante.",
+  support_email: "info@bzonefitness.it",
+  terms_url: "https://www.bzonefitness.it/bzone_gdpr/",
+  privacy_url: "https://www.bzonefitness.it/bzone_gdpr/",
+  metadata: {
+    website: "https://www.bzonefitness.it/",
+    address: "Via Magenta, 8 - Borgo Ticino, 27100 Pavia (PV)",
+    phone: "0382 25146",
+    openingHours: {
+      weekdays: "07:00/22:00",
+      saturday: "09:00/17:00",
+      sunday: "09:00/14:00"
+    }
+  }
+};
 
 const BZONE_PLANS: PlanSeed[] = [
   {
@@ -164,7 +200,32 @@ export async function seedBzoneDemoData(
   supabase: SupabaseClient,
   gymId: string
 ): Promise<SeedResult> {
-  // 1. Membership plans (idempotent; unique on gym_id+name)
+  // 1. Canonical BZone identity for the selected test gym.
+  const { error: gymError } = await supabase
+    .from("gyms")
+    .update({
+      slug: BZONE_GYM_PROFILE.slug,
+      name: BZONE_GYM_PROFILE.name,
+      motto: BZONE_GYM_PROFILE.motto,
+      description: BZONE_GYM_PROFILE.description,
+      city: BZONE_GYM_PROFILE.city,
+      country_code: BZONE_GYM_PROFILE.countryCode,
+      timezone: BZONE_GYM_PROFILE.timezone,
+      is_public: true
+    })
+    .eq("id", gymId);
+  if (gymError) throw new Error(`Gym profile: ${gymError.message}`);
+
+  const { error: brandError } = await supabase.from("gym_brand_settings").upsert(
+    {
+      gym_id: gymId,
+      ...BZONE_BRAND_SETTINGS
+    },
+    { onConflict: "gym_id" }
+  );
+  if (brandError) throw new Error(`Brand settings: ${brandError.message}`);
+
+  // 2. Membership plans (idempotent; unique on gym_id+name)
   const planRows = BZONE_PLANS.map((p) => ({
     gym_id: gymId,
     name: p.name,
@@ -180,12 +241,14 @@ export async function seedBzoneDemoData(
     .upsert(planRows, { onConflict: "gym_id,name" });
   if (planError) throw new Error(`Plans: ${planError.message}`);
 
-  // 2. Classes: only insert if no classes exist yet (avoids duplicating the
+  // 3. Classes: only insert if no classes exist yet (avoids duplicating the
   // weekly grid every time someone hits the seed button).
   const { count: existingClassCount, error: countError } = await supabase
     .from("gym_classes")
     .select("id", { head: true, count: "exact" })
-    .eq("gym_id", gymId);
+    .eq("gym_id", gymId)
+    .neq("status", "cancelled")
+    .gte("starts_at", new Date().toISOString());
   if (countError) throw new Error(`Class count: ${countError.message}`);
 
   let classesCreated = 0;
@@ -215,7 +278,7 @@ export async function seedBzoneDemoData(
     classesCreated = classRows.length;
   }
 
-  // 3. Waiver (idempotent; unique on gym_id+title+policy_version)
+  // 4. Waiver (idempotent; unique on gym_id+title+policy_version)
   const { error: waiverError } = await supabase.from("waivers").upsert(
     {
       gym_id: gymId,
@@ -229,7 +292,7 @@ export async function seedBzoneDemoData(
   );
   if (waiverError) throw new Error(`Waiver: ${waiverError.message}`);
 
-  // 4. Manual billing instructions shown beside open member invoices.
+  // 5. Manual billing instructions shown beside open member invoices.
   const { error: billingError } = await supabase.from("gym_feature_settings").upsert(
     {
       gym_id: gymId,
@@ -244,10 +307,12 @@ export async function seedBzoneDemoData(
   if (billingError) throw new Error(`Billing settings: ${billingError.message}`);
 
   return {
+    gymUpdated: true,
     plansUpserted: planRows.length,
     classesCreated,
     classesSkipped,
     waiverUpserted: true,
+    brandSettingsUpserted: true,
     billingSettingsUpserted: true,
   };
 }

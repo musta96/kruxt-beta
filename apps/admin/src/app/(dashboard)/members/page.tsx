@@ -36,6 +36,7 @@ interface AddMemberForm {
   profileQuery: string;
   role: GymRole;
   membershipStatus: MembershipStatus;
+  membershipPlanId: string;
   coachUserId: string;
 }
 
@@ -44,11 +45,17 @@ const defaultAddForm: AddMemberForm = {
   profileQuery: "",
   role: "member",
   membershipStatus: "active",
+  membershipPlanId: "",
   coachUserId: "",
 };
 
 function memberLabel(member: GymMemberDirectoryItem): string {
   return member.profile?.label ?? `${member.userId.slice(0, 8)}...`;
+}
+
+function memberSecondaryLabel(member: GymMemberDirectoryItem): string {
+  if (member.profile?.username) return `@${member.profile.username}`;
+  return `Profile ${member.userId.slice(0, 8)}`;
 }
 
 function formatDate(value?: string | null): string {
@@ -125,6 +132,9 @@ export default function MembersPage() {
   const [actionError, setActionError] = useState<string | undefined>();
   const [managedMember, setManagedMember] = useState<GymMemberDirectoryItem | null>(null);
   const [managedCoachId, setManagedCoachId] = useState("");
+  const [managedRole, setManagedRole] = useState<GymRole>("member");
+  const [managedStatus, setManagedStatus] = useState<MembershipStatus>("active");
+  const [managedPlanId, setManagedPlanId] = useState("");
   const [planTitle, setPlanTitle] = useState("");
   const [planGoal, setPlanGoal] = useState("");
   const [planNotes, setPlanNotes] = useState("");
@@ -132,6 +142,7 @@ export default function MembersPage() {
   const [manageError, setManageError] = useState<string | undefined>();
   const [inviteLabel, setInviteLabel] = useState("Front desk invite");
   const [inviteAccess, setInviteAccess] = useState<"active" | "pending">("active");
+  const [invitePlanId, setInvitePlanId] = useState("");
   const [inviteLimit, setInviteLimit] = useState("25");
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState<string | undefined>();
@@ -155,6 +166,11 @@ export default function MembersPage() {
 
   const joinRequestsState = useAsync(
     () => gym.listGymJoinRequests(gymId, "pending"),
+    [gymId]
+  );
+
+  const membershipPlansState = useAsync(
+    () => gym.listMembershipPlanOptions(gymId),
     [gymId]
   );
 
@@ -225,6 +241,7 @@ export default function MembersPage() {
   }, [inviteCodesState.data]);
 
   const staffOptions = staffOptionsState.data ?? [];
+  const membershipPlanOptions = membershipPlansState.data ?? [];
 
   const handleAddMember = async () => {
     if (!addForm.userId.trim()) {
@@ -238,6 +255,7 @@ export default function MembersPage() {
         userId: addForm.userId.trim(),
         role: addForm.role,
         membershipStatus: addForm.membershipStatus,
+        membershipPlanId: addForm.membershipPlanId || null,
       });
       if (addForm.coachUserId) {
         await gym.assignMembershipCoach(gymId, membership.id, addForm.coachUserId);
@@ -272,10 +290,43 @@ export default function MembersPage() {
   const openManageModal = (member: GymMemberDirectoryItem) => {
     setManagedMember(member);
     setManagedCoachId(member.coachUserId ?? "");
+    setManagedRole(member.role);
+    setManagedStatus(member.membershipStatus);
+    setManagedPlanId(member.membershipPlanId ?? "");
     setPlanTitle("");
     setPlanGoal("");
     setPlanNotes("");
     setManageError(undefined);
+  };
+
+  const handleSaveMemberDetails = async () => {
+    if (!managedMember) return;
+    setManageLoading(true);
+    setManageError(undefined);
+    try {
+      await gym.updateMembershipDetails(gymId, managedMember.id, {
+        role: managedRole,
+        membershipStatus: managedStatus,
+        membershipPlanId: managedPlanId || null,
+      });
+      const selectedPlan = membershipPlanOptions.find((plan) => plan.id === managedPlanId);
+      setManagedMember((member) =>
+        member
+          ? {
+              ...member,
+              role: managedRole,
+              membershipStatus: managedStatus,
+              membershipPlanId: managedPlanId || null,
+              membershipPlanName: selectedPlan?.name ?? null,
+            }
+          : member
+      );
+      refetch();
+    } catch (e) {
+      setManageError(e instanceof Error ? e.message : "Unable to update member details.");
+    } finally {
+      setManageLoading(false);
+    }
   };
 
   const handleSaveCoach = async () => {
@@ -284,6 +335,16 @@ export default function MembersPage() {
     setManageError(undefined);
     try {
       await gym.assignMembershipCoach(gymId, managedMember.id, managedCoachId || null);
+      const selectedCoach = staffOptions.find((staff) => staff.userId === managedCoachId);
+      setManagedMember((member) =>
+        member
+          ? {
+              ...member,
+              coachUserId: managedCoachId || null,
+              coachProfile: selectedCoach ?? null,
+            }
+          : member
+      );
       refetch();
     } catch (e) {
       setManageError(e instanceof Error ? e.message : "Unable to update personal trainer.");
@@ -330,6 +391,7 @@ export default function MembersPage() {
       await gym.createGymInviteCode(gymId, {
         label: inviteLabel.trim() || "Gym invite",
         membershipStatus: inviteAccess,
+        membershipPlanId: invitePlanId || null,
         maxRedemptions: inviteLimit.trim() ? Number(inviteLimit) : null,
       });
       inviteCodesState.refetch();
@@ -389,6 +451,7 @@ export default function MembersPage() {
       const haystack = [
         member.userId,
         member.role,
+        member.membershipPlanName,
         member.profile?.displayName,
         member.profile?.username,
         member.coachProfile?.displayName,
@@ -417,7 +480,7 @@ export default function MembersPage() {
       render: (row) => (
         <div>
           <p className="font-medium text-foreground">{memberLabel(row)}</p>
-          <p className="text-xs text-muted-foreground">{row.userId}</p>
+          <p className="text-xs text-muted-foreground">{memberSecondaryLabel(row)}</p>
         </div>
       ),
     },
@@ -431,6 +494,16 @@ export default function MembersPage() {
       header: "Status",
       render: (row) => (
         <StatusBadge label={row.membershipStatus} variant={statusToVariant(row.membershipStatus)} dot />
+      ),
+    },
+    {
+      key: "membership",
+      header: "Membership",
+      render: (row) => (
+        <div>
+          <p className="text-sm text-foreground">{row.membershipPlanName ?? "No plan assigned"}</p>
+          <p className="text-xs text-muted-foreground">{row.membershipPlanId ? "Plan linked" : "Manual access"}</p>
+        </div>
       ),
     },
     {
@@ -606,7 +679,7 @@ export default function MembersPage() {
           {inviteError && (
             <p className="mt-3 rounded-lg bg-kruxt-danger/10 px-3 py-2 text-xs text-kruxt-danger">{inviteError}</p>
           )}
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_130px]">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_110px_minmax(0,1fr)_minmax(0,1fr)_110px]">
             <input
               value={inviteLabel}
               onChange={(event) => setInviteLabel(event.target.value)}
@@ -627,6 +700,14 @@ export default function MembersPage() {
               <option value="active">Instant private access</option>
               <option value="pending">Request approval after scan</option>
             </select>
+            <select value={invitePlanId} onChange={(event) => setInvitePlanId(event.target.value)} className={INPUT}>
+              <option value="">No default plan</option>
+              {membershipPlanOptions.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.label}
+                </option>
+              ))}
+            </select>
             <button
               onClick={handleCreateInvite}
               disabled={inviteLoading}
@@ -636,45 +717,51 @@ export default function MembersPage() {
             </button>
           </div>
           <div className="mt-4 space-y-3">
-            {activeInvites.slice(0, 3).map((invite) => (
-              <div key={invite.id} className="rounded-lg border border-border bg-kruxt-panel/35 p-3">
-                <div className="flex gap-3">
-                  {qrCodes[invite.id] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={qrCodes[invite.id]} alt="" className="h-24 w-24 rounded-md bg-white p-1" />
-                  ) : (
-                    <div className="h-24 w-24 rounded-md bg-card" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">{invite.label || invite.code}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {invite.membershipStatus === "active" ? "Instant access" : "Approval required"} / {invite.redeemedCount}
-                      {invite.maxRedemptions ? ` of ${invite.maxRedemptions}` : ""} used
-                    </p>
-                    <input
-                      readOnly
-                      value={inviteUrl(invite.code)}
-                      className="mt-2 w-full rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground outline-none font-kruxt-mono"
-                    />
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        onClick={() => copyInvite(invite)}
-                        className="rounded-button border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-card"
-                      >
-                        Copy Link
-                      </button>
-                      <button
-                        onClick={() => gym.updateGymInviteCode(gymId, invite.id, { isActive: false }).then(inviteCodesState.refetch)}
-                        className="rounded-button border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-card"
-                      >
-                        Disable
-                      </button>
+            {activeInvites.slice(0, 3).map((invite) => {
+              const invitePlanName = invite.membershipPlanId
+                ? membershipPlanOptions.find((plan) => plan.id === invite.membershipPlanId)?.name ?? "Plan linked"
+                : "No default plan";
+
+              return (
+                <div key={invite.id} className="rounded-lg border border-border bg-kruxt-panel/35 p-3">
+                  <div className="flex gap-3">
+                    {qrCodes[invite.id] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={qrCodes[invite.id]} alt="" className="h-24 w-24 rounded-md bg-white p-1" />
+                    ) : (
+                      <div className="h-24 w-24 rounded-md bg-card" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground">{invite.label || invite.code}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {invite.membershipStatus === "active" ? "Instant access" : "Approval required"} / {invitePlanName} / {invite.redeemedCount}
+                        {invite.maxRedemptions ? ` of ${invite.maxRedemptions}` : ""} used
+                      </p>
+                      <input
+                        readOnly
+                        value={inviteUrl(invite.code)}
+                        className="mt-2 w-full rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground outline-none font-kruxt-mono"
+                      />
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => copyInvite(invite)}
+                          className="rounded-button border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-card"
+                        >
+                          Copy Link
+                        </button>
+                        <button
+                          onClick={() => gym.updateGymInviteCode(gymId, invite.id, { isActive: false }).then(inviteCodesState.refetch)}
+                          className="rounded-button border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-card"
+                        >
+                          Disable
+                        </button>
+                      </div>
+                      <p className="mt-2 text-[10px] text-muted-foreground">Expires: {formatDateTime(invite.expiresAt)}</p>
                     </div>
-                    <p className="mt-2 text-[10px] text-muted-foreground">Expires: {formatDateTime(invite.expiresAt)}</p>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {activeInvites.length === 0 && (
               <p className="text-sm text-muted-foreground">No active invite links yet.</p>
             )}
@@ -793,7 +880,7 @@ export default function MembersPage() {
             <p className="mt-2 text-xs text-kruxt-success">Selected profile: {addForm.profileQuery}</p>
           )}
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Role</label>
             <select
@@ -819,6 +906,21 @@ export default function MembersPage() {
               <option value="active">Active</option>
               <option value="trial">Trial</option>
               <option value="pending">Pending</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Membership Plan</label>
+            <select
+              value={addForm.membershipPlanId}
+              onChange={(e) => setAddForm((form) => ({ ...form, membershipPlanId: e.target.value }))}
+              className={INPUT}
+            >
+              <option value="">No paid plan</option>
+              {membershipPlanOptions.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -862,13 +964,64 @@ export default function MembersPage() {
               <p className="text-sm font-semibold text-foreground">{memberLabel(managedMember)}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {managedMember.role} / {managedMember.membershipStatus}
+                {managedMember.membershipPlanName ? ` / ${managedMember.membershipPlanName}` : ""}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 Latest plan: {managedMember.latestWorkoutPlan?.title ?? "No workout plan logged yet."}
               </p>
             </div>
-            <div className="space-y-3">
-              <label className="block text-xs font-medium text-muted-foreground">Assigned personal trainer</label>
+            <div className="space-y-3 rounded-lg border border-border bg-card p-4">
+              <p className="text-sm font-semibold text-foreground">Member access</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Role</label>
+                  <select
+                    value={managedRole}
+                    onChange={(e) => setManagedRole(e.target.value as GymRole)}
+                    className={INPUT}
+                  >
+                    <option value="member">Member</option>
+                    <option value="coach">Coach</option>
+                    <option value="officer">Officer</option>
+                    <option value="leader">Leader</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Status</label>
+                  <select
+                    value={managedStatus}
+                    onChange={(e) => setManagedStatus(e.target.value as MembershipStatus)}
+                    className={INPUT}
+                  >
+                    <option value="active">Active</option>
+                    <option value="trial">Trial</option>
+                    <option value="pending">Pending</option>
+                    <option value="paused">Paused</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Plan</label>
+                  <select value={managedPlanId} onChange={(e) => setManagedPlanId(e.target.value)} className={INPUT}>
+                    <option value="">No paid plan</option>
+                    {membershipPlanOptions.map((plan) => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <button
+                onClick={handleSaveMemberDetails}
+                disabled={manageLoading}
+                className="rounded-button bg-kruxt-accent px-4 py-2 text-sm font-semibold text-kruxt-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {manageLoading ? "Saving..." : "Save Access Details"}
+              </button>
+            </div>
+            <div className="space-y-3 rounded-lg border border-border bg-card p-4">
+              <label className="block text-sm font-semibold text-foreground">Assigned personal trainer</label>
               <div className="flex gap-2">
                 <select
                   value={managedCoachId}

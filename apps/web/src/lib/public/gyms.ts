@@ -25,6 +25,7 @@ type BrandRow = {
   surface_color: string | null;
   text_color: string | null;
   launch_screen_message: string | null;
+  metadata: Record<string, unknown> | null;
 };
 
 type MembershipPlanRow = {
@@ -79,6 +80,11 @@ export interface PublicGymBrand {
   surfaceColor: string | null;
   textColor: string | null;
   launchMessage: string | null;
+  publicPage: {
+    visibleMembershipPlanIds: string[] | null;
+    scheduleVisible: boolean | null;
+    publishedAt: string | null;
+  } | null;
 }
 
 export interface PublicGymDirectoryItem {
@@ -122,6 +128,23 @@ function mapPlan(row: MembershipPlanRow): PublicGymPlan {
   };
 }
 
+function mapPublicPageMetadata(metadata: Record<string, unknown> | null): PublicGymBrand["publicPage"] {
+  const publicPage = metadata?.publicPage;
+  if (!publicPage || typeof publicPage !== "object" || Array.isArray(publicPage)) {
+    return null;
+  }
+
+  const page = publicPage as Record<string, unknown>;
+  const rawPlanIds = page.visibleMembershipPlanIds;
+  return {
+    visibleMembershipPlanIds: Array.isArray(rawPlanIds)
+      ? rawPlanIds.filter((planId): planId is string => typeof planId === "string")
+      : null,
+    scheduleVisible: typeof page.scheduleVisible === "boolean" ? page.scheduleVisible : null,
+    publishedAt: typeof page.publishedAt === "string" ? page.publishedAt : null
+  };
+}
+
 function mapBrand(row: BrandRow): PublicGymBrand {
   return {
     displayName: row.app_display_name,
@@ -133,7 +156,8 @@ function mapBrand(row: BrandRow): PublicGymBrand {
     backgroundColor: row.background_color,
     surfaceColor: row.surface_color,
     textColor: row.text_color,
-    launchMessage: row.launch_screen_message
+    launchMessage: row.launch_screen_message,
+    publicPage: mapPublicPageMetadata(row.metadata)
   };
 }
 
@@ -168,7 +192,7 @@ export async function listPublicGyms(client: SupabaseClient): Promise<PublicGymD
     client
       .from("gym_brand_settings")
       .select(
-        "gym_id,app_display_name,logo_url,icon_url,banner_url,primary_color,accent_color,background_color,surface_color,text_color,launch_screen_message"
+        "gym_id,app_display_name,logo_url,icon_url,banner_url,primary_color,accent_color,background_color,surface_color,text_color,launch_screen_message,metadata"
       )
       .in("gym_id", gymIds),
     client
@@ -230,6 +254,10 @@ export async function listPublicGyms(client: SupabaseClient): Promise<PublicGymD
   return gyms.map((gym) => {
     const membership = membershipMap.get(gym.id) ?? null;
     const latestRequest = requestMap.get(gym.id) ?? null;
+    const brand = brandMap.get(gym.id) ?? null;
+    const planIds = brand?.publicPage?.visibleMembershipPlanIds ?? null;
+    const plans = planMap.get(gym.id) ?? [];
+    const visiblePlanSet = planIds ? new Set(planIds) : null;
 
     return {
       id: gym.id,
@@ -241,8 +269,8 @@ export async function listPublicGyms(client: SupabaseClient): Promise<PublicGymD
       bannerUrl: gym.banner_url,
       city: gym.city,
       countryCode: gym.country_code,
-      brand: brandMap.get(gym.id) ?? null,
-      plans: planMap.get(gym.id) ?? [],
+      brand,
+      plans: visiblePlanSet ? plans.filter((plan) => visiblePlanSet.has(plan.id)) : plans,
       membership: membership
         ? {
             id: membership.id,

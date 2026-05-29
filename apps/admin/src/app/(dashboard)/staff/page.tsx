@@ -52,9 +52,57 @@ function formatDateTime(value: string): string {
   });
 }
 
+function toDateInput(date: Date): string {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+function startOfWeek(date: Date): Date {
+  const start = new Date(date);
+  const day = start.getDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + offset);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function formatDayLabel(date: Date): string {
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+function formatTimeRange(shift: StaffShift): string {
+  return `${new Date(shift.startsAt).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })} - ${new Date(shift.endsAt).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
+function shiftOverlapsRange(shift: StaffShift, rangeStart: Date, rangeEnd: Date): boolean {
+  const shiftStart = new Date(shift.startsAt);
+  const shiftEnd = new Date(shift.endsAt);
+  return shiftStart < rangeEnd && shiftEnd > rangeStart;
+}
+
+function shiftDurationHours(shift: StaffShift): number {
+  const startsAt = new Date(shift.startsAt).getTime();
+  const endsAt = new Date(shift.endsAt).getTime();
+  if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt) || endsAt <= startsAt) return 0;
+  return (endsAt - startsAt) / 36e5;
+}
+
 export default function StaffPage() {
   const { gymId } = useGym();
   const { gym } = useServices();
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [staffUserId, setStaffUserId] = useState("");
   const [title, setTitle] = useState("Floor shift");
   const [shiftRole, setShiftRole] = useState("coach");
@@ -127,9 +175,15 @@ export default function StaffPage() {
   }
 
   const shifts = shiftsState.data ?? [];
-  const scheduledCount = shifts.filter((shift) => ["scheduled", "confirmed"].includes(shift.status)).length;
-  const activeCount = shifts.filter((shift) => shift.status === "in_progress").length;
-  const completedCount = shifts.filter((shift) => shift.status === "completed").length;
+  const weekEnd = addDays(weekStart, 7);
+  const weekDays = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  const weekShifts = shifts
+    .filter((shift) => shiftOverlapsRange(shift, weekStart, weekEnd))
+    .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+  const scheduledCount = weekShifts.filter((shift) => ["scheduled", "confirmed"].includes(shift.status)).length;
+  const activeCount = weekShifts.filter((shift) => shift.status === "in_progress").length;
+  const completedCount = weekShifts.filter((shift) => shift.status === "completed").length;
+  const plannedHours = weekShifts.reduce((total, shift) => total + shiftDurationHours(shift), 0);
 
   const columns: Column<StaffShift>[] = [
     {
@@ -193,7 +247,7 @@ export default function StaffPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Upcoming Coverage" value={scheduledCount} accent="default" />
         <StatCard label="In Progress" value={activeCount} accent="warning" />
-        <StatCard label="Completed" value={completedCount} accent="success" />
+        <StatCard label="Planned Hours" value={plannedHours.toFixed(plannedHours % 1 === 0 ? 0 : 1)} accent="success" />
       </div>
 
       <div className="rounded-card border border-border bg-card p-5">
@@ -226,10 +280,79 @@ export default function StaffPage() {
         />
       </div>
 
-      {shifts.length === 0 ? (
+      <section className="rounded-card border border-border bg-card p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground font-kruxt-headline">Weekly Coverage</h2>
+            <p className="text-xs text-muted-foreground">
+              {formatDayLabel(weekStart)} to {formatDayLabel(addDays(weekStart, 6))} / {completedCount} completed
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setWeekStart((current) => addDays(current, -7))}
+              className="rounded-button border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-kruxt-panel"
+            >
+              Previous
+            </button>
+            <input
+              type="date"
+              value={toDateInput(weekStart)}
+              onChange={(event) => setWeekStart(startOfWeek(new Date(`${event.target.value}T00:00:00`)))}
+              className="rounded-lg border border-border bg-kruxt-panel px-3 py-2 text-xs text-foreground focus:border-kruxt-accent focus:outline-none"
+            />
+            <button
+              onClick={() => setWeekStart(startOfWeek(new Date()))}
+              className="rounded-button border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-kruxt-panel"
+            >
+              This Week
+            </button>
+            <button
+              onClick={() => setWeekStart((current) => addDays(current, 7))}
+              className="rounded-button border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-kruxt-panel"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-7">
+          {weekDays.map((day) => {
+            const dayStart = new Date(day);
+            const dayEnd = addDays(dayStart, 1);
+            const dayShifts = weekShifts.filter((shift) => shiftOverlapsRange(shift, dayStart, dayEnd));
+
+            return (
+              <div key={day.toISOString()} className="min-h-36 rounded-lg border border-border bg-kruxt-panel/35 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {formatDayLabel(day)}
+                </p>
+                <div className="mt-3 space-y-2">
+                  {dayShifts.slice(0, 3).map((shift) => (
+                    <div key={shift.id} className="rounded-md bg-card px-2 py-2">
+                      <p className="truncate text-xs font-semibold text-foreground">{shift.title}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {formatTimeRange(shift)}
+                      </p>
+                      <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                        {staffById.get(shift.staffUserId) ?? shift.staffUserId.slice(0, 8)}
+                      </p>
+                    </div>
+                  ))}
+                  {dayShifts.length > 3 && (
+                    <p className="text-[11px] text-muted-foreground">+{dayShifts.length - 3} more shifts</p>
+                  )}
+                  {dayShifts.length === 0 && <p className="text-xs text-muted-foreground">No coverage</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {weekShifts.length === 0 ? (
         <EmptyState
-          title="No staff shifts"
-          description="Create the first shift to start planning gym coverage."
+          title="No staff shifts this week"
+          description="Create a shift or move to another week to review coverage."
           icon={
             <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5A2.25 2.25 0 015.25 5.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
@@ -237,7 +360,7 @@ export default function StaffPage() {
           }
         />
       ) : (
-        <DataTable columns={columns} data={shifts} keyExtractor={(row) => row.id} />
+        <DataTable columns={columns} data={weekShifts} keyExtractor={(row) => row.id} />
       )}
     </div>
   );

@@ -51,7 +51,7 @@ export function useAdminAccess() {
     router.replace("/");
   }, [router, supabase]);
 
-  const canManageGyms = access.platformRole === "founder";
+  const canManageGyms = Boolean(access.platformRole);
   const allowedGymIds = canManageGyms ? null : access.staffGymIds;
 
   return {

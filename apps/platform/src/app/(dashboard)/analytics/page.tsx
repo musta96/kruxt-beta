@@ -16,7 +16,7 @@ const topGyms = [
   { name: "CrossFit Apex", members: 890, mrr: 74900, growth: "+3.2%" },
   { name: "Peak Performance", members: 1243, mrr: 74900, growth: "+2.8%" },
   { name: "Urban Fit Lab", members: 567, mrr: 28900, growth: "+5.1%" },
-  { name: "Iron Temple Fitness", members: 342, mrr: 28900, growth: "+1.9%" },
+  { name: "BZone Fitness", members: 342, mrr: 28900, growth: "+1.9%" },
   { name: "Summit Training Co.", members: 215, mrr: 28900, growth: "+4.3%" },
 ];
 

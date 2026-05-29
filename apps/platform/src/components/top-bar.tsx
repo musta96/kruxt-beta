@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { usePlatformAuth } from "@/contexts/platform-auth-context";
 
 interface TopBarProps {
   sidebarCollapsed: boolean;
@@ -8,6 +9,9 @@ interface TopBarProps {
 }
 
 export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
+  const { user, platformRole, signOut } = usePlatformAuth();
+  const initials = (user?.email ?? "PO").slice(0, 2).toUpperCase();
+
   return (
     <header
       className={cn(
@@ -60,9 +64,18 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
           <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-kruxt-platform animate-pulse-glow" />
         </button>
 
-        {/* User avatar */}
-        <button className="flex h-8 w-8 items-center justify-center rounded-full bg-kruxt-platform/20 text-xs font-bold text-kruxt-platform">
-          EM
+        <div className="hidden text-right sm:block">
+          <p className="text-xs font-medium text-foreground">{user?.email ?? "Platform operator"}</p>
+          <p className="text-[10px] uppercase tracking-wider text-kruxt-platform">{platformRole}</p>
+        </div>
+
+        <button
+          onClick={() => void signOut()}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-kruxt-platform/20 text-xs font-bold text-kruxt-platform"
+          aria-label="Sign out"
+          title="Sign out"
+        >
+          {initials}
         </button>
       </div>
     </header>

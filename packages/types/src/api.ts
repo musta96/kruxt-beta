@@ -23,6 +23,8 @@ import type {
   GymAddonCategory,
   GymAddonSubscriptionStatus,
   GymAutomationRunStatus,
+  GymPublicPageBrandDraft,
+  GymPublicPageDraftStatus,
   IntegrationConnectionStatus,
   IntegrationProvider,
   PartnerAppStatus,
@@ -1148,6 +1150,18 @@ export interface UpsertGymBrandSettingsInput {
   privacyUrl?: string | null;
   supportEmail?: string | null;
   metadata?: Record<string, unknown>;
+}
+
+export interface UpsertGymPublicPageDraftInput {
+  brandSettings?: GymPublicPageBrandDraft;
+  visibleMembershipPlanIds?: string[];
+  scheduleVisible?: boolean;
+  checks?: Array<Record<string, unknown>>;
+  status?: GymPublicPageDraftStatus;
+}
+
+export interface PublishGymPublicPageDraftInput {
+  checks?: Array<Record<string, unknown>>;
 }
 
 export interface UpsertGymFeatureSettingInput {

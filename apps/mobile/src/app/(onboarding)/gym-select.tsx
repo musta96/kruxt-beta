@@ -20,10 +20,10 @@ interface Gym {
 
 // Placeholder data -- replaced by real search in production
 const MOCK_GYMS: Gym[] = [
-  { id: "1", name: "Iron Temple Fitness", address: "123 Main St" },
-  { id: "2", name: "The Forge Gym", address: "456 Oak Ave" },
-  { id: "3", name: "Titan Strength Co.", address: "789 Steel Blvd" },
-  { id: "4", name: "Atlas Performance", address: "321 Peak Dr" },
+  { id: "1", name: "BZone Fitness", address: "Via Magenta, 8 - Borgo Ticino, Pavia" },
+  { id: "2", name: "BZone Corsi Fitness", address: "Functional, G.A.G., Pilates, Tone UP" },
+  { id: "3", name: "BZone Sala Pesi", address: "Sala pesi e cardio" },
+  { id: "4", name: "BZone Personal Training", address: "Personal wellness e schede personalizzate" },
 ];
 
 export default function GymSelectScreen() {

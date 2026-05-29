@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
@@ -23,10 +23,10 @@ export function AuthGateway() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
 
-  async function resolveNextPath(): Promise<string> {
+  const resolveNextPath = useCallback(async (): Promise<string> => {
     const access = await resolveAdminAccess(supabase);
     return resolvePostAuthPath(access);
-  }
+  }, [supabase]);
 
   useEffect(() => {
     let active = true;
@@ -59,7 +59,7 @@ export function AuthGateway() {
       active = false;
       listener.data.subscription.unsubscribe();
     };
-  }, [router, supabase]);
+  }, [resolveNextPath, router, supabase]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

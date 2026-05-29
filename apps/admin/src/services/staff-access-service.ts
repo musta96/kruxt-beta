@@ -11,6 +11,15 @@ type MembershipRow = {
   membership_status: "pending" | "trial" | "active" | "paused" | "cancelled";
 };
 
+type PlatformOperatorRow = {
+  role: string;
+  is_active: boolean;
+};
+
+type PlatformPermissionRow = {
+  is_allowed: boolean;
+};
+
 export class StaffAccessService {
   constructor(private readonly supabase: SupabaseClient) {}
 
@@ -40,22 +49,51 @@ export class StaffAccessService {
     throwIfAdminError(error, "ADMIN_STAFF_ACCESS_CHECK_FAILED", "Unable to validate staff access.");
 
     if (!data) {
-      const { data: founderData, error: founderError } = await this.supabase
+      const { data: operatorData, error: operatorError } = await this.supabase
         .from("platform_operator_accounts")
         .select("role,is_active")
         .eq("user_id", resolvedUserId)
-        .eq("role", "founder")
         .eq("is_active", true)
         .maybeSingle();
 
-      throwIfAdminError(founderError, "ADMIN_STAFF_ACCESS_CHECK_FAILED", "Unable to validate staff access.");
+      throwIfAdminError(operatorError, "ADMIN_STAFF_ACCESS_CHECK_FAILED", "Unable to validate staff access.");
 
-      if (!founderData) {
+      if (!operatorData) {
         throw new KruxtAdminError("ADMIN_STAFF_ACCESS_DENIED", "Gym staff access is required.");
       }
 
+      const operator = operatorData as PlatformOperatorRow;
+      if (operator.role !== "founder") {
+        const [{ data: rolePermissionData, error: rolePermissionError }, { data: overrideData, error: overrideError }] =
+          await Promise.all([
+            this.supabase
+              .from("platform_role_permissions")
+              .select("is_allowed")
+              .eq("role", operator.role)
+              .eq("permission_key", "platform.gyms.manage")
+              .maybeSingle(),
+            this.supabase
+              .from("platform_operator_permission_overrides")
+              .select("is_allowed")
+              .eq("user_id", resolvedUserId)
+              .eq("permission_key", "platform.gyms.manage")
+              .maybeSingle()
+          ]);
+
+        throwIfAdminError(rolePermissionError, "ADMIN_STAFF_ACCESS_CHECK_FAILED", "Unable to validate staff access.");
+        throwIfAdminError(overrideError, "ADMIN_STAFF_ACCESS_CHECK_FAILED", "Unable to validate staff access.");
+
+        const override = overrideData as PlatformPermissionRow | null;
+        const rolePermission = rolePermissionData as PlatformPermissionRow | null;
+        const canManageGyms = override?.is_allowed ?? rolePermission?.is_allowed ?? false;
+
+        if (!canManageGyms) {
+          throw new KruxtAdminError("ADMIN_STAFF_ACCESS_DENIED", "Gym staff access is required.");
+        }
+      }
+
       return {
-        id: "founder-override",
+        id: "platform-operator-override",
         gym_id: gymId,
         user_id: resolvedUserId,
         role: "leader",

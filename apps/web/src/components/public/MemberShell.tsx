@@ -76,7 +76,7 @@ export function MemberShell({
             <span className="identity-chip">{displayLabel}</span>
             {hasBackofficeAccess && (
               <Link href={adminPath} className="ghost-chip">
-                {adminPath === "/admin" ? "Founder" : "Org"}
+                {adminPath === "/admin" ? "Platform" : "Org"}
               </Link>
             )}
             <button

@@ -34,7 +34,7 @@ export function broadcastPublicSessionRefresh() {
 }
 
 export function resolvePostAuthPath(access: AdminAccessState): string {
-  if (access.platformRole === "founder") return "/admin";
+  if (access.platformRole) return "/admin";
   if (access.staffGymIds.length > 0) return "/org";
   return "/feed";
 }

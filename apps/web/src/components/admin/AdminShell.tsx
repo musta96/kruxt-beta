@@ -63,15 +63,15 @@ export function AdminShell({
     );
   }
 
-  const isFounder = access.platformRole === "founder";
+  const isPlatformOperator = Boolean(access.platformRole);
   const hasGymAccess = access.staffGymIds.length > 0;
   const nav = scope === "founder" ? FOUNDER_NAV : ORG_NAV;
 
-  if (scope === "founder" && !isFounder) {
+  if (scope === "founder" && !isPlatformOperator) {
     return (
       <main className="container">
         <div className="panel" style={{ maxWidth: 760 }}>
-          <h1 className="heading">Founder access required</h1>
+          <h1 className="heading">Platform access required</h1>
           <p className="subheading">This area is reserved for KRUXT platform operators.</p>
           <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
             {hasGymAccess && (
@@ -86,7 +86,7 @@ export function AdminShell({
     );
   }
 
-  if (scope === "org" && !isFounder && !hasGymAccess) {
+  if (scope === "org" && !isPlatformOperator && !hasGymAccess) {
     return (
       <main className="container">
         <div className="panel" style={{ maxWidth: 760 }}>
@@ -109,8 +109,8 @@ export function AdminShell({
             <p className="subheading">{subtitle ?? `Signed in as ${access.user.email}`}</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className={`badge ${isFounder ? "badge-founder" : "badge-staff"}`}>
-              {scope === "founder" ? "Founder Area" : isFounder ? "Founder" : "Gym Staff"}
+            <span className={`badge ${isPlatformOperator ? "badge-founder" : "badge-staff"}`}>
+              {scope === "founder" ? "Platform Area" : isPlatformOperator ? "Platform" : "Gym Staff"}
             </span>
             <button className="btn btn-danger" onClick={() => void onSignOut()}>Sign out</button>
           </div>

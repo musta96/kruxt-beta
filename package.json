@@ -26,6 +26,8 @@
     "db:test": "bash packages/db/tests/run_smoke.sh"
   },
   "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
     "turbo": "^2.4.4",
     "typescript": "^5.9.3"
   },

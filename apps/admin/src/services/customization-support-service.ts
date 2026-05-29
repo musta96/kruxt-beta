@@ -5,9 +5,11 @@ import type {
   CreateSupportTicketMessageInput,
   GymBrandSettings,
   GymFeatureSetting,
+  GymPublicPageDraft,
   InvoiceComplianceProfile,
   InvoiceDeliveryJob,
   InvoiceProviderConnection,
+  PublishGymPublicPageDraftInput,
   SubmitSupportTicketInput,
   SupportAutomationRun,
   SupportTicket,
@@ -16,6 +18,7 @@ import type {
   UpdateSupportTicketInput,
   UpsertGymBrandSettingsInput,
   UpsertGymFeatureSettingInput,
+  UpsertGymPublicPageDraftInput,
   UpsertInvoiceComplianceProfileInput,
   UpsertInvoiceProviderConnectionInput
 } from "@kruxt/types";
@@ -54,6 +57,22 @@ type GymFeatureSettingRow = {
   rollout_percentage: number;
   config: Record<string, unknown>;
   note: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type GymPublicPageDraftRow = {
+  gym_id: string;
+  status: GymPublicPageDraft["status"];
+  brand_settings: Record<string, unknown>;
+  visible_membership_plan_ids: string[] | null;
+  schedule_visible: boolean;
+  checks: unknown;
+  last_previewed_at: string | null;
+  published_at: string | null;
+  published_by: string | null;
+  created_by: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;
@@ -189,12 +208,23 @@ type SupportTicketLookupRow = {
   gym_id: string | null;
 };
 
+export type GymBrandAssetKind = "logo" | "icon" | "banner";
+
+export interface UploadedGymBrandAsset {
+  bucket: string;
+  path: string;
+  publicUrl: string;
+}
+
 export interface SupportTicketListOptions {
   statuses?: SupportTicketStatus[];
   includeClosed?: boolean;
   limit?: number;
   search?: string;
 }
+
+const GYM_BRAND_ASSET_BUCKET = "gym-brand-assets";
+const ALLOWED_GYM_BRAND_ASSET_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function toObject(value: unknown): Record<string, unknown> {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -252,6 +282,60 @@ function mapGymFeatureSetting(row: GymFeatureSettingRow): GymFeatureSetting {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
+}
+
+function mapGymPublicPageDraft(row: GymPublicPageDraftRow): GymPublicPageDraft {
+  return {
+    gymId: row.gym_id,
+    status: row.status,
+    brandSettings: toObject(row.brand_settings) as GymPublicPageDraft["brandSettings"],
+    visibleMembershipPlanIds: row.visible_membership_plan_ids ?? [],
+    scheduleVisible: row.schedule_visible,
+    checks: toObjectArray(row.checks),
+    lastPreviewedAt: row.last_previewed_at,
+    publishedAt: row.published_at,
+    publishedBy: row.published_by,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function buildPublishedBrandInput(
+  draft: GymPublicPageDraft,
+  publishedBrand: GymBrandSettings | null,
+  publishedAt: string
+): UpsertGymBrandSettingsInput {
+  const existingMetadata = publishedBrand?.metadata ?? {};
+  const existingPublicPage =
+    existingMetadata.publicPage && typeof existingMetadata.publicPage === "object" && !Array.isArray(existingMetadata.publicPage)
+      ? (existingMetadata.publicPage as Record<string, unknown>)
+      : {};
+
+  return {
+    ...draft.brandSettings,
+    metadata: {
+      ...existingMetadata,
+      publicPage: {
+        ...existingPublicPage,
+        visibleMembershipPlanIds: draft.visibleMembershipPlanIds,
+        scheduleVisible: draft.scheduleVisible,
+        publishedAt
+      }
+    }
+  };
+}
+
+function extensionForAsset(file: File): string {
+  const nameExtension = file.name.split(".").pop()?.toLowerCase();
+  if (nameExtension && ["jpg", "jpeg", "png", "webp"].includes(nameExtension)) {
+    return nameExtension === "jpeg" ? "jpg" : nameExtension;
+  }
+
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  return "jpg";
 }
 
 function mapInvoiceProviderConnection(row: InvoiceProviderConnectionRow): InvoiceProviderConnection {
@@ -460,6 +544,118 @@ export class CustomizationSupportService {
 
     throwIfAdminError(error, "ADMIN_GYM_BRAND_SETTINGS_UPSERT_FAILED", "Unable to save gym brand settings.");
     return mapGymBrandSettings(data as GymBrandSettingsRow);
+  }
+
+  async getGymPublicPageDraft(gymId: string): Promise<GymPublicPageDraft | null> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase
+      .from("gym_public_page_drafts")
+      .select("*")
+      .eq("gym_id", gymId)
+      .maybeSingle();
+
+    throwIfAdminError(error, "ADMIN_GYM_PUBLIC_PAGE_DRAFT_READ_FAILED", "Unable to load public page draft.");
+    return data ? mapGymPublicPageDraft(data as GymPublicPageDraftRow) : null;
+  }
+
+  async upsertGymPublicPageDraft(
+    gymId: string,
+    input: UpsertGymPublicPageDraftInput
+  ): Promise<GymPublicPageDraft> {
+    await this.access.requireGymStaff(gymId);
+    const user = await this.access.getCurrentUser();
+    const existing = await this.getGymPublicPageDraft(gymId);
+    const payload: Record<string, unknown> = {
+      gym_id: gymId,
+      updated_by: user.id
+    };
+
+    if (!existing) payload.created_by = user.id;
+    if (input.brandSettings !== undefined) payload.brand_settings = input.brandSettings;
+    if (input.visibleMembershipPlanIds !== undefined) {
+      payload.visible_membership_plan_ids = input.visibleMembershipPlanIds;
+    }
+    if (input.scheduleVisible !== undefined) payload.schedule_visible = input.scheduleVisible;
+    if (input.checks !== undefined) payload.checks = input.checks;
+    if (input.status !== undefined) payload.status = input.status;
+
+    const { data, error } = await this.supabase
+      .from("gym_public_page_drafts")
+      .upsert(payload, { onConflict: "gym_id" })
+      .select("*")
+      .single();
+
+    throwIfAdminError(error, "ADMIN_GYM_PUBLIC_PAGE_DRAFT_UPSERT_FAILED", "Unable to save public page draft.");
+    return mapGymPublicPageDraft(data as GymPublicPageDraftRow);
+  }
+
+  async publishGymPublicPageDraft(
+    gymId: string,
+    input: PublishGymPublicPageDraftInput = {}
+  ): Promise<GymPublicPageDraft> {
+    await this.access.requireGymStaff(gymId);
+    const user = await this.access.getCurrentUser();
+    const draft = await this.getGymPublicPageDraft(gymId);
+
+    if (!draft) {
+      throw new KruxtAdminError("ADMIN_GYM_PUBLIC_PAGE_DRAFT_NOT_FOUND", "Save a public page draft before publishing.");
+    }
+
+    const publishedAt = new Date().toISOString();
+    const publishedBrand = await this.getGymBrandSettings(gymId);
+    await this.upsertGymBrandSettings(gymId, buildPublishedBrandInput(draft, publishedBrand, publishedAt));
+
+    const { data, error } = await this.supabase
+      .from("gym_public_page_drafts")
+      .update({
+        status: "published",
+        checks: input.checks ?? draft.checks,
+        published_at: publishedAt,
+        published_by: user.id,
+        updated_by: user.id
+      })
+      .eq("gym_id", gymId)
+      .select("*")
+      .single();
+
+    throwIfAdminError(error, "ADMIN_GYM_PUBLIC_PAGE_DRAFT_PUBLISH_FAILED", "Unable to publish public page draft.");
+    return mapGymPublicPageDraft(data as GymPublicPageDraftRow);
+  }
+
+  async uploadGymBrandAsset(
+    gymId: string,
+    kind: GymBrandAssetKind,
+    file: File
+  ): Promise<UploadedGymBrandAsset> {
+    await this.access.requireGymStaff(gymId);
+
+    if (!ALLOWED_GYM_BRAND_ASSET_TYPES.has(file.type)) {
+      throw new KruxtAdminError("ADMIN_GYM_BRAND_ASSET_TYPE_INVALID", "Upload a PNG, JPEG, or WebP image.");
+    }
+
+    const extension = extensionForAsset(file);
+    const objectPath = `${gymId}/${kind}-${Date.now()}.${extension}`;
+    const { error } = await this.supabase.storage
+      .from(GYM_BRAND_ASSET_BUCKET)
+      .upload(objectPath, file, {
+        cacheControl: "31536000",
+        contentType: file.type || "image/jpeg",
+        upsert: false
+      });
+
+    throwIfAdminError(error, "ADMIN_GYM_BRAND_ASSET_UPLOAD_FAILED", "Unable to upload brand asset.");
+
+    const { data } = this.supabase.storage.from(GYM_BRAND_ASSET_BUCKET).getPublicUrl(objectPath);
+    if (!data.publicUrl) {
+      throw new KruxtAdminError("ADMIN_GYM_BRAND_ASSET_URL_FAILED", "Unable to resolve uploaded asset URL.");
+    }
+
+    return {
+      bucket: GYM_BRAND_ASSET_BUCKET,
+      path: objectPath,
+      publicUrl: data.publicUrl
+    };
   }
 
   async listGymFeatureSettings(gymId: string, limit = 500): Promise<GymFeatureSetting[]> {

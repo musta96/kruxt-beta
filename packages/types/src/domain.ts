@@ -1859,6 +1859,44 @@ export interface GymBrandSettings {
   updatedAt: string;
 }
 
+export type GymPublicPageDraftStatus = "draft" | "ready" | "published";
+
+export interface GymPublicPageBrandDraft {
+  appDisplayName?: string | null;
+  logoUrl?: string | null;
+  iconUrl?: string | null;
+  bannerUrl?: string | null;
+  primaryColor?: string | null;
+  accentColor?: string | null;
+  backgroundColor?: string | null;
+  surfaceColor?: string | null;
+  textColor?: string | null;
+  headlineFont?: string | null;
+  bodyFont?: string | null;
+  statsFont?: string | null;
+  launchScreenMessage?: string | null;
+  termsUrl?: string | null;
+  privacyUrl?: string | null;
+  supportEmail?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface GymPublicPageDraft {
+  gymId: string;
+  status: GymPublicPageDraftStatus;
+  brandSettings: GymPublicPageBrandDraft;
+  visibleMembershipPlanIds: string[];
+  scheduleVisible: boolean;
+  checks: Array<Record<string, unknown>>;
+  lastPreviewedAt?: string | null;
+  publishedAt?: string | null;
+  publishedBy?: string | null;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface GymFeatureSetting {
   id: string;
   gymId: string;

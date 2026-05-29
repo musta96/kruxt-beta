@@ -52,6 +52,10 @@ type ProfileRow = {
 type MembershipPlanRow = {
   id: string;
   name: string;
+  billing_cycle?: string;
+  price_cents?: number;
+  currency?: string;
+  is_active?: boolean;
 };
 
 type ConsentRow = {
@@ -299,6 +303,15 @@ export interface StaffProfileOption {
   displayName: string;
   username: string;
   label: string;
+}
+
+export interface MembershipPlanOption {
+  id: string;
+  name: string;
+  label: string;
+  billingCycle?: string;
+  priceCents?: number;
+  currency?: string;
 }
 
 export interface MemberProfileSummary {
@@ -639,6 +652,37 @@ export class GymAdminService {
     return mapMembership(data as MembershipRow);
   }
 
+  async updateMembershipDetails(
+    gymId: string,
+    membershipId: string,
+    input: {
+      role?: GymRole;
+      membershipStatus?: MembershipStatus;
+      membershipPlanId?: string | null;
+      endsAt?: string | null;
+    }
+  ): Promise<GymMembership> {
+    await this.access.requireGymStaff(gymId);
+
+    const payload: Record<string, unknown> = {};
+    if (input.role !== undefined) payload.role = input.role;
+    if (input.membershipStatus !== undefined) payload.membership_status = input.membershipStatus;
+    if (input.membershipPlanId !== undefined) payload.membership_plan_id = input.membershipPlanId;
+    if (input.endsAt !== undefined) payload.ends_at = input.endsAt;
+
+    const { data, error } = await this.supabase
+      .from("gym_memberships")
+      .update(payload)
+      .eq("id", membershipId)
+      .eq("gym_id", gymId)
+      .select("*")
+      .single();
+
+    throwIfAdminError(error, "ADMIN_MEMBERSHIP_DETAILS_UPDATE_FAILED", "Unable to update member details.");
+
+    return mapMembership(data as MembershipRow);
+  }
+
   async assignMembershipCoach(
     gymId: string,
     membershipId: string,
@@ -949,6 +993,35 @@ export class GymAdminService {
         return mapped ? [mapped] : [];
       })
       .sort((left, right) => left.label.localeCompare(right.label));
+  }
+
+  async listMembershipPlanOptions(gymId: string): Promise<MembershipPlanOption[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase
+      .from("gym_membership_plans")
+      .select("id,name,billing_cycle,price_cents,currency,is_active")
+      .eq("gym_id", gymId)
+      .eq("is_active", true)
+      .order("price_cents", { ascending: true });
+
+    throwIfAdminError(error, "ADMIN_MEMBERSHIP_PLAN_OPTIONS_FAILED", "Unable to load membership plans.");
+
+    return ((data as MembershipPlanRow[]) ?? []).map((plan) => ({
+      id: plan.id,
+      name: plan.name,
+      label:
+        typeof plan.price_cents === "number"
+          ? `${plan.name} / ${new Intl.NumberFormat("it-IT", {
+              style: "currency",
+              currency: plan.currency || "EUR",
+              maximumFractionDigits: 0
+            }).format(plan.price_cents / 100)} / ${plan.billing_cycle ?? "plan"}`
+          : plan.name,
+      billingCycle: plan.billing_cycle,
+      priceCents: plan.price_cents,
+      currency: plan.currency
+    }));
   }
 
   async listMemberWorkoutPlans(gymId: string, memberUserId: string): Promise<MemberWorkoutPlan[]> {

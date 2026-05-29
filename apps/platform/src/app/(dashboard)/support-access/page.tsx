@@ -16,7 +16,7 @@ interface SupportGrant {
 }
 
 const mockGrants: SupportGrant[] = [
-  { id: "sg_01", gym: "Iron Temple Fitness", requestedBy: "John (Gym Admin)", operator: "Marcus Johnson", reason: "Billing dispute investigation", scope: "billing, members (read-only)", status: "requested", requestedAt: "2026-03-21T08:45:00Z", expiresAt: null },
+  { id: "sg_01", gym: "BZone Fitness", requestedBy: "John (Gym Admin)", operator: "Marcus Johnson", reason: "Billing dispute investigation", scope: "billing, members (read-only)", status: "requested", requestedAt: "2026-03-21T08:45:00Z", expiresAt: null },
   { id: "sg_02", gym: "CrossFit Apex", requestedBy: "Lisa (Gym Admin)", operator: "Marcus Johnson", reason: "Class scheduling issue", scope: "classes, check-ins (read-only)", status: "requested", requestedAt: "2026-03-21T07:30:00Z", expiresAt: null },
   { id: "sg_03", gym: "Summit Training Co.", requestedBy: "Mike (Gym Admin)", operator: "Sarah Chen", reason: "Data migration assistance", scope: "full access", status: "requested", requestedAt: "2026-03-20T16:00:00Z", expiresAt: null },
   { id: "sg_04", gym: "Urban Fit Lab", requestedBy: "Amy (Gym Admin)", operator: "Marcus Johnson", reason: "Integration troubleshooting", scope: "integrations (read-write)", status: "active", requestedAt: "2026-03-19T10:00:00Z", expiresAt: "2026-03-22T10:00:00Z" },

@@ -6,6 +6,13 @@ import { Banner, Button, Card, Field, Heading, InlineButton, Pill, ScreenScroll,
 import { palette, spacing } from "../theme";
 import { useNativeSession } from "../session";
 
+function formatDate(value: string | null): string {
+  if (!value) return "No date";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "No date";
+  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
 export function ProfileScreen() {
   const { state, saveProfile, signOut, uploadAvatar, removeAvatar, webAppUrl } = useNativeSession();
   const profile = state.profile;
@@ -162,10 +169,36 @@ export function ProfileScreen() {
           {state.access.staffGymIds.length > 0 ? <Pill tone="success">gym staff</Pill> : null}
         </View>
         {(state.access.platformRole || state.access.staffGymIds.length > 0) ? (
-          <InlineButton onPress={() => void Linking.openURL(`${webAppUrl}${state.access.platformRole === "founder" ? "/admin" : "/org"}`)}>
+          <InlineButton onPress={() => void Linking.openURL(`${webAppUrl}${state.access.platformRole ? "/admin" : "/org"}`)}>
             Open web workspace
           </InlineButton>
         ) : null}
+      </Card>
+
+      <Card>
+        <SectionTitle>Workout plans</SectionTitle>
+        {profile?.workoutPlans.length ? (
+          profile.workoutPlans.map((plan) => (
+            <View key={plan.id} style={styles.planRow}>
+              <View style={styles.planHeader}>
+                <View style={styles.membershipCopy}>
+                  <Text style={styles.membershipGym}>{plan.title}</Text>
+                  <Text style={styles.note}>
+                    {plan.gymName ?? plan.gymId} · {plan.status}
+                  </Text>
+                </View>
+                <Pill tone={plan.status === "active" ? "success" : "default"}>{plan.status}</Pill>
+              </View>
+              {plan.goal ? <Text style={styles.note}>{plan.goal}</Text> : null}
+              {plan.notes ? <Text style={styles.planNotes}>{plan.notes}</Text> : null}
+              <Text style={styles.note}>
+                {formatDate(plan.startsAt)} → {formatDate(plan.endsAt)}
+              </Text>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.note}>No assigned workout plans yet.</Text>
+        )}
       </Card>
 
       <Card>
@@ -189,7 +222,8 @@ export function ProfileScreen() {
       <StatGrid
         items={[
           { label: "Role", value: state.access.platformRole ?? (state.access.staffGymIds.length > 0 ? "staff" : "member") },
-          { label: "Gyms", value: String(profile?.memberships.length ?? 0) }
+          { label: "Gyms", value: String(profile?.memberships.length ?? 0) },
+          { label: "Plans", value: String(profile?.workoutPlans.length ?? 0) }
         ]}
       />
 
@@ -252,6 +286,23 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: palette.border
+  },
+  planRow: {
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.border
+  },
+  planHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: spacing.md
+  },
+  planNotes: {
+    color: palette.text,
+    fontSize: 14,
+    lineHeight: 20
   },
   membershipCopy: {
     gap: 4
