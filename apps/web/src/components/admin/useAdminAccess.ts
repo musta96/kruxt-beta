@@ -10,6 +10,7 @@ const INITIAL: AdminAccessState = {
   status: "loading",
   isAuthenticated: false,
   user: null,
+  activationStatus: null,
   platformRole: null,
   staffGymIds: []
 };

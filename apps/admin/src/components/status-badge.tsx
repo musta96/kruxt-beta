@@ -71,6 +71,7 @@ export function statusToVariant(
     case "paid":
       return "success";
     case "pending":
+    case "pending_activation":
     case "triaged":
     case "waiting_user":
     case "waiting_approval":
@@ -82,6 +83,7 @@ export function statusToVariant(
       return "warning";
     case "cancelled":
     case "expired":
+    case "invite_expired":
     case "revoked":
     case "failed":
     case "rejected":

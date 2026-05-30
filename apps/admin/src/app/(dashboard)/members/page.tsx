@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/empty-state";
 import { ErrorBanner } from "@/components/error-banner";
 import { PageSkeleton } from "@/components/loading-skeleton";
 import { Modal } from "@/components/modal";
+import { ProfileInviteForm } from "@/components/profile-invite-form";
 import { useGym } from "@/contexts/gym-context";
 import { useServices } from "@/hooks/use-services";
 import { useAsync } from "@/hooks/use-async";
@@ -609,12 +610,22 @@ export default function MembersPage() {
             onClick={() => setShowAdd(true)}
             className="rounded-button bg-kruxt-accent px-4 py-2 text-sm font-semibold text-kruxt-bg transition-opacity hover:opacity-90"
           >
-            + Add Member
+            + Add Existing
           </button>
         }
       />
 
       {actionError && <ErrorBanner message={actionError} onRetry={() => setActionError(undefined)} />}
+
+      <ProfileInviteForm
+        gymId={gymId}
+        defaultRole="member"
+        showAssignments
+        onChanged={() => {
+          refetch();
+          staffOptionsState.refetch();
+        }}
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Active Members" value={activeCount} accent="success" />

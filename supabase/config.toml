@@ -26,7 +26,7 @@ port = 54323
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:19006", "http://localhost:3001"]
+additional_redirect_urls = ["http://localhost:19006", "http://localhost:3001", "http://localhost:3200", "http://localhost:3200/activate-invite"]
 
 [functions.provider_webhook_ingest]
 verify_jwt = false
@@ -50,4 +50,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions."accept-invite"]
+verify_jwt = false
+
+[functions."create-profile-invite"]
+verify_jwt = false
+
+[functions."complete-profile-activation"]
 verify_jwt = false

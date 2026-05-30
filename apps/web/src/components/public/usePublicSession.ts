@@ -34,6 +34,9 @@ export function broadcastPublicSessionRefresh() {
 }
 
 export function resolvePostAuthPath(access: AdminAccessState): string {
+  if (access.activationStatus === "pending_activation" || access.activationStatus === "disabled") {
+    return "/activate-invite";
+  }
   if (access.platformRole) return "/admin";
   if (access.staffGymIds.length > 0) return "/org";
   return "/feed";

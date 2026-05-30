@@ -60,6 +60,41 @@ export function MemberShell({
     );
   }
 
+  if (state.access.activationStatus === "pending_activation" || state.access.activationStatus === "disabled") {
+    return (
+      <main className="app-shell">
+        <div className="mobile-frame">
+          <section className="glass-panel">
+            <p className="eyebrow">KRUXT</p>
+            <h1 className="mobile-title">
+              {state.access.activationStatus === "disabled" ? "Profile disabled" : "Activation required"}
+            </h1>
+            <p className="mobile-copy">
+              {state.access.activationStatus === "disabled"
+                ? "This profile cannot access the app. Ask the gym or KRUXT team to send a new invite."
+                : "Set your password from the activation screen before using the member app."}
+            </p>
+            <div className="stack-actions">
+              {state.access.activationStatus === "pending_activation" && (
+                <button className="primary-cta" onClick={() => router.push("/activate-invite")}>
+                  Complete activation
+                </button>
+              )}
+              <button
+                className="secondary-cta"
+                onClick={() => {
+                  void signOut().then(() => router.push("/"));
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   const adminPath = resolvePostAuthPath(state.access);
   const hasBackofficeAccess = adminPath === "/admin" || adminPath === "/org";
 

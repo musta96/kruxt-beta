@@ -198,6 +198,31 @@ type GymInviteCodeRow = {
   updated_at: string;
 };
 
+type GymProfileInvitationRow = {
+  id: string;
+  gym_id: string;
+  invited_user_id: string | null;
+  email: string;
+  display_name: string;
+  requested_role: RequestedGymProfileRole;
+  gym_role: GymRole;
+  membership_plan_id: string | null;
+  coach_user_id: string | null;
+  status: GymProfileInvitationStatus;
+  invite_attempt: number;
+  invited_by: string | null;
+  invited_by_context: "platform" | "gym_owner" | "gym_staff";
+  sent_at: string | null;
+  expires_at: string;
+  activated_at: string | null;
+  disabled_at: string | null;
+  last_email_status: string | null;
+  last_email_provider: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
 type GymJoinRequestRow = {
   id: string;
   gym_id: string;
@@ -334,6 +359,51 @@ export interface GymJoinRequestDirectoryItem extends GymJoinRequest {
   inviteLabel?: string | null;
 }
 
+export type RequestedGymProfileRole = "owner" | "admin" | "staff" | "pt" | "member";
+export type GymProfileInvitationStatus = "pending_activation" | "active" | "invite_expired" | "disabled";
+
+export interface GymProfileInvitation {
+  id: string;
+  gymId: string;
+  invitedUserId: string | null;
+  email: string;
+  displayName: string;
+  requestedRole: RequestedGymProfileRole;
+  gymRole: GymRole;
+  membershipPlanId: string | null;
+  coachUserId: string | null;
+  status: GymProfileInvitationStatus;
+  inviteAttempt: number;
+  invitedBy: string | null;
+  invitedByContext: "platform" | "gym_owner" | "gym_staff";
+  sentAt: string | null;
+  expiresAt: string;
+  activatedAt: string | null;
+  disabledAt: string | null;
+  lastEmailStatus: string | null;
+  lastEmailProvider: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateProfileInviteInput {
+  fullName: string;
+  email: string;
+  role: RequestedGymProfileRole;
+  membershipPlanId?: string | null;
+  coachUserId?: string | null;
+  expiresInHours?: number;
+}
+
+export interface ProfileInviteResult {
+  invite: GymProfileInvitation;
+  inviteUrl?: string;
+  emailDelivery?: "sent" | "link_only" | "failed";
+  emailProvider?: "resend" | "none";
+  emailError?: string;
+}
+
 function mapMembership(row: MembershipRow): GymMembership {
   return {
     id: row.id,
@@ -414,6 +484,33 @@ function mapGymInviteCode(row: GymInviteCodeRow): GymInviteCode {
     expiresAt: row.expires_at,
     isActive: row.is_active,
     createdBy: row.created_by,
+    metadata: row.metadata ?? {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function mapGymProfileInvitation(row: GymProfileInvitationRow): GymProfileInvitation {
+  return {
+    id: row.id,
+    gymId: row.gym_id,
+    invitedUserId: row.invited_user_id,
+    email: row.email,
+    displayName: row.display_name,
+    requestedRole: row.requested_role,
+    gymRole: row.gym_role,
+    membershipPlanId: row.membership_plan_id,
+    coachUserId: row.coach_user_id,
+    status: row.status,
+    inviteAttempt: row.invite_attempt,
+    invitedBy: row.invited_by,
+    invitedByContext: row.invited_by_context,
+    sentAt: row.sent_at,
+    expiresAt: row.expires_at,
+    activatedAt: row.activated_at,
+    disabledAt: row.disabled_at,
+    lastEmailStatus: row.last_email_status,
+    lastEmailProvider: row.last_email_provider,
     metadata: row.metadata ?? {},
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -770,6 +867,116 @@ export class GymAdminService {
       const mapped = profileLabel(profile);
       return mapped ? [mapped] : [];
     });
+  }
+
+  async listProfileInvitations(gymId: string): Promise<GymProfileInvitation[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase
+      .from("gym_profile_invitations")
+      .select("*")
+      .eq("gym_id", gymId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    throwIfAdminError(error, "ADMIN_PROFILE_INVITES_LIST_FAILED", "Unable to load profile invitations.");
+
+    return ((data as GymProfileInvitationRow[]) ?? []).map(mapGymProfileInvitation);
+  }
+
+  async createProfileInvite(gymId: string, input: CreateProfileInviteInput): Promise<ProfileInviteResult> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase.functions.invoke("create-profile-invite", {
+      body: {
+        action: "create",
+        gymId,
+        fullName: input.fullName,
+        email: input.email,
+        role: input.role,
+        membershipPlanId: input.membershipPlanId ?? null,
+        coachUserId: input.coachUserId ?? null,
+        expiresInHours: input.expiresInHours ?? 48
+      }
+    });
+
+    if (error) {
+      throw new KruxtAdminError("ADMIN_PROFILE_INVITE_CREATE_FAILED", error.message || "Unable to create profile invite.", error);
+    }
+
+    if (!data?.ok || !data?.invite) {
+      throw new KruxtAdminError(
+        "ADMIN_PROFILE_INVITE_CREATE_FAILED",
+        typeof data?.error === "string" ? data.error : "Unable to create profile invite.",
+        data
+      );
+    }
+
+    return {
+      invite: mapGymProfileInvitation(data.invite as GymProfileInvitationRow),
+      inviteUrl: typeof data.inviteUrl === "string" ? data.inviteUrl : undefined,
+      emailDelivery: data.emailDelivery,
+      emailProvider: data.emailProvider,
+      emailError: typeof data.emailError === "string" ? data.emailError : undefined
+    };
+  }
+
+  async resendProfileInvite(gymId: string, inviteId: string): Promise<ProfileInviteResult> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase.functions.invoke("create-profile-invite", {
+      body: {
+        action: "resend",
+        gymId,
+        inviteId
+      }
+    });
+
+    if (error) {
+      throw new KruxtAdminError("ADMIN_PROFILE_INVITE_RESEND_FAILED", error.message || "Unable to resend profile invite.", error);
+    }
+
+    if (!data?.ok || !data?.invite) {
+      throw new KruxtAdminError(
+        "ADMIN_PROFILE_INVITE_RESEND_FAILED",
+        typeof data?.error === "string" ? data.error : "Unable to resend profile invite.",
+        data
+      );
+    }
+
+    return {
+      invite: mapGymProfileInvitation(data.invite as GymProfileInvitationRow),
+      inviteUrl: typeof data.inviteUrl === "string" ? data.inviteUrl : undefined,
+      emailDelivery: data.emailDelivery,
+      emailProvider: data.emailProvider,
+      emailError: typeof data.emailError === "string" ? data.emailError : undefined
+    };
+  }
+
+  async disableProfileInvite(gymId: string, inviteId: string): Promise<GymProfileInvitation> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase.functions.invoke("create-profile-invite", {
+      body: {
+        action: "disable",
+        gymId,
+        inviteId
+      }
+    });
+
+    if (error) {
+      throw new KruxtAdminError("ADMIN_PROFILE_INVITE_DISABLE_FAILED", error.message || "Unable to disable profile invite.", error);
+    }
+
+    if (!data?.ok || !data?.invite) {
+      throw new KruxtAdminError(
+        "ADMIN_PROFILE_INVITE_DISABLE_FAILED",
+        typeof data?.error === "string" ? data.error : "Unable to disable profile invite.",
+        data
+      );
+    }
+
+    return mapGymProfileInvitation(data.invite as GymProfileInvitationRow);
   }
 
   async listGymInviteCodes(gymId: string): Promise<GymInviteCode[]> {

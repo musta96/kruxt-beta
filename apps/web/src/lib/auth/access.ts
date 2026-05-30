@@ -5,6 +5,7 @@ export interface AdminAccessState {
   status: "loading" | "ready";
   isAuthenticated: boolean;
   user: User | null;
+  activationStatus: "pending_activation" | "active" | "disabled" | null;
   platformRole: PlatformOperatorRole | null;
   staffGymIds: string[];
 }
@@ -17,6 +18,7 @@ export async function resolveAdminAccess(client: SupabaseClient): Promise<AdminA
       status: "ready",
       isAuthenticated: false,
       user: null,
+      activationStatus: null,
       platformRole: null,
       staffGymIds: []
     };
@@ -25,7 +27,7 @@ export async function resolveAdminAccess(client: SupabaseClient): Promise<AdminA
   const user = authData.user;
 
   try {
-    const [{ data: platformData }, { data: membershipsData }] = await Promise.all([
+    const [{ data: platformData }, { data: membershipsData }, { data: profileData }] = await Promise.all([
       client
         .from("platform_operator_accounts")
         .select("role,is_active")
@@ -37,13 +39,20 @@ export async function resolveAdminAccess(client: SupabaseClient): Promise<AdminA
         .select("gym_id")
         .eq("user_id", user.id)
         .in("membership_status", ["trial", "active"])
-        .in("role", ["leader", "officer", "coach"])
+        .in("role", ["leader", "officer", "coach"]),
+      client
+        .from("profiles")
+        .select("activation_status")
+        .eq("id", user.id)
+        .maybeSingle()
     ]);
 
     return {
       status: "ready",
       isAuthenticated: true,
       user,
+      activationStatus:
+        (profileData?.activation_status as AdminAccessState["activationStatus"] | undefined) ?? "active",
       platformRole: (platformData?.role as PlatformOperatorRole | null | undefined) ?? null,
       staffGymIds: (membershipsData ?? []).map((row) => row.gym_id)
     };
@@ -52,6 +61,7 @@ export async function resolveAdminAccess(client: SupabaseClient): Promise<AdminA
       status: "ready",
       isAuthenticated: true,
       user,
+      activationStatus: null,
       platformRole: null,
       staffGymIds: []
     };

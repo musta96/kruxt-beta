@@ -8,6 +8,7 @@ import { StatusBadge, statusToVariant } from "@/components/status-badge";
 import { ErrorBanner } from "@/components/error-banner";
 import { PageSkeleton } from "@/components/loading-skeleton";
 import { EmptyState } from "@/components/empty-state";
+import { ProfileInviteForm } from "@/components/profile-invite-form";
 import { useGym } from "@/contexts/gym-context";
 import { useServices } from "@/hooks/use-services";
 import { useAsync } from "@/hooks/use-async";
@@ -249,6 +250,15 @@ export default function StaffPage() {
         <StatCard label="In Progress" value={activeCount} accent="warning" />
         <StatCard label="Planned Hours" value={plannedHours.toFixed(plannedHours % 1 === 0 ? 0 : 1)} accent="success" />
       </div>
+
+      <ProfileInviteForm
+        gymId={gymId}
+        title="Create staff profile & invite"
+        defaultRole="staff"
+        roles={["owner", "admin", "staff", "pt"]}
+        showAssignments={false}
+        onChanged={staffState.refetch}
+      />
 
       <div className="rounded-card border border-border bg-card p-5">
         <h2 className="text-sm font-semibold text-foreground font-kruxt-headline">Create Shift</h2>

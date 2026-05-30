@@ -209,10 +209,10 @@ export default function TenantsPage() {
     onboarding: tenants.filter((tenant) => tenant.status === "onboarding").length,
   };
 
-  async function openGymWorkspace(tenant: Tenant, mode: "manage" | "preview") {
+  async function openGymWorkspace(tenant: Tenant, mode: "manage" | "preview" | "invite") {
     if (!user) return;
 
-    const targetPath = mode === "preview" ? "/preview" : "/";
+    const targetPath = mode === "preview" ? "/preview" : mode === "invite" ? "/members?invite=1" : "/";
     setPendingAction(`${tenant.id}:${mode}`);
     setError(null);
 
@@ -221,7 +221,7 @@ export default function TenantsPage() {
         supabase,
         user,
         gymId: tenant.id,
-        mode,
+        mode: mode === "invite" ? "manage" : mode,
         targetPath,
       });
       window.location.href = buildAdminUrlWithSession(tenant.id, targetPath, session.sessionId);
@@ -342,6 +342,14 @@ export default function TenantsPage() {
                         className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-kruxt-panel"
                       >
                         {pendingAction === `${tenant.id}:manage` ? "Opening..." : "Open Admin"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void openGymWorkspace(tenant, "invite")}
+                        disabled={pendingAction !== null}
+                        className="rounded-md border border-kruxt-platform/40 px-3 py-1.5 text-xs font-medium text-kruxt-platform transition-colors hover:bg-kruxt-platform/10"
+                      >
+                        {pendingAction === `${tenant.id}:invite` ? "Opening..." : "Invite Profile"}
                       </button>
                       <button
                         type="button"

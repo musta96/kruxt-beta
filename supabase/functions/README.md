@@ -8,5 +8,7 @@
 - `incident_notifier`: claims incident notification jobs and runs provider-agnostic email/webhook stub notifiers (drill-safe by default)
 - `send-invite`: creates/resends/revokes gym staff invite tokens for org admins/founders
 - `accept-invite`: validates invite token + email match and upserts the recipient gym membership
+- `create-profile-invite`: creates/resends/disables pending gym profiles and sends expiring Supabase Auth magic links without setting passwords
+- `complete-profile-activation`: finalizes a magic-link invite after the recipient sets their own password and accepts owner terms when required
 
 All functions are intentionally thin entrypoints and should delegate heavy logic to SQL/RPC.
