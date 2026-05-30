@@ -23,6 +23,10 @@ type MembershipLookupRow = {
   gym_id: string;
 };
 
+type SupportSessionLookupRow = {
+  gym_id: string;
+};
+
 function readRequestedGymId(): string | null {
   if (typeof window === "undefined") return null;
   const params = new URLSearchParams(window.location.search);
@@ -52,6 +56,11 @@ function readSupportSessionId(): string | null {
 function persistRequestedGymId(gymId: string) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(SELECTED_GYM_STORAGE_KEY, gymId);
+}
+
+function clearStoredGymId() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(SELECTED_GYM_STORAGE_KEY);
 }
 
 function clearStoredSupportSessionId() {
@@ -105,8 +114,25 @@ export function GymProvider({ children }: { children: ReactNode }) {
     setNoGymFound(false);
     try {
       const supabase = createAdminSupabaseClient();
-      const requestedGymId = readRequestedGymId();
-      setSupportSessionId(readSupportSessionId());
+      const storedSupportSessionId = readSupportSessionId();
+      let requestedGymId = readRequestedGymId();
+      setSupportSessionId(storedSupportSessionId);
+
+      if (!requestedGymId && storedSupportSessionId) {
+        const { data: supportSession, error: supportSessionError } = await supabase
+          .from("gym_support_access_sessions")
+          .select("gym_id")
+          .eq("id", storedSupportSessionId)
+          .maybeSingle();
+
+        if (supportSessionError) throw supportSessionError;
+
+        const sessionGymId = (supportSession as SupportSessionLookupRow | null)?.gym_id ?? null;
+        if (sessionGymId) {
+          requestedGymId = sessionGymId;
+          persistRequestedGymId(sessionGymId);
+        }
+      }
 
       if (platformRole) {
         if (requestedGymId) {
@@ -125,6 +151,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
             persistRequestedGymId(selected.id);
             return;
           }
+          clearStoredGymId();
         }
 
         const { data: fallbackGym, error: fallbackGymError } = await supabase

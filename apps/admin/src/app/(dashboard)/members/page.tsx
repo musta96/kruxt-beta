@@ -79,8 +79,21 @@ function formatDateTime(value?: string | null): string {
 
 function inviteUrl(code: string): string {
   if (typeof window === "undefined") return `/join?code=${encodeURIComponent(code)}`;
-  const publicOrigin = process.env.NEXT_PUBLIC_KRUXT_WEB_URL || window.location.origin;
-  return `${publicOrigin.replace(/\/$/, "")}/join?code=${encodeURIComponent(code)}`;
+  const configuredOrigin =
+    process.env.NEXT_PUBLIC_KRUXT_WEB_URL ||
+    process.env.NEXT_PUBLIC_KRUXT_CONSUMER_WEB_URL ||
+    process.env.NEXT_PUBLIC_KRUXT_APP_URL;
+
+  if (configuredOrigin) {
+    return `${configuredOrigin.replace(/\/$/, "")}/join?code=${encodeURIComponent(code)}`;
+  }
+
+  const localOrigin = new URL(window.location.origin);
+  if (localOrigin.port === "3000" || localOrigin.port === "3100") {
+    localOrigin.port = "3200";
+  }
+
+  return `${localOrigin.toString().replace(/\/$/, "")}/join?code=${encodeURIComponent(code)}`;
 }
 
 function ProfileSearchResults({

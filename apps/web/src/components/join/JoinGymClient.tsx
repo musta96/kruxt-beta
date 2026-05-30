@@ -108,6 +108,7 @@ export function JoinGymClient() {
         });
         if (signInError) throw signInError;
         setSessionUserEmail(normalizedEmail);
+        if (code.trim()) await redeemCode();
         return;
       }
 
@@ -140,6 +141,7 @@ export function JoinGymClient() {
       }
 
       setSessionUserEmail(normalizedEmail);
+      if (code.trim()) await redeemCode();
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : "Unable to authenticate.");
     } finally {

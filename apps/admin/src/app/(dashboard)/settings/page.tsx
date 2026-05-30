@@ -158,6 +158,7 @@ export default function SettingsPage() {
   const plans = plansState.data ?? [];
   const allPlansSelected = plans.length > 0 && selectedPlanIds.length === plans.length;
   const previewHref = useMemo(() => buildPreviewHref(gymId, supportSessionId), [gymId, supportSessionId]);
+  const showDemoSeed = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED === "true";
   const draftStatusLabel = draftState.data
     ? draftState.data.status === "published"
       ? "Published draft"
@@ -245,6 +246,7 @@ export default function SettingsPage() {
     setSeedMessage(undefined);
     try {
       const result = await seedBzoneDemoData(supabase, gymId);
+      const demoPeople = result.demoPeople;
       setSeedMessage(
         `BZone demo ready: gym identity ${result.gymUpdated ? "updated" : "unchanged"}, brand ${
           result.brandSettingsUpserted ? "upserted" : "unchanged"
@@ -252,7 +254,11 @@ export default function SettingsPage() {
           result.classesSkipped ? "existing class schedule kept" : `${result.classesCreated} classes`
         }, waiver ${result.waiverUpserted ? "upserted" : "unchanged"}, and billing instructions ${
           result.billingSettingsUpserted ? "upserted" : "unchanged"
-        }.`
+        }. Demo people: ${demoPeople.profilesUpserted} profiles, ${demoPeople.membershipsUpserted} memberships, ${
+          demoPeople.joinRequestsUpserted
+        } pending request, ${demoPeople.staffShiftsCreated} shifts, ${demoPeople.workoutPlansCreated} workout plan, ${
+          demoPeople.classesAssigned
+        } classes assigned to the demo PT.`
       );
       brandState.refetch();
       draftState.refetch();
@@ -556,23 +562,25 @@ export default function SettingsPage() {
         ))}
       </section>
 
-      <section className="rounded-card border border-border bg-card p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground font-kruxt-headline">Demo Data</h2>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Seed the current gym with BZone-style plans, a four-week class schedule, and the Italian waiver baseline.
-            </p>
+      {showDemoSeed && (
+        <section className="rounded-card border border-border bg-card p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground font-kruxt-headline">Demo Data</h2>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Seed the current gym with BZone-style plans, a four-week class schedule, demo staff/members, and the Italian waiver baseline.
+              </p>
+            </div>
+            <button
+              onClick={seedBzone}
+              disabled={seeding}
+              className="rounded-button bg-kruxt-accent px-5 py-2 text-sm font-semibold text-kruxt-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {seeding ? "Seeding..." : "Seed BZone Demo"}
+            </button>
           </div>
-          <button
-            onClick={seedBzone}
-            disabled={seeding}
-            className="rounded-button bg-kruxt-accent px-5 py-2 text-sm font-semibold text-kruxt-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {seeding ? "Seeding..." : "Seed BZone Demo"}
-          </button>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 }

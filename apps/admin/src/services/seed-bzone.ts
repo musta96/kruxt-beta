@@ -16,6 +16,17 @@ export interface SeedResult {
   waiverUpserted: boolean;
   brandSettingsUpserted: boolean;
   billingSettingsUpserted: boolean;
+  demoPeople: DemoPeopleSeedResult;
+}
+
+export interface DemoPeopleSeedResult {
+  authUsersUpserted: number;
+  profilesUpserted: number;
+  membershipsUpserted: number;
+  joinRequestsUpserted: number;
+  staffShiftsCreated: number;
+  workoutPlansCreated: number;
+  classesAssigned: number;
 }
 
 interface PlanSeed {
@@ -196,6 +207,24 @@ const BZONE_MANUAL_BILLING = {
   externalPaymentUrl: "https://www.bzonefitness.it/contatti/"
 };
 
+function numberFromRecord(record: Record<string, unknown>, key: keyof DemoPeopleSeedResult): number {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function normalizeDemoPeopleSeed(value: unknown): DemoPeopleSeedResult {
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return {
+    authUsersUpserted: numberFromRecord(record, "authUsersUpserted"),
+    profilesUpserted: numberFromRecord(record, "profilesUpserted"),
+    membershipsUpserted: numberFromRecord(record, "membershipsUpserted"),
+    joinRequestsUpserted: numberFromRecord(record, "joinRequestsUpserted"),
+    staffShiftsCreated: numberFromRecord(record, "staffShiftsCreated"),
+    workoutPlansCreated: numberFromRecord(record, "workoutPlansCreated"),
+    classesAssigned: numberFromRecord(record, "classesAssigned")
+  };
+}
+
 export async function seedBzoneDemoData(
   supabase: SupabaseClient,
   gymId: string
@@ -306,6 +335,13 @@ export async function seedBzoneDemoData(
   );
   if (billingError) throw new Error(`Billing settings: ${billingError.message}`);
 
+  // 6. Demo people are seeded in the database so profiles can satisfy the
+  // auth.users foreign key without exposing privileged credentials to the app.
+  const { data: demoPeopleData, error: demoPeopleError } = await supabase.rpc("seed_bzone_demo_people", {
+    p_gym_id: gymId
+  });
+  if (demoPeopleError) throw new Error(`Demo people: ${demoPeopleError.message}`);
+
   return {
     gymUpdated: true,
     plansUpserted: planRows.length,
@@ -314,5 +350,6 @@ export async function seedBzoneDemoData(
     waiverUpserted: true,
     brandSettingsUpserted: true,
     billingSettingsUpserted: true,
+    demoPeople: normalizeDemoPeopleSeed(demoPeopleData),
   };
 }

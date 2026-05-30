@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { DataTable, type Column } from "@/components/data-table";
@@ -11,6 +11,7 @@ import { Modal } from "@/components/modal";
 import { useGym } from "@/contexts/gym-context";
 import { useServices } from "@/hooks/use-services";
 import { useAsync } from "@/hooks/use-async";
+import type { StaffProfileOption } from "@/services";
 import type { GymClass } from "@kruxt/types";
 
 const INPUT =
@@ -36,7 +37,7 @@ const defaultForm: CreateClassForm = {
 
 export default function ClassesPage() {
   const { gymId } = useGym();
-  const { ops } = useServices();
+  const { ops, gym } = useServices();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<CreateClassForm>(defaultForm);
   const [createLoading, setCreateLoading] = useState(false);
@@ -49,9 +50,14 @@ export default function ClassesPage() {
     [gymId]
   );
 
+  const staffState = useAsync(
+    () => gym.listStaffProfileOptions(gymId),
+    [gymId]
+  );
+
   const handleCreate = async () => {
-    if (!form.title.trim() || !form.startsAt || !form.endsAt || !form.capacity) {
-      setCreateError("Title, start time, end time, and capacity are required.");
+    if (!form.title.trim() || !form.startsAt || !form.endsAt || !form.capacity || !form.coachUserId) {
+      setCreateError("Title, coach, start time, end time, and capacity are required.");
       return;
     }
     const cap = parseInt(form.capacity, 10);
@@ -96,16 +102,36 @@ export default function ClassesPage() {
     [ops, gymId, refetch]
   );
 
-  if (status === "loading" || status === "idle") return <PageSkeleton />;
+  const staffOptions = useMemo<StaffProfileOption[]>(() => staffState.data ?? [], [staffState.data]);
+  const staffById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const staff of staffOptions) {
+      map.set(staff.userId, staff.label);
+    }
+    return map;
+  }, [staffOptions]);
 
-  if (status === "error") {
+  if (
+    status === "loading" ||
+    status === "idle" ||
+    staffState.status === "loading" ||
+    staffState.status === "idle"
+  ) return <PageSkeleton />;
+
+  if (status === "error" || staffState.status === "error") {
     return (
       <div className="space-y-6">
         <PageHeader
           title="Classes"
           description="Manage class schedules, instructors, and capacity."
         />
-        <ErrorBanner message={error} onRetry={refetch} />
+        <ErrorBanner
+          message={error ?? staffState.error ?? "Unable to load classes."}
+          onRetry={() => {
+            refetch();
+            staffState.refetch();
+          }}
+        />
       </div>
     );
   }
@@ -131,7 +157,7 @@ export default function ClassesPage() {
       header: "Coach",
       render: (row) => (
         <span className="text-sm text-muted-foreground">
-          {row.coachUserId ? row.coachUserId.slice(0, 8) : "—"}
+          {row.coachUserId ? staffById.get(row.coachUserId) ?? row.coachUserId.slice(0, 8) : "—"}
         </span>
       ),
     },
@@ -257,7 +283,7 @@ export default function ClassesPage() {
             </button>
             <button
               onClick={handleCreate}
-              disabled={createLoading}
+              disabled={createLoading || staffOptions.length === 0}
               className="rounded-button bg-kruxt-accent px-4 py-2 text-sm font-semibold text-kruxt-bg transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {createLoading ? "Creating…" : "Create Class"}
@@ -334,15 +360,20 @@ export default function ClassesPage() {
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Coach User ID
+              Coach *
             </label>
-            <input
-              type="text"
-              placeholder="Optional UUID…"
+            <select
               value={form.coachUserId}
               onChange={(e) => setForm((f) => ({ ...f, coachUserId: e.target.value }))}
               className={INPUT}
-            />
+            >
+              <option value="">Select coach</option>
+              {staffOptions.map((staff) => (
+                <option key={staff.userId} value={staff.userId}>
+                  {staff.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </Modal>

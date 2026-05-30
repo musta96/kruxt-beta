@@ -49,8 +49,8 @@ const emptyPlanDraft: PlanDraft = {
   isActive: true
 };
 
-function formatMoney(cents: number | null | undefined, currency = "USD"): string {
-  return new Intl.NumberFormat(undefined, {
+function formatMoney(cents: number | null | undefined, currency = "EUR"): string {
+  return new Intl.NumberFormat("it-IT", {
     style: "currency",
     currency,
     maximumFractionDigits: 2
@@ -474,6 +474,12 @@ export default function BillingPage() {
   const invoiceList = invoices.data ?? [];
   const subList = subscriptions.data ?? [];
   const paymentList = payments.data ?? [];
+  const gymCurrency =
+    planList.find((plan) => plan.isActive)?.currency ??
+    planList[0]?.currency ??
+    invoiceList[0]?.currency ??
+    paymentList[0]?.currency ??
+    "EUR";
   const planColumns: Column<GymMembershipPlan>[] = [
     {
       key: "name",
@@ -578,10 +584,10 @@ export default function BillingPage() {
       <PageHeader title="Billing" description="Invoices, subscriptions, and payment management." />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Revenue (Paid)" value={formatMoney(totalRevenue, invoiceList[0]?.currency ?? "USD")} accent="success" />
+        <StatCard label="Revenue (Paid)" value={formatMoney(totalRevenue, gymCurrency)} accent="success" />
         <StatCard label="Active Plans" value={activePlanCount} />
         <StatCard label="Active Subscriptions" value={activeSubCount} />
-        <StatCard label="Manual Payments" value={formatMoney(collectedPayments, paymentList[0]?.currency ?? "USD")} />
+        <StatCard label="Manual Payments" value={formatMoney(collectedPayments, gymCurrency)} />
         <StatCard label="Open Invoices" value={openInvoiceCount} />
       </div>
       {overdueCount > 0 && <ErrorBanner message={`${overdueCount} open invoices are overdue.`} />}

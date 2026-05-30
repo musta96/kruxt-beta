@@ -738,7 +738,7 @@ export class B2BOpsService {
         name: input.name,
         billing_cycle: input.billingCycle,
         price_cents: input.priceCents,
-        currency: (input.currency ?? "USD").toUpperCase(),
+        currency: (input.currency ?? "EUR").toUpperCase(),
         class_credits_per_cycle: input.classCreditsPerCycle ?? null,
         trial_days: input.trialDays ?? null,
         cancel_policy: input.cancelPolicy ?? null,
