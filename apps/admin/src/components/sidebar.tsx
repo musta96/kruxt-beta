@@ -23,6 +23,7 @@ const navigation: NavGroup[] = [
       { label: "Overview", href: "/", icon: "grid" },
       { label: "Members", href: "/members", icon: "users" },
       { label: "Staff", href: "/staff", icon: "briefcase" },
+      { label: "Coaching", href: "/coaching", icon: "clipboard-list" },
       { label: "Classes", href: "/classes", icon: "calendar" },
       { label: "Check-ins", href: "/checkins", icon: "check" },
       { label: "Preview", href: "/preview", icon: "eye" },
@@ -80,6 +81,13 @@ const iconMap: Record<string, JSX.Element> = {
   briefcase: (
     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.1A2.25 2.25 0 0118 20.5H6a2.25 2.25 0 01-2.25-2.25v-4.1m16.5 0A2.25 2.25 0 0022.5 11.9V8.25A2.25 2.25 0 0020.25 6H15V4.75A2.25 2.25 0 0012.75 2.5h-1.5A2.25 2.25 0 009 4.75V6H3.75A2.25 2.25 0 001.5 8.25v3.65a2.25 2.25 0 002.25 2.25m16.5 0H3.75m16.5 0v-.25a2.25 2.25 0 00-2.25-2.25H6a2.25 2.25 0 00-2.25 2.25v.25M9 6h6" />
+    </svg>
+  ),
+  "clipboard-list": (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5.25h6M9.75 3.75h4.5c.621 0 1.125.504 1.125 1.125S14.871 6 14.25 6h-4.5A1.125 1.125 0 018.625 4.875c0-.621.504-1.125 1.125-1.125z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 5.25H6.375A2.625 2.625 0 003.75 7.875v10.5A2.625 2.625 0 006.375 21h11.25a2.625 2.625 0 002.625-2.625v-10.5a2.625 2.625 0 00-2.625-2.625H16.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 11.25h7.5M8.25 15h4.5" />
     </svg>
   ),
   link: (

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import {
   createAdminSupabaseClient,
   GymAdminService,
+  CoachingService,
   B2BOpsService,
   IntegrationMonitorService,
   CustomizationSupportService,
@@ -20,6 +21,7 @@ export function useServices() {
     return {
       supabase,
       gym: new GymAdminService(supabase),
+      coaching: new CoachingService(supabase),
       ops: new B2BOpsService(supabase),
       integrations: new IntegrationMonitorService(supabase),
       customization: new CustomizationSupportService(supabase),
