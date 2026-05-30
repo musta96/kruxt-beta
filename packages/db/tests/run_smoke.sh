@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MIGRATIONS_DIR="$ROOT_DIR/supabase/migrations"
-PRIMARY_MIGRATION="$MIGRATIONS_DIR/202602190001_krux_beta_foundation_part1.sql"
+PRIMARY_MIGRATION="$MIGRATIONS_DIR/00000000000000_baseline.sql"
 RLS_FILE="$ROOT_DIR/tests/rls_smoke.sql"
 
 if [[ ! -d "$MIGRATIONS_DIR" ]]; then
