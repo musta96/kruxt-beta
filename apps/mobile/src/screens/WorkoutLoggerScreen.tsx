@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Button, Card, Chip, Input, ProgressBar } from "@kruxt/ui";
 import { darkTheme } from "@kruxt/ui/theme";
 import type {
@@ -52,6 +53,7 @@ const STEP_LABELS: Record<WorkoutLoggerUiStep, string> = {
 };
 
 export function WorkoutLoggerScreen() {
+  const router = useRouter();
   const flowRef = useRef(createPhase3WorkoutLoggerUiFlow());
   const [currentStep, setCurrentStep] = useState(0);
   const [draft, setDraft] = useState<WorkoutLoggerDraft>(() =>
@@ -93,16 +95,24 @@ export function WorkoutLoggerScreen() {
     setSubmitting(false);
 
     if (result.ok) {
+      // Reset the logger so the next session starts clean.
+      setDraft(flowRef.current.createDraft());
+      setCurrentStep(0);
       Alert.alert(
         "Proof Posted!",
         `+${result.progressDelta.xpDelta ?? 0} XP  \u2022  Chain: ${result.progressDelta.current.chainDays}d`,
+        [
+          { text: "Keep logging", style: "cancel" },
+          {
+            text: "See Feed",
+            onPress: () => router.replace("/"),
+          },
+        ],
       );
-      setDraft(flowRef.current.createDraft());
-      setCurrentStep(0);
     } else {
       Alert.alert("Error", result.error.message);
     }
-  }, [draft]);
+  }, [draft, router]);
 
   const updateMetadata = useCallback(
     (updates: Partial<WorkoutLoggerDraft["metadata"]>) => {

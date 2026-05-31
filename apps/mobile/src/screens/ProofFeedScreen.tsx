@@ -1,7 +1,5 @@
 import React, {
   useCallback,
-  useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -22,6 +20,7 @@ import {
   type ListRenderItemInfo,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { Avatar, EmptyState, ErrorState } from "@kruxt/ui";
 import { darkTheme } from "@kruxt/ui/theme";
 import type {
@@ -65,6 +64,10 @@ export function ProofFeedScreen() {
   const [postingComment, setPostingComment] = useState(false);
   // Local optimistic reaction selection per workout (for instant rail feedback).
   const [pendingReaction, setPendingReaction] = useState<Record<string, ReactionType>>({});
+
+  // Tracks whether the very first load has happened, so focus-refetch only
+  // runs a silent refresh on *return* visits (e.g. after posting from Log).
+  const hasLoadedRef = useRef(false);
 
   const loadFeed = useCallback(async () => {
     setLoading(true);
@@ -121,9 +124,18 @@ export function ProofFeedScreen() {
     setPostingComment(false);
   }, [commentSheetWorkoutId, commentDraft]);
 
-  useEffect(() => {
-    loadFeed();
-  }, [loadFeed]);
+  // Load on first focus; silently refresh on every return focus so a workout
+  // just posted from the Log tab shows up without a manual pull-to-refresh.
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasLoadedRef.current) {
+        hasLoadedRef.current = true;
+        loadFeed();
+      } else {
+        refreshFeed();
+      }
+    }, [loadFeed, refreshFeed]),
+  );
 
   const onListLayout = useCallback((e: LayoutChangeEvent) => {
     const h = e.nativeEvent.layout.height;
