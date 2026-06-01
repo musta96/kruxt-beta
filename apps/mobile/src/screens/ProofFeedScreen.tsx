@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -166,12 +167,35 @@ export function ProofFeedScreen() {
 
       const { actor, workout, engagement, createdAt } = item.item;
       const selected = pendingReaction[workout.id];
+      const mediaUrl = workout.proofMediaThumbnailUrl ?? workout.proofMediaUrl;
+      const hasMedia = Boolean(mediaUrl);
+      const isVideo = workout.proofMediaType === "video";
 
       return (
         <View style={[styles.page, { height: pageHeight }]}>
-          {/* Background accent glow (no gradient lib needed) */}
-          <View style={styles.glowTop} pointerEvents="none" />
-          <View style={styles.glowBottom} pointerEvents="none" />
+          {hasMedia ? (
+            <>
+              {/* Full-bleed proof media */}
+              <Image
+                source={{ uri: mediaUrl as string }}
+                style={styles.mediaBg}
+                resizeMode="cover"
+              />
+              {/* Scrim so overlaid text stays legible */}
+              <View style={styles.mediaScrim} pointerEvents="none" />
+              {isVideo && (
+                <View style={styles.videoBadge} pointerEvents="none">
+                  <Text style={styles.videoBadgeText}>{"▶"}</Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Background accent glow (no media → stat-hero card) */}
+              <View style={styles.glowTop} pointerEvents="none" />
+              <View style={styles.glowBottom} pointerEvents="none" />
+            </>
+          )}
 
           {/* Top meta */}
           <View style={[styles.topMeta, { paddingTop: insets.top + 12 }]}>
@@ -441,6 +465,33 @@ const styles = StyleSheet.create({
     height: 380,
     borderRadius: 380,
     backgroundColor: "rgba(53,208,255,0.06)",
+  },
+  mediaBg: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+  },
+  mediaScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(14,17,22,0.45)",
+  },
+  videoBadge: {
+    position: "absolute",
+    top: "46%",
+    alignSelf: "center",
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(14,17,22,0.5)",
+    borderWidth: 1.5,
+    borderColor: "rgba(244,246,248,0.7)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  videoBadgeText: {
+    fontSize: 26,
+    color: "#F4F6F8",
+    marginLeft: 4,
   },
 
   topMeta: {

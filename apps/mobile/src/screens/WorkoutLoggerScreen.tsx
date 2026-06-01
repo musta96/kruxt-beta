@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,6 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Button, Card, Chip, Input, ProgressBar } from "@kruxt/ui";
 import { darkTheme } from "@kruxt/ui/theme";
@@ -124,6 +126,37 @@ export function WorkoutLoggerScreen() {
     [],
   );
 
+  const handlePickMedia = useCallback(async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "Allow photo/video access to attach workout proof.",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images", "videos"],
+        quality: 0.85,
+        videoMaxDuration: 60,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.uri) return;
+      setDraft((prev) => ({
+        ...prev,
+        proofMedia: { uri: asset.uri, mimeType: asset.mimeType ?? null },
+      }));
+    } catch (e) {
+      Alert.alert("Error", e instanceof Error ? e.message : "Unable to pick media.");
+    }
+  }, []);
+
+  const handleClearMedia = useCallback(() => {
+    setDraft((prev) => ({ ...prev, proofMedia: null }));
+  }, []);
+
   const addExercise = useCallback(() => {
     setDraft((prev) => flowRef.current.addExercise(prev));
   }, []);
@@ -203,7 +236,13 @@ export function WorkoutLoggerScreen() {
               onQuickAdjust={quickAdjust}
             />
           )}
-          {step === "review" && <ReviewStep draft={draft} />}
+          {step === "review" && (
+            <ReviewStep
+              draft={draft}
+              onPickMedia={handlePickMedia}
+              onClearMedia={handleClearMedia}
+            />
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -519,7 +558,15 @@ function SetRow({
 // Step 4: Review
 // ---------------------------------------------------------------------------
 
-function ReviewStep({ draft }: { draft: WorkoutLoggerDraft }) {
+function ReviewStep({
+  draft,
+  onPickMedia,
+  onClearMedia,
+}: {
+  draft: WorkoutLoggerDraft;
+  onPickMedia: () => void;
+  onClearMedia: () => void;
+}) {
   const totalSets = draft.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
   const totalVolume = draft.exercises.reduce(
     (sum, ex) =>
@@ -564,6 +611,35 @@ function ReviewStep({ draft }: { draft: WorkoutLoggerDraft }) {
           </View>
         )}
       </Card>
+      {/* Proof media attach */}
+      <Card theme={theme} style={styles.proofCard}>
+        <Text style={styles.proofTitle}>Proof Media</Text>
+        {draft.proofMedia?.uri ? (
+          <View>
+            <Image source={{ uri: draft.proofMedia.uri }} style={styles.proofPreview} />
+            {(draft.proofMedia.mimeType ?? "").startsWith("video") && (
+              <View style={styles.proofVideoBadge}>
+                <Text style={styles.proofVideoBadgeText}>{"▶ VIDEO"}</Text>
+              </View>
+            )}
+            <View style={styles.proofActions}>
+              <Pressable onPress={onPickMedia} style={styles.proofActionBtn}>
+                <Text style={styles.proofActionText}>Replace</Text>
+              </Pressable>
+              <Pressable onPress={onClearMedia} style={styles.proofActionBtn}>
+                <Text style={styles.proofActionTextDanger}>Remove</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <Pressable onPress={onPickMedia} style={styles.proofPicker}>
+            <Text style={styles.proofPickerIcon}>{"\u{1F4F8}"}</Text>
+            <Text style={styles.proofPickerText}>Add a photo or video</Text>
+            <Text style={styles.proofPickerHint}>Optional — proof hits different</Text>
+          </Pressable>
+        )}
+      </Card>
+
       <Text style={styles.reviewHint}>
         {"\u{1F525}"} Protect the chain. Post the proof.
       </Text>
@@ -778,6 +854,77 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 12,
   },
+  // Proof media
+  proofCard: { marginBottom: 16 },
+  proofTitle: {
+    fontFamily: "Sora",
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#A7B1C2",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  proofPicker: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(53,208,255,0.3)",
+    borderStyle: "dashed",
+    backgroundColor: "rgba(53,208,255,0.04)",
+  },
+  proofPickerIcon: { fontSize: 28, marginBottom: 6 },
+  proofPickerText: {
+    fontFamily: "Sora",
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#F4F6F8",
+  },
+  proofPickerHint: {
+    fontFamily: "Sora",
+    fontSize: 12,
+    color: "#A7B1C2",
+    marginTop: 2,
+  },
+  proofPreview: {
+    width: "100%",
+    height: 220,
+    borderRadius: 14,
+    backgroundColor: "rgba(141,153,174,0.1)",
+  },
+  proofVideoBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    backgroundColor: "rgba(14,17,22,0.8)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  proofVideoBadgeText: {
+    fontFamily: "Roboto Mono",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#35D0FF",
+    letterSpacing: 1,
+  },
+  proofActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 12,
+  },
+  proofActionBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(141,153,174,0.18)",
+  },
+  proofActionText: { fontFamily: "Sora", fontSize: 13, fontWeight: "600", color: "#F4F6F8" },
+  proofActionTextDanger: { fontFamily: "Sora", fontSize: 13, fontWeight: "600", color: "#FF6B6B" },
   // Footer
   footer: {
     flexDirection: "row",
