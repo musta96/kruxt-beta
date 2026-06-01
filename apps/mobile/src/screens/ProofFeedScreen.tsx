@@ -5,7 +5,9 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
+  Easing,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -70,6 +72,11 @@ export function ProofFeedScreen() {
   // runs a silent refresh on *return* visits (e.g. after posting from Log).
   const hasLoadedRef = useRef(false);
 
+  // Double-tap-to-react: per-card last-tap timestamps + a single burst overlay.
+  const lastTapRef = useRef<Record<string, number>>({});
+  const burstAnim = useRef(new Animated.Value(0)).current;
+  const [burstId, setBurstId] = useState<string | null>(null);
+
   const loadFeed = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -104,6 +111,45 @@ export function ProofFeedScreen() {
       if (result.ok) setSnapshot(result.snapshot);
     },
     [],
+  );
+
+  const triggerBurst = useCallback(
+    (workoutId: string) => {
+      setBurstId(workoutId);
+      burstAnim.setValue(0);
+      Animated.sequence([
+        Animated.timing(burstAnim, {
+          toValue: 1,
+          duration: 160,
+          easing: Easing.out(Easing.back(2)),
+          useNativeDriver: true,
+        }),
+        Animated.timing(burstAnim, {
+          toValue: 0,
+          duration: 320,
+          delay: 280,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start(() => setBurstId(null));
+      // Fire the 🔥 reaction (TikTok-style double-tap = fire).
+      void handleReaction(workoutId, "fire");
+    },
+    [burstAnim, handleReaction],
+  );
+
+  const handleCardTap = useCallback(
+    (workoutId: string) => {
+      const now = Date.now();
+      const last = lastTapRef.current[workoutId] ?? 0;
+      if (now - last < 300) {
+        lastTapRef.current[workoutId] = 0;
+        triggerBurst(workoutId);
+      } else {
+        lastTapRef.current[workoutId] = now;
+      }
+    },
+    [triggerBurst],
   );
 
   const openComments = useCallback((workoutId: string) => {
@@ -195,6 +241,36 @@ export function ProofFeedScreen() {
               <View style={styles.glowTop} pointerEvents="none" />
               <View style={styles.glowBottom} pointerEvents="none" />
             </>
+          )}
+
+          {/* Double-tap zone — sits above the background, below the rail/meta
+              (which render later in JSX and capture their own taps). */}
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => handleCardTap(workout.id)}
+            accessibilityLabel="Double-tap to react with fire"
+          />
+
+          {/* Double-tap burst */}
+          {burstId === workout.id && (
+            <Animated.Text
+              style={[
+                styles.burst,
+                {
+                  opacity: burstAnim,
+                  transform: [
+                    {
+                      scale: burstAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.4, 1.7],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              {"\u{1F525}"}
+            </Animated.Text>
           )}
 
           {/* Top meta */}
@@ -289,7 +365,7 @@ export function ProofFeedScreen() {
         </View>
       );
     },
-    [pageHeight, insets, pendingReaction, handleReaction, openComments],
+    [pageHeight, insets, pendingReaction, handleReaction, openComments, handleCardTap, burstId, burstAnim],
   );
 
   // ---- States ----
@@ -492,6 +568,15 @@ const styles = StyleSheet.create({
     fontSize: 26,
     color: "#F4F6F8",
     marginLeft: 4,
+  },
+  burst: {
+    position: "absolute",
+    top: "40%",
+    alignSelf: "center",
+    fontSize: 96,
+    textAlign: "center",
+    zIndex: 20,
+    pointerEvents: "none",
   },
 
   topMeta: {
