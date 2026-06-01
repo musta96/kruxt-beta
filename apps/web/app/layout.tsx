@@ -21,6 +21,9 @@ export const metadata: Metadata = {
       "Social fitness member experience, gym operations workspace, and founder-level control plane for KRUXT.",
     type: "website",
     siteName: "KRUXT"
+  },
+  other: {
+    "mobile-web-app-capable": "yes"
   }
 };
 

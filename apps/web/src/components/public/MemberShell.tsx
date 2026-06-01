@@ -7,10 +7,15 @@ import { resolvePostAuthPath, usePublicSession } from "@/components/public/usePu
 
 const MEMBER_NAV = [
   { href: "/feed", label: "Feed" },
+  { href: "/plan", label: "Plan" },
+  { href: "/library", label: "Library" },
   { href: "/log", label: "Log" },
   { href: "/gyms", label: "Gyms" },
   { href: "/guild", label: "Guild" },
   { href: "/rank", label: "Rank" },
+  { href: "/integrations", label: "Integrations" },
+  { href: "/privacy", label: "Privacy" },
+  { href: "/support", label: "Support" },
   { href: "/profile", label: "Profile" }
 ];
 

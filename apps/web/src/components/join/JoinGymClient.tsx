@@ -35,17 +35,16 @@ export function JoinGymClient() {
   useEffect(() => {
     let active = true;
     const run = async () => {
-      const { data } = await supabase.auth.getUser();
+      const { data } = await supabase.auth.getSession();
       if (!active) return;
-      setSessionUserEmail(data.user?.email ?? null);
+      setSessionUserEmail(data.session?.user.email ?? null);
       setCheckingSession(false);
     };
 
     void run();
-    const listener = supabase.auth.onAuthStateChange(async () => {
-      const { data } = await supabase.auth.getUser();
+    const listener = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
-      setSessionUserEmail(data.user?.email ?? null);
+      setSessionUserEmail(session?.user.email ?? null);
     });
 
     return () => {

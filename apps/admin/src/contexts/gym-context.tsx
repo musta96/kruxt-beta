@@ -13,6 +13,11 @@ import { createAdminSupabaseClient } from "@/services";
 
 const SELECTED_GYM_STORAGE_KEY = "kruxt:selected-gym-id";
 const SUPPORT_SESSION_STORAGE_KEY = "kruxt:platform-support-session-id";
+const DEFAULT_UAT_GYM_ID = process.env.NEXT_PUBLIC_KRUXT_UAT_GYM_ID ?? "61036acd-2f86-4745-866e-cd2f5539371f";
+const DEPRECATED_BZONE_GYM_IDS = new Set([
+  "871a11f1-6893-495a-8ed8-70d736876096",
+  "3306f501-3f50-4a30-8552-b47bf9cce199",
+]);
 
 type GymLookupRow = {
   id: string;
@@ -66,6 +71,11 @@ function clearStoredGymId() {
 function clearStoredSupportSessionId() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(SUPPORT_SESSION_STORAGE_KEY);
+}
+
+function normalizeDefaultGymId(gymId: string | null): string | null {
+  if (!gymId) return null;
+  return DEPRECATED_BZONE_GYM_IDS.has(gymId) ? DEFAULT_UAT_GYM_ID : gymId;
 }
 
 interface GymContextValue {
@@ -135,6 +145,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
       }
 
       if (platformRole) {
+        requestedGymId = normalizeDefaultGymId(requestedGymId);
+
         if (requestedGymId) {
           const { data: selectedGym, error: selectedGymError } = await supabase
             .from("gyms")
@@ -154,9 +166,26 @@ export function GymProvider({ children }: { children: ReactNode }) {
           clearStoredGymId();
         }
 
+        const { data: uatGym, error: uatGymError } = await supabase
+          .from("gyms")
+          .select("id,name")
+          .eq("id", DEFAULT_UAT_GYM_ID)
+          .maybeSingle();
+
+        if (uatGymError) throw uatGymError;
+
+        const explicitUatGym = uatGym as GymLookupRow | null;
+        if (explicitUatGym) {
+          setGymId(explicitUatGym.id);
+          setGymName(explicitUatGym.name);
+          persistRequestedGymId(explicitUatGym.id);
+          return;
+        }
+
         const { data: fallbackGym, error: fallbackGymError } = await supabase
           .from("gyms")
           .select("id,name")
+          .order("is_public", { ascending: false })
           .order("name", { ascending: true })
           .limit(1)
           .maybeSingle();

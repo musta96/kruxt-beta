@@ -86,6 +86,7 @@ interface ImpactConfirmation {
 }
 
 const adminAppUrl = process.env.NEXT_PUBLIC_ADMIN_APP_URL ?? "http://localhost:3000";
+const DEFAULT_UAT_GYM_ID = process.env.NEXT_PUBLIC_KRUXT_UAT_GYM_ID ?? "61036acd-2f86-4745-866e-cd2f5539371f";
 
 const statusStyles: Record<TenantStatus, string> = {
   active: "bg-kruxt-success/20 text-kruxt-success",
@@ -110,7 +111,8 @@ function formatLocation(gym: GymRow): string {
 
 function formatCapabilityValue(capability: TenantCapability): string {
   if (capability.value_type === "limit") {
-    return (capability.effective_limit ?? 0).toLocaleString();
+    const limit = capability.effective_limit ?? 0;
+    return limit >= 1_000_000_000 ? "Unlimited" : limit.toLocaleString();
   }
 
   return capability.effective_bool ? "On" : "Off";
@@ -122,7 +124,8 @@ function formatNullableCapabilityValue(
   limitValue: number | null
 ): string {
   if (capability.value_type === "limit") {
-    return limitValue === null ? "Not set" : limitValue.toLocaleString();
+    if (limitValue === null) return "Not set";
+    return limitValue >= 1_000_000_000 ? "Unlimited" : limitValue.toLocaleString();
   }
 
   return boolValue === null ? "Not set" : boolValue ? "On" : "Off";
@@ -264,8 +267,18 @@ export default function TenantsPage() {
           };
         });
 
+        const sorted = mapped.sort((left, right) => {
+          if (left.id === DEFAULT_UAT_GYM_ID) return -1;
+          if (right.id === DEFAULT_UAT_GYM_ID) return 1;
+          if (left.status !== right.status) {
+            const statusRank: Record<TenantStatus, number> = { active: 0, private: 1, onboarding: 2 };
+            return statusRank[left.status] - statusRank[right.status];
+          }
+          return left.name.localeCompare(right.name);
+        });
+
         if (!active) return;
-        setTenants(mapped);
+        setTenants(sorted);
       } catch (loadError) {
         if (!active) return;
         setError(loadError instanceof Error ? loadError.message : "Unable to load gym tenants.");
@@ -617,7 +630,14 @@ export default function TenantsPage() {
                 <tr key={tenant.id} className="border-b border-border/50 transition-colors last:border-0 hover:bg-kruxt-panel/50">
                   <td className="px-4 py-3">
                     <div>
-                      <p className="font-medium text-foreground">{tenant.name}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-foreground">{tenant.name}</p>
+                        {tenant.id === DEFAULT_UAT_GYM_ID && (
+                          <span className="rounded-badge bg-kruxt-platform/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-kruxt-platform">
+                            UAT default
+                          </span>
+                        )}
+                      </div>
                       <p className="font-kruxt-mono text-xs text-muted-foreground">{tenant.slug}</p>
                     </div>
                   </td>

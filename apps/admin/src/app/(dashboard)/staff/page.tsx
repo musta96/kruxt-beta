@@ -9,6 +9,7 @@ import { ErrorBanner } from "@/components/error-banner";
 import { PageSkeleton } from "@/components/loading-skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { ProfileInviteForm } from "@/components/profile-invite-form";
+import { StaffPermissionMatrix } from "@/components/staff-permission-matrix";
 import { useGym } from "@/contexts/gym-context";
 import { useServices } from "@/hooks/use-services";
 import { useAsync } from "@/hooks/use-async";
@@ -115,6 +116,7 @@ export default function StaffPage() {
 
   const shiftsState = useAsync(() => gym.listStaffShifts(gymId), [gymId]);
   const staffState = useAsync(() => gym.listStaffProfileOptions(gymId), [gymId]);
+  const permissionsState = useAsync(() => gym.listGymRolePermissionMatrix(gymId), [gymId]);
 
   const staffById = useMemo(() => {
     const map = new Map<string, string>();
@@ -185,6 +187,10 @@ export default function StaffPage() {
   const activeCount = weekShifts.filter((shift) => shift.status === "in_progress").length;
   const completedCount = weekShifts.filter((shift) => shift.status === "completed").length;
   const plannedHours = weekShifts.reduce((total, shift) => total + shiftDurationHours(shift), 0);
+  const staffSchedulingCapability = permissionsState.data?.capabilities.find(
+    (capability) => capability.capabilityKey === "staff_scheduling"
+  );
+  const staffSchedulingEnabled = staffSchedulingCapability?.effectiveBool !== false;
 
   const columns: Column<StaffShift>[] = [
     {
@@ -260,117 +266,139 @@ export default function StaffPage() {
         onChanged={staffState.refetch}
       />
 
-      <div className="rounded-card border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-foreground font-kruxt-headline">Create Shift</h2>
-        <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
-          <select value={staffUserId} onChange={(event) => setStaffUserId(event.target.value)} className={INPUT}>
-            <option value="">Select staff member</option>
-            {(staffState.data ?? []).map((staff) => (
-              <option key={staff.userId} value={staff.userId}>{staff.label}</option>
-            ))}
-          </select>
-          <input value={title} onChange={(event) => setTitle(event.target.value)} className={INPUT} placeholder="Shift title" />
-          <input value={shiftRole} onChange={(event) => setShiftRole(event.target.value)} className={INPUT} placeholder="Role, e.g. coach" />
-          <input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} className={INPUT} />
-          <input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} className={INPUT} />
-          <button
-            onClick={createShift}
-            disabled={creating}
-            className="rounded-button bg-kruxt-accent px-4 py-2 text-sm font-semibold text-kruxt-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {creating ? "Creating..." : "Create Shift"}
-          </button>
-        </div>
-        <textarea
-          rows={2}
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-          className={`${INPUT} mt-3`}
-          placeholder="Coverage notes, handover details, or class responsibilities..."
-        />
-      </div>
+      <StaffPermissionMatrix
+        matrix={permissionsState.data}
+        status={permissionsState.status}
+        error={permissionsState.error}
+        onRetry={permissionsState.refetch}
+        onCreateCustomRole={(input) => gym.createGymCustomRole(gymId, input)}
+        onSetCustomPermission={(input) => gym.setGymCustomRolePermission(gymId, input)}
+        onMatrixChanged={permissionsState.refetch}
+      />
 
-      <section className="rounded-card border border-border bg-card p-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground font-kruxt-headline">Weekly Coverage</h2>
-            <p className="text-xs text-muted-foreground">
-              {formatDayLabel(weekStart)} to {formatDayLabel(addDays(weekStart, 6))} / {completedCount} completed
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setWeekStart((current) => addDays(current, -7))}
-              className="rounded-button border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-kruxt-panel"
-            >
-              Previous
-            </button>
-            <input
-              type="date"
-              value={toDateInput(weekStart)}
-              onChange={(event) => setWeekStart(startOfWeek(new Date(`${event.target.value}T00:00:00`)))}
-              className="rounded-lg border border-border bg-kruxt-panel px-3 py-2 text-xs text-foreground focus:border-kruxt-accent focus:outline-none"
+      {staffSchedulingEnabled ? (
+        <>
+          <div className="rounded-card border border-border bg-card p-5">
+            <h2 className="text-sm font-semibold text-foreground font-kruxt-headline">Create Shift</h2>
+            <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <select value={staffUserId} onChange={(event) => setStaffUserId(event.target.value)} className={INPUT}>
+                <option value="">Select staff member</option>
+                {(staffState.data ?? []).map((staff) => (
+                  <option key={staff.userId} value={staff.userId}>{staff.label}</option>
+                ))}
+              </select>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} className={INPUT} placeholder="Shift title" />
+              <input value={shiftRole} onChange={(event) => setShiftRole(event.target.value)} className={INPUT} placeholder="Role, e.g. coach" />
+              <input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} className={INPUT} />
+              <input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} className={INPUT} />
+              <button
+                onClick={createShift}
+                disabled={creating}
+                className="rounded-button bg-kruxt-accent px-4 py-2 text-sm font-semibold text-kruxt-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {creating ? "Creating..." : "Create Shift"}
+              </button>
+            </div>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              className={`${INPUT} mt-3`}
+              placeholder="Coverage notes, handover details, or class responsibilities..."
             />
-            <button
-              onClick={() => setWeekStart(startOfWeek(new Date()))}
-              className="rounded-button border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-kruxt-panel"
-            >
-              This Week
-            </button>
-            <button
-              onClick={() => setWeekStart((current) => addDays(current, 7))}
-              className="rounded-button border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-kruxt-panel"
-            >
-              Next
-            </button>
           </div>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-7">
-          {weekDays.map((day) => {
-            const dayStart = new Date(day);
-            const dayEnd = addDays(dayStart, 1);
-            const dayShifts = weekShifts.filter((shift) => shiftOverlapsRange(shift, dayStart, dayEnd));
 
-            return (
-              <div key={day.toISOString()} className="min-h-36 rounded-lg border border-border bg-kruxt-panel/35 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {formatDayLabel(day)}
+          <section className="rounded-card border border-border bg-card p-5">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground font-kruxt-headline">Weekly Coverage</h2>
+                <p className="text-xs text-muted-foreground">
+                  {formatDayLabel(weekStart)} to {formatDayLabel(addDays(weekStart, 6))} / {completedCount} completed
                 </p>
-                <div className="mt-3 space-y-2">
-                  {dayShifts.slice(0, 3).map((shift) => (
-                    <div key={shift.id} className="rounded-md bg-card px-2 py-2">
-                      <p className="truncate text-xs font-semibold text-foreground">{shift.title}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        {formatTimeRange(shift)}
-                      </p>
-                      <p className="mt-1 truncate text-[11px] text-muted-foreground">
-                        {staffById.get(shift.staffUserId) ?? shift.staffUserId.slice(0, 8)}
-                      </p>
-                    </div>
-                  ))}
-                  {dayShifts.length > 3 && (
-                    <p className="text-[11px] text-muted-foreground">+{dayShifts.length - 3} more shifts</p>
-                  )}
-                  {dayShifts.length === 0 && <p className="text-xs text-muted-foreground">No coverage</p>}
-                </div>
               </div>
-            );
-          })}
-        </div>
-      </section>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setWeekStart((current) => addDays(current, -7))}
+                  className="rounded-button border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-kruxt-panel"
+                >
+                  Previous
+                </button>
+                <input
+                  type="date"
+                  value={toDateInput(weekStart)}
+                  onChange={(event) => setWeekStart(startOfWeek(new Date(`${event.target.value}T00:00:00`)))}
+                  className="rounded-lg border border-border bg-kruxt-panel px-3 py-2 text-xs text-foreground focus:border-kruxt-accent focus:outline-none"
+                />
+                <button
+                  onClick={() => setWeekStart(startOfWeek(new Date()))}
+                  className="rounded-button border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-kruxt-panel"
+                >
+                  This Week
+                </button>
+                <button
+                  onClick={() => setWeekStart((current) => addDays(current, 7))}
+                  className="rounded-button border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-kruxt-panel"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-7">
+              {weekDays.map((day) => {
+                const dayStart = new Date(day);
+                const dayEnd = addDays(dayStart, 1);
+                const dayShifts = weekShifts.filter((shift) => shiftOverlapsRange(shift, dayStart, dayEnd));
 
-      {weekShifts.length === 0 ? (
-        <EmptyState
-          title="No staff shifts this week"
-          description="Create a shift or move to another week to review coverage."
-          icon={
-            <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5A2.25 2.25 0 015.25 5.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-            </svg>
-          }
-        />
+                return (
+                  <div key={day.toISOString()} className="min-h-36 rounded-lg border border-border bg-kruxt-panel/35 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {formatDayLabel(day)}
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {dayShifts.slice(0, 3).map((shift) => (
+                        <div key={shift.id} className="rounded-md bg-card px-2 py-2">
+                          <p className="truncate text-xs font-semibold text-foreground">{shift.title}</p>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {formatTimeRange(shift)}
+                          </p>
+                          <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                            {staffById.get(shift.staffUserId) ?? shift.staffUserId.slice(0, 8)}
+                          </p>
+                        </div>
+                      ))}
+                      {dayShifts.length > 3 && (
+                        <p className="text-[11px] text-muted-foreground">+{dayShifts.length - 3} more shifts</p>
+                      )}
+                      {dayShifts.length === 0 && <p className="text-xs text-muted-foreground">No coverage</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {weekShifts.length === 0 ? (
+            <EmptyState
+              title="No staff shifts this week"
+              description="Create a shift or move to another week to review coverage."
+              icon={
+                <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5A2.25 2.25 0 015.25 5.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                </svg>
+              }
+            />
+          ) : (
+            <DataTable columns={columns} data={weekShifts} keyExtractor={(row) => row.id} />
+          )}
+        </>
       ) : (
-        <DataTable columns={columns} data={weekShifts} keyExtractor={(row) => row.id} />
+        <div className="rounded-card border border-kruxt-warning/30 bg-kruxt-warning/10 p-5">
+          <h2 className="text-sm font-semibold text-kruxt-warning font-kruxt-headline">Staff scheduling disabled</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This gym&apos;s effective entitlement turns off staff scheduling, so shift creation and weekly coverage are hidden.
+            Enable <span className="font-kruxt-mono text-kruxt-warning">staff_scheduling</span> from Platform &gt; Tenant Features to restore this workflow.
+          </p>
+        </div>
       )}
     </div>
   );

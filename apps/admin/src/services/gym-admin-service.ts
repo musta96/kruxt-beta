@@ -260,6 +260,61 @@ type SecurityIncidentRow = {
   updated_at: string;
 };
 
+type GymPermissionCatalogRow = {
+  permission_key: string;
+  category: string;
+  label: string;
+  description: string | null;
+  metadata: Record<string, unknown>;
+};
+
+type GymRolePermissionRow = {
+  role: GymRole;
+  permission_key: string;
+  is_allowed: boolean;
+  updated_at: string;
+  metadata: Record<string, unknown>;
+};
+
+type GymCapabilityRow = {
+  capability_key: string;
+  category: string;
+  label: string;
+  value_type: "boolean" | "limit";
+  effective_bool: boolean | null;
+  effective_limit: number | null;
+  source: "override" | "plan" | "global";
+  template_key: string | null;
+  template_name: string | null;
+  metadata: Record<string, unknown>;
+};
+
+type GymCustomRoleRow = {
+  id: string;
+  gym_id: string;
+  role_key: string;
+  label: string;
+  description: string | null;
+  base_role: GymRole;
+  is_active: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+type GymCustomRolePermissionRow = {
+  id: string;
+  custom_role_id: string;
+  permission_key: string;
+  is_allowed: boolean;
+  updated_by: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
 export interface OpenPrivacyRequest {
   id: string;
   userId: string;
@@ -328,6 +383,69 @@ export interface StaffProfileOption {
   displayName: string;
   username: string;
   label: string;
+}
+
+export interface GymPermissionCatalogItem {
+  permissionKey: string;
+  category: string;
+  label: string;
+  description?: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface GymRolePermissionValue {
+  role: GymRole;
+  permissionKey: string;
+  isAllowed: boolean;
+  updatedAt: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface GymCustomRole {
+  id: string;
+  gymId: string;
+  roleKey: string;
+  label: string;
+  description?: string | null;
+  baseRole: GymRole;
+  isActive: boolean;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GymCustomRolePermissionValue {
+  id: string;
+  customRoleId: string;
+  permissionKey: string;
+  isAllowed: boolean;
+  updatedBy?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GymRolePermissionMatrix {
+  catalog: GymPermissionCatalogItem[];
+  rolePermissions: GymRolePermissionValue[];
+  capabilities: GymCapabilityValue[];
+  customRoles: GymCustomRole[];
+  customRolePermissions: GymCustomRolePermissionValue[];
+}
+
+export interface GymCapabilityValue {
+  capabilityKey: string;
+  category: string;
+  label: string;
+  valueType: "boolean" | "limit";
+  effectiveBool: boolean | null;
+  effectiveLimit: number | null;
+  source: "override" | "plan" | "global";
+  templateKey: string | null;
+  templateName: string | null;
+  metadata: Record<string, unknown>;
 }
 
 export interface MembershipPlanOption {
@@ -404,6 +522,21 @@ export interface ProfileInviteResult {
   emailError?: string;
 }
 
+export interface CreateGymCustomRoleInput {
+  label: string;
+  baseRole: GymRole;
+  roleKey?: string | null;
+  description?: string | null;
+  reason?: string | null;
+}
+
+export interface SetGymCustomRolePermissionInput {
+  customRoleId: string;
+  permissionKey: string;
+  isAllowed: boolean;
+  reason?: string | null;
+}
+
 function mapMembership(row: MembershipRow): GymMembership {
   return {
     id: row.id,
@@ -449,6 +582,71 @@ function mapStaffShift(row: StaffShiftRow): StaffShift {
     metadata: row.metadata ?? {},
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+function mapGymPermissionCatalog(row: GymPermissionCatalogRow): GymPermissionCatalogItem {
+  return {
+    permissionKey: row.permission_key,
+    category: row.category,
+    label: row.label,
+    description: row.description,
+    metadata: row.metadata ?? {}
+  };
+}
+
+function mapGymRolePermission(row: GymRolePermissionRow): GymRolePermissionValue {
+  return {
+    role: row.role,
+    permissionKey: row.permission_key,
+    isAllowed: row.is_allowed,
+    updatedAt: row.updated_at,
+    metadata: row.metadata ?? {}
+  };
+}
+
+function mapGymCustomRole(row: GymCustomRoleRow): GymCustomRole {
+  return {
+    id: row.id,
+    gymId: row.gym_id,
+    roleKey: row.role_key,
+    label: row.label,
+    description: row.description,
+    baseRole: row.base_role,
+    isActive: row.is_active,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
+    metadata: row.metadata ?? {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function mapGymCustomRolePermission(row: GymCustomRolePermissionRow): GymCustomRolePermissionValue {
+  return {
+    id: row.id,
+    customRoleId: row.custom_role_id,
+    permissionKey: row.permission_key,
+    isAllowed: row.is_allowed,
+    updatedBy: row.updated_by,
+    metadata: row.metadata ?? {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function mapGymCapability(row: GymCapabilityRow): GymCapabilityValue {
+  return {
+    capabilityKey: row.capability_key,
+    category: row.category,
+    label: row.label,
+    valueType: row.value_type,
+    effectiveBool: row.effective_bool,
+    effectiveLimit: row.effective_limit,
+    source: row.source,
+    templateKey: row.template_key,
+    templateName: row.template_name,
+    metadata: row.metadata ?? {}
   };
 }
 
@@ -612,6 +810,121 @@ export class GymAdminService {
     throwIfAdminError(error, "ADMIN_MEMBERSHIP_LIST_FAILED", "Unable to list gym memberships.");
 
     return (data as MembershipRow[]).map(mapMembership);
+  }
+
+  async listGymRolePermissionMatrix(gymId: string): Promise<GymRolePermissionMatrix> {
+    await this.access.requireGymStaff(gymId);
+
+    const [catalogResponse, rolePermissionsResponse, capabilitiesResponse, customRolesResponse] = await Promise.all([
+      this.supabase
+        .from("gym_permission_catalog")
+        .select("permission_key,category,label,description,metadata")
+        .eq("is_active", true)
+        .order("category", { ascending: true })
+        .order("label", { ascending: true }),
+      this.supabase
+        .from("gym_role_permissions")
+        .select("role,permission_key,is_allowed,updated_at,metadata")
+        .eq("gym_id", gymId)
+        .order("role", { ascending: true })
+        .order("permission_key", { ascending: true }),
+      this.supabase.rpc("platform_get_gym_capabilities", { p_gym_id: gymId }),
+      this.supabase
+        .from("gym_custom_roles")
+        .select("*")
+        .eq("gym_id", gymId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+    ]);
+
+    const { data: catalog, error: catalogError } = catalogResponse;
+    const { data: rolePermissions, error: rolePermissionsError } = rolePermissionsResponse;
+    const { data: capabilities, error: capabilitiesError } = capabilitiesResponse;
+    const { data: customRoles, error: customRolesError } = customRolesResponse;
+
+    throwIfAdminError(catalogError, "ADMIN_GYM_PERMISSION_CATALOG_FAILED", "Unable to load gym permission catalog.");
+
+    throwIfAdminError(
+      rolePermissionsError,
+      "ADMIN_GYM_ROLE_PERMISSIONS_FAILED",
+      "Unable to load gym role permissions."
+    );
+
+    throwIfAdminError(capabilitiesError, "ADMIN_GYM_CAPABILITY_MATRIX_FAILED", "Unable to load gym entitlement state.");
+
+    throwIfAdminError(customRolesError, "ADMIN_GYM_CUSTOM_ROLES_FAILED", "Unable to load custom gym roles.");
+
+    const mappedCustomRoles = ((customRoles as GymCustomRoleRow[]) ?? []).map(mapGymCustomRole);
+    let customRolePermissions: GymCustomRolePermissionValue[] = [];
+
+    if (mappedCustomRoles.length > 0) {
+      const { data: customPermissions, error: customPermissionsError } = await this.supabase
+        .from("gym_custom_role_permissions")
+        .select("*")
+        .in(
+          "custom_role_id",
+          mappedCustomRoles.map((role) => role.id)
+        )
+        .order("permission_key", { ascending: true });
+
+      throwIfAdminError(
+        customPermissionsError,
+        "ADMIN_GYM_CUSTOM_ROLE_PERMISSIONS_FAILED",
+        "Unable to load custom role permissions."
+      );
+
+      customRolePermissions = ((customPermissions as GymCustomRolePermissionRow[]) ?? []).map(
+        mapGymCustomRolePermission
+      );
+    }
+
+    return {
+      catalog: ((catalog as GymPermissionCatalogRow[]) ?? []).map(mapGymPermissionCatalog),
+      rolePermissions: ((rolePermissions as GymRolePermissionRow[]) ?? []).map(mapGymRolePermission),
+      capabilities: ((capabilities as GymCapabilityRow[]) ?? []).map(mapGymCapability),
+      customRoles: mappedCustomRoles,
+      customRolePermissions
+    };
+  }
+
+  async createGymCustomRole(gymId: string, input: CreateGymCustomRoleInput): Promise<GymCustomRole> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase.rpc("create_gym_custom_role", {
+      p_gym_id: gymId,
+      p_label: input.label.trim(),
+      p_base_role: input.baseRole,
+      p_role_key: input.roleKey?.trim() || null,
+      p_description: input.description?.trim() || null,
+      p_reason: input.reason?.trim() || null
+    });
+
+    throwIfAdminError(error, "ADMIN_GYM_CUSTOM_ROLE_CREATE_FAILED", "Unable to create custom gym role.");
+
+    return mapGymCustomRole(data as GymCustomRoleRow);
+  }
+
+  async setGymCustomRolePermission(
+    gymId: string,
+    input: SetGymCustomRolePermissionInput
+  ): Promise<GymCustomRolePermissionValue> {
+    await this.access.requireGymStaff(gymId);
+
+    const { data, error } = await this.supabase.rpc("set_gym_custom_role_permission", {
+      p_gym_id: gymId,
+      p_custom_role_id: input.customRoleId,
+      p_permission_key: input.permissionKey,
+      p_is_allowed: input.isAllowed,
+      p_reason: input.reason?.trim() || null
+    });
+
+    throwIfAdminError(
+      error,
+      "ADMIN_GYM_CUSTOM_ROLE_PERMISSION_FAILED",
+      "Unable to update custom role permission."
+    );
+
+    return mapGymCustomRolePermission(data as GymCustomRolePermissionRow);
   }
 
   async listGymMemberDirectory(gymId: string): Promise<GymMemberDirectoryItem[]> {

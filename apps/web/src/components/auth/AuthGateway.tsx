@@ -13,6 +13,10 @@ type AuthMode = "signin" | "signup";
 export function AuthGateway() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const gymAdminUrl = normalizeLoginUrl(
+    process.env.NEXT_PUBLIC_KRUXT_GYM_ADMIN_URL ?? process.env.NEXT_PUBLIC_KRUXT_ADMIN_URL ?? "http://localhost:3000"
+  );
+  const platformUrl = normalizeLoginUrl(process.env.NEXT_PUBLIC_KRUXT_PLATFORM_URL ?? "http://localhost:3100");
   const [mode, setMode] = useState<AuthMode>("signin");
   const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -130,36 +134,56 @@ export function AuthGateway() {
   }
 
   return (
-    <main className="landing-shell">
-      <section className="landing-copy">
-        <p className="eyebrow">KRUXT</p>
-        <h1 className="landing-title">No log, no legend.</h1>
-        <p className="landing-subtitle">
-          Member-facing web shell, gym operations workspace, and founder control plane running from the same app.
-        </p>
+    <main className="landing-site">
+      <header className="landing-nav">
+        <a className="landing-logo" href="/">
+          <img src="/icon.svg" alt="" className="landing-logo-mark" />
+          <span>KRUXT</span>
+        </a>
+        <nav className="landing-nav-links" aria-label="KRUXT entry points">
+          <a href="/gyms">Gyms</a>
+          <a href="/plan">Plan</a>
+          <a href="/rank">Rank</a>
+          <a href={gymAdminUrl}>Gym admin</a>
+          <a href={platformUrl}>Platform</a>
+        </nav>
+      </header>
 
-        <div className="landing-promo">
-          <div className="promo-panel">
-            <span className="promo-label">Members</span>
-            <strong>Feed, proof, profile, and logging flow</strong>
-          </div>
-          <div className="promo-panel">
-            <span className="promo-label">Gyms</span>
-            <strong>Class scheduling, invites, roles, and organization ops</strong>
-          </div>
-          <div className="promo-panel">
-            <span className="promo-label">Platform</span>
-            <strong>Founder-level control over gyms, owners, and compliance</strong>
-          </div>
-        </div>
-      </section>
+      <section className="landing-hero">
+        <section className="landing-copy">
+          <h1 className="landing-title">KRUXT</h1>
+          <p className="landing-subtitle">
+            The training app where proof, plans, rank, coaching, and gym operations finally move together.
+          </p>
 
-      <section className="auth-panel">
+          <div className="landing-actions" aria-label="Primary login actions">
+            <a className="primary-cta" href="#member-login">Member login</a>
+            <a className="secondary-cta" href={gymAdminUrl}>Gym admin login</a>
+            <a className="secondary-cta" href={platformUrl}>Platform login</a>
+          </div>
+
+          <div className="landing-promo">
+            <a className="promo-panel" href="/feed">
+              <span className="promo-label">Members</span>
+              <strong>Plan, log, post proof, rank up, and join gyms.</strong>
+            </a>
+            <a className="promo-panel" href={gymAdminUrl}>
+              <span className="promo-label">Gyms</span>
+              <strong>Members, staff, classes, coaching, waivers, billing, and public pages.</strong>
+            </a>
+            <a className="promo-panel" href={platformUrl}>
+              <span className="promo-label">Platform</span>
+              <strong>Tenant control, entitlements, support access, governance, and audits.</strong>
+            </a>
+          </div>
+        </section>
+
+        <section className="auth-panel" id="member-login">
         <div className="auth-shell-card">
           <p className="eyebrow">{mode === "signin" ? "WELCOME BACK" : "CREATE ACCOUNT"}</p>
           <h2 className="section-title">{mode === "signin" ? "Sign in to KRUXT" : "Claim your KRUXT account"}</h2>
           <p className="section-copy">
-            Founders land in `/admin`, gym staff in `/org`, and members in `/feed`.
+            Members continue into the app. Gym staff and platform operators can use the dedicated login buttons.
           </p>
 
           <div className="mode-toggle">
@@ -187,6 +211,7 @@ export function AuthGateway() {
                   <input
                     id="displayName"
                     className="input"
+                    autoComplete="name"
                     value={displayName}
                     onChange={(event) => setDisplayName(event.target.value)}
                     placeholder="Edoardo Mustarelli"
@@ -197,6 +222,7 @@ export function AuthGateway() {
                   <input
                     id="username"
                     className="input"
+                    autoComplete="username"
                     value={username}
                     onChange={(event) => setUsername(event.target.value)}
                     placeholder="musta96"
@@ -212,6 +238,7 @@ export function AuthGateway() {
                 className="input"
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="mustarelli.edoardo@gmail.com"
@@ -226,6 +253,7 @@ export function AuthGateway() {
                 type="password"
                 required
                 minLength={mode === "signup" ? 8 : 1}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder={mode === "signup" ? "Minimum 8 characters" : "Your password"}
@@ -244,6 +272,73 @@ export function AuthGateway() {
           </form>
         </div>
       </section>
+
+        <aside className="landing-product-panel" aria-label="KRUXT product preview">
+          <div className="mock-phone">
+            <div className="mock-phone-bar">
+              <span>Today</span>
+              <strong>Plan 72%</strong>
+            </div>
+            <div className="mock-session">
+              <span className="promo-label">BZone Hybrid</span>
+              <strong>Strength + Engine</strong>
+              <p>4 blocks · Coach note · Proof required</p>
+            </div>
+            <div className="mock-proof-row">
+              <span>Proof feed</span>
+              <strong>+180 XP</strong>
+            </div>
+            <div className="mock-proof-row">
+              <span>Rank trial</span>
+              <strong>#12</strong>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section className="landing-section">
+        <div>
+          <h2 className="section-title">One product, three doors.</h2>
+          <p className="section-copy">
+            KRUXT keeps the consumer app, gym back office, and founder control plane connected without forcing every
+            person into the same workspace.
+          </p>
+        </div>
+        <div className="landing-door-grid">
+          <a className="door-card" href="/gyms">
+            <span className="promo-label">User app</span>
+            <strong>Discover gyms, follow a plan, log workouts, and compete with proof.</strong>
+          </a>
+          <a className="door-card" href={gymAdminUrl}>
+            <span className="promo-label">Gym workspace</span>
+            <strong>Run B2B operations: members, staff roles, coaching, classes, payments, and compliance.</strong>
+          </a>
+          <a className="door-card" href={platformUrl}>
+            <span className="promo-label">KRUXT platform</span>
+            <strong>Manage tenant access, feature entitlements, support sessions, marketplace, and audit trails.</strong>
+          </a>
+        </div>
+      </section>
+
+      <section className="landing-section landing-section-split">
+        <div>
+          <h2 className="section-title">Built for BZone testing, ready for the network.</h2>
+          <p className="section-copy">
+            Invite links, public gym discovery, private member approvals, coach workspaces, custom roles, and audit logs
+            all point at the same operational spine.
+          </p>
+        </div>
+        <div className="landing-utility-actions">
+          <a className="primary-cta" href="/join">Join with invite</a>
+          <a className="secondary-cta" href="/gyms">Explore gyms</a>
+          <a className="secondary-cta" href="/support">Member support</a>
+        </div>
+      </section>
     </main>
   );
+}
+
+function normalizeLoginUrl(url: string): string {
+  const trimmed = url.replace(/\/+$/, "");
+  return trimmed.endsWith("/login") ? trimmed : `${trimmed}/login`;
 }

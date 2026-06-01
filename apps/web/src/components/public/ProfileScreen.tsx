@@ -16,6 +16,7 @@ import {
   uploadMemberAvatar,
   type MemberProfileDetails
 } from "@/lib/public/profile";
+import { loadAchievementSnapshot, type AchievementSnapshot } from "@/lib/public/achievements";
 
 function formatMoney(cents: number, currency: string): string {
   return new Intl.NumberFormat(undefined, {
@@ -42,6 +43,7 @@ function statusTone(status: string): string {
 export function ProfileScreen() {
   const { state, displayLabel, supabase } = usePublicSession();
   const [profile, setProfile] = useState<MemberProfileDetails | null>(null);
+  const [achievements, setAchievements] = useState<AchievementSnapshot | null>(null);
   const [form, setForm] = useState({
     displayName: "",
     username: "",
@@ -74,9 +76,13 @@ export function ProfileScreen() {
       setLoadingProfile(true);
       setError(null);
       try {
-        const nextProfile = await loadMemberProfile(supabase, userId, userEmail);
+        const [nextProfile, nextAchievements] = await Promise.all([
+          loadMemberProfile(supabase, userId, userEmail),
+          loadAchievementSnapshot(supabase).catch(() => null)
+        ]);
         if (!active) return;
         setProfile(nextProfile);
+        setAchievements(nextAchievements);
         setForm({
           displayName: nextProfile.displayName,
           username: nextProfile.username,
@@ -237,6 +243,56 @@ export function ProfileScreen() {
             )}
           </ul>
         </article>
+      </section>
+
+      <section className="glass-panel">
+        <div className="profile-form-header">
+          <div>
+            <p className="eyebrow">IDENTITY</p>
+            <h2 className="section-title">Proof-backed achievements</h2>
+          </div>
+          <span className="ghost-chip">
+            {achievements ? `${achievements.rankTier} · lvl ${achievements.level}` : "Loading"}
+          </span>
+        </div>
+        <div className="identity-metric-grid">
+          <div className="metric-card">
+            <span className="metric-label">XP</span>
+            <strong className="metric-value">{achievements?.xpTotal ?? 0}</strong>
+          </div>
+          <div className="metric-card">
+            <span className="metric-label">Streak</span>
+            <strong className="metric-value">{achievements?.chainDays ?? 0}</strong>
+          </div>
+          <div className="metric-card">
+            <span className="metric-label">PRs</span>
+            <strong className="metric-value">{achievements?.prCount ?? 0}</strong>
+          </div>
+          <div className="metric-card">
+            <span className="metric-label">Proof posts</span>
+            <strong className="metric-value">{achievements?.proofPostCount ?? 0}</strong>
+          </div>
+        </div>
+        <div className="achievement-grid">
+          {(achievements?.cards ?? []).slice(0, 6).map((achievement) => (
+            <Link key={achievement.id} href={achievement.proofHref} className="achievement-card">
+              <div className="content-card-header">
+                <div>
+                  <p className="eyebrow">{achievement.status}</p>
+                  <h3 className="feed-title">{achievement.title}</h3>
+                </div>
+                <span className={`achievement-status ${achievement.status}`}>{achievement.groupVisible ? "group" : "private"}</span>
+              </div>
+              <p className="supporting-copy">{achievement.description}</p>
+              <div className="achievement-progress">
+                <span style={{ width: `${Math.min(100, (achievement.progress / achievement.target) * 100)}%` }} />
+              </div>
+              <p className="feed-body" style={{ margin: 0 }}>
+                {achievement.evidenceLabel}
+              </p>
+            </Link>
+          ))}
+        </div>
       </section>
 
       <section className="glass-panel">
