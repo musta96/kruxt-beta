@@ -24,8 +24,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
+import type { ViewToken } from "react-native";
 import { Avatar, EmptyState, ErrorState } from "@kruxt/ui";
 import { darkTheme } from "@kruxt/ui/theme";
+import { ProofVideoCard } from "./ProofVideoCard";
 import type {
   ProofFeedRenderItem,
   ProofFeedSnapshot,
@@ -60,6 +62,18 @@ export function ProofFeedScreen() {
   // Height of one full-bleed page. Measured from the list container so we
   // don't have to guess the bottom tab-bar height.
   const [pageHeight, setPageHeight] = useState(SCREEN_HEIGHT);
+
+  // Which card is centered — only its video autoplays.
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const onViewableItemsChangedRef = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const first = viewableItems[0];
+      if (first?.item) {
+        setActiveKey((first.item as ProofFeedRenderItem).key);
+      }
+    },
+  );
+  const viewabilityConfigRef = useRef({ itemVisiblePercentThreshold: 80 });
 
   // Comment sheet state
   const [commentSheetWorkoutId, setCommentSheetWorkoutId] = useState<string | null>(null);
@@ -219,21 +233,24 @@ export function ProofFeedScreen() {
 
       return (
         <View style={[styles.page, { height: pageHeight }]}>
-          {hasMedia ? (
+          {isVideo && workout.proofMediaUrl ? (
             <>
-              {/* Full-bleed proof media */}
+              {/* Full-bleed video — autoplays only when this card is centered */}
+              <ProofVideoCard
+                uri={workout.proofMediaUrl}
+                isActive={activeKey === item.key}
+              />
+              <View style={styles.mediaScrim} pointerEvents="none" />
+            </>
+          ) : hasMedia ? (
+            <>
+              {/* Full-bleed proof image */}
               <Image
                 source={{ uri: mediaUrl as string }}
                 style={styles.mediaBg}
                 resizeMode="cover"
               />
-              {/* Scrim so overlaid text stays legible */}
               <View style={styles.mediaScrim} pointerEvents="none" />
-              {isVideo && (
-                <View style={styles.videoBadge} pointerEvents="none">
-                  <Text style={styles.videoBadgeText}>{"▶"}</Text>
-                </View>
-              )}
             </>
           ) : (
             <>
@@ -365,7 +382,7 @@ export function ProofFeedScreen() {
         </View>
       );
     },
-    [pageHeight, insets, pendingReaction, handleReaction, openComments, handleCardTap, burstId, burstAnim],
+    [pageHeight, insets, pendingReaction, handleReaction, openComments, handleCardTap, burstId, burstAnim, activeKey],
   );
 
   // ---- States ----
@@ -430,6 +447,8 @@ export function ProofFeedScreen() {
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
+        onViewableItemsChanged={onViewableItemsChangedRef.current}
+        viewabilityConfig={viewabilityConfigRef.current}
         windowSize={3}
         maxToRenderPerBatch={3}
         initialNumToRender={2}
