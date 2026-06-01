@@ -126,6 +126,19 @@ export function WorkoutLoggerScreen() {
     [],
   );
 
+  const applyPickedAsset = useCallback(
+    (result: ImagePicker.ImagePickerResult) => {
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.uri) return;
+      setDraft((prev) => ({
+        ...prev,
+        proofMedia: { uri: asset.uri, mimeType: asset.mimeType ?? null },
+      }));
+    },
+    [],
+  );
+
   const handlePickMedia = useCallback(async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -141,17 +154,32 @@ export function WorkoutLoggerScreen() {
         quality: 0.85,
         videoMaxDuration: 60,
       });
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      if (!asset?.uri) return;
-      setDraft((prev) => ({
-        ...prev,
-        proofMedia: { uri: asset.uri, mimeType: asset.mimeType ?? null },
-      }));
+      applyPickedAsset(result);
     } catch (e) {
       Alert.alert("Error", e instanceof Error ? e.message : "Unable to pick media.");
     }
-  }, []);
+  }, [applyPickedAsset]);
+
+  const handleCaptureMedia = useCallback(async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (permission.status !== "granted") {
+        Alert.alert(
+          "Camera permission needed",
+          "Allow camera access to capture your proof.",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images", "videos"],
+        quality: 0.85,
+        videoMaxDuration: 60,
+      });
+      applyPickedAsset(result);
+    } catch (e) {
+      Alert.alert("Error", e instanceof Error ? e.message : "Unable to capture media.");
+    }
+  }, [applyPickedAsset]);
 
   const handleClearMedia = useCallback(() => {
     setDraft((prev) => ({ ...prev, proofMedia: null }));
@@ -240,6 +268,7 @@ export function WorkoutLoggerScreen() {
             <ReviewStep
               draft={draft}
               onPickMedia={handlePickMedia}
+              onCaptureMedia={handleCaptureMedia}
               onClearMedia={handleClearMedia}
             />
           )}
@@ -561,10 +590,12 @@ function SetRow({
 function ReviewStep({
   draft,
   onPickMedia,
+  onCaptureMedia,
   onClearMedia,
 }: {
   draft: WorkoutLoggerDraft;
   onPickMedia: () => void;
+  onCaptureMedia: () => void;
   onClearMedia: () => void;
 }) {
   const totalSets = draft.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
@@ -632,11 +663,19 @@ function ReviewStep({
             </View>
           </View>
         ) : (
-          <Pressable onPress={onPickMedia} style={styles.proofPicker}>
-            <Text style={styles.proofPickerIcon}>{"\u{1F4F8}"}</Text>
-            <Text style={styles.proofPickerText}>Add a photo or video</Text>
+          <View>
+            <View style={styles.proofPickRow}>
+              <Pressable onPress={onCaptureMedia} style={styles.proofPickHalf}>
+                <Text style={styles.proofPickerIcon}>{"\u{1F4F7}"}</Text>
+                <Text style={styles.proofPickerText}>Camera</Text>
+              </Pressable>
+              <Pressable onPress={onPickMedia} style={styles.proofPickHalf}>
+                <Text style={styles.proofPickerIcon}>{"\u{1F5BC}️"}</Text>
+                <Text style={styles.proofPickerText}>Library</Text>
+              </Pressable>
+            </View>
             <Text style={styles.proofPickerHint}>Optional — proof hits different</Text>
-          </Pressable>
+          </View>
         )}
       </Card>
 
@@ -869,6 +908,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(53,208,255,0.3)",
+    borderStyle: "dashed",
+    backgroundColor: "rgba(53,208,255,0.04)",
+  },
+  proofPickRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  proofPickHalf: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(53,208,255,0.3)",

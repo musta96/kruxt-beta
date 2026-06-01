@@ -17,6 +17,8 @@ import {
   StatCard,
 } from "@kruxt/ui";
 import { darkTheme } from "@kruxt/ui/theme";
+import { createMobileSupabaseClient } from "../services";
+import { createGuildHallFlow } from "../flows/guild-hall";
 
 const theme = darkTheme;
 
@@ -57,8 +59,42 @@ export function GuildHallScreen() {
     setLoading(true);
     setError(null);
     try {
-      // Will wire to createGuildHallFlow().load() once context is available
-      // For now show the UI shell
+      const supabase = createMobileSupabaseClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        throw new Error("You need to be signed in to view your Guild Hall.");
+      }
+
+      const flow = createGuildHallFlow(supabase);
+      const { snapshot: gs, roster } = await flow.load(authData.user.id);
+
+      // No gym membership yet → leave snapshot null so the empty state shows.
+      if (!gs.gymId) {
+        setSnapshot(null);
+        setLoading(false);
+        return;
+      }
+
+      setSnapshot({
+        gym: {
+          id: gs.gymId,
+          name: gs.gymName ?? "Your Guild",
+          memberCount: gs.rosterCount,
+          activeTodayCount: gs.upcomingClasses,
+        },
+        roster: roster.map((m) => ({
+          userId: m.userId,
+          displayName: m.displayName,
+          avatarUrl: m.avatarUrl ?? undefined,
+          role: m.guildRole ?? m.role,
+          rankTier: m.rankTier,
+          chainDays: 0,
+          lastWorkoutAt: null,
+        })),
+        myMembership: gs.role
+          ? { role: gs.guildRole ?? gs.role, joinedAt: "" }
+          : null,
+      });
       setLoading(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load guild");
