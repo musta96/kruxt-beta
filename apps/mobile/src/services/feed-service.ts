@@ -24,6 +24,9 @@ type WorkoutRow = {
   total_sets: number;
   total_volume_kg: number;
   is_pr: boolean;
+  proof_media_url: string | null;
+  proof_media_type: "image" | "video" | null;
+  proof_media_thumbnail_url: string | null;
 };
 
 type ProfileRow = {
@@ -71,6 +74,9 @@ export interface FeedWorkoutSnapshot {
   totalSets: number;
   totalVolumeKg: number;
   isPr: boolean;
+  proofMediaUrl?: string | null;
+  proofMediaType?: "image" | "video" | null;
+  proofMediaThumbnailUrl?: string | null;
 }
 
 export interface FeedEngagementSnapshot {
@@ -198,7 +204,7 @@ export class FeedService {
     ] = await Promise.all([
       this.supabase
         .from("workouts")
-        .select("id,user_id,gym_id,title,workout_type,started_at,visibility,total_sets,total_volume_kg,is_pr")
+        .select("id,user_id,gym_id,title,workout_type,started_at,visibility,total_sets,total_volume_kg,is_pr,proof_media_url,proof_media_type,proof_media_thumbnail_url")
         .in("id", workoutIds),
       this.supabase
         .from("profiles")
@@ -337,7 +343,10 @@ export class FeedService {
           visibility: workout.visibility,
           totalSets: workout.total_sets,
           totalVolumeKg: workout.total_volume_kg,
-          isPr: workout.is_pr
+          isPr: workout.is_pr,
+          proofMediaUrl: workout.proof_media_url,
+          proofMediaType: workout.proof_media_type,
+          proofMediaThumbnailUrl: workout.proof_media_thumbnail_url
         },
         engagement: {
           reactionCount: engagement.reactionCount,

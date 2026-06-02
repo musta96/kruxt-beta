@@ -1,0 +1,31 @@
+{
+  "name": "KRUXT Beta (pnpm + turbo monorepo)",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-20-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "onCreateCommand": "corepack enable && corepack prepare pnpm@10.6.5 --activate",
+  "postCreateCommand": "pnpm install --frozen-lockfile",
+  "forwardPorts": [3000, 3100, 3200, 8081, 19000, 19006],
+  "portsAttributes": {
+    "3000": { "label": "admin (Next.js)" },
+    "3100": { "label": "platform (Next.js)" },
+    "3200": { "label": "web (Next.js)" },
+    "8081": { "label": "Metro bundler" },
+    "19000": { "label": "Expo dev server" },
+    "19006": { "label": "Expo web" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  },
+  "remoteEnv": {
+    "TURBO_TELEMETRY_DISABLED": "1",
+    "NEXT_TELEMETRY_DISABLED": "1"
+  }
+}

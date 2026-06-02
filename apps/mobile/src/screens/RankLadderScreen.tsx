@@ -19,6 +19,11 @@ import {
   StatCard,
 } from "@kruxt/ui";
 import { darkTheme } from "@kruxt/ui/theme";
+import {
+  createMobileSupabaseClient,
+  CompetitionService,
+  ProfileService,
+} from "../services";
 
 const theme = darkTheme;
 
@@ -67,7 +72,54 @@ export function RankLadderScreen() {
     setLoading(true);
     setError(null);
     try {
-      // Will wire to rank-trials flow
+      const supabase = createMobileSupabaseClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        throw new Error("You need to be signed in to view rankings.");
+      }
+      const meId = authData.user.id;
+
+      const competition = new CompetitionService(supabase);
+      const profiles = new ProfileService(supabase);
+
+      const [boards, myProfile] = await Promise.all([
+        competition.listLeaderboards(),
+        profiles.getProfileById(meId),
+      ]);
+
+      // Pick the active board matching the selected scope + timeframe; for the
+      // "gym" scope, prefer one scoped to the viewer's home gym.
+      const matching = boards.filter(
+        (b) => b.timeframe === timeframe && b.scope === scope && b.isActive,
+      );
+      const board =
+        scope === "gym" && myProfile?.homeGymId
+          ? matching.find((b) => b.scopeGymId === myProfile.homeGymId) ?? matching[0]
+          : matching[0] ?? boards.find((b) => b.timeframe === timeframe && b.scope === scope);
+
+      const rawEntries = board
+        ? await competition.listLeaderboardEntries(board.id, 100)
+        : [];
+
+      const entries: LeaderboardEntry[] = rawEntries.map((entry) => ({
+        rank: entry.rank,
+        userId: entry.userId,
+        displayName: entry.actor?.displayName ?? entry.userId.slice(0, 8),
+        avatarUrl: entry.actor?.avatarUrl ?? undefined,
+        score: entry.score,
+        metric: board?.metric ?? "score",
+        isCurrentUser: entry.userId === meId,
+      }));
+
+      const myEntry = entries.find((e) => e.isCurrentUser);
+
+      setSnapshot({
+        myRank: myEntry?.rank ?? null,
+        myTier: myProfile?.rankTier ?? "unranked",
+        myChainDays: myProfile?.chainDays ?? 0,
+        myXpTotal: myProfile?.xpTotal ?? 0,
+        entries,
+      });
       setLoading(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load rankings");

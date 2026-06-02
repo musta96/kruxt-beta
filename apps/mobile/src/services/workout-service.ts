@@ -26,6 +26,9 @@ type WorkoutRow = {
   is_pr: boolean;
   source: string;
   created_at: string;
+  proof_media_url: string | null;
+  proof_media_type: "image" | "video" | null;
+  proof_media_thumbnail_url: string | null;
 };
 
 type FeedEventRow = {
@@ -74,6 +77,9 @@ export interface LoggedWorkoutSnapshot {
   isPr: boolean;
   source: string;
   createdAt: string;
+  proofMediaUrl?: string | null;
+  proofMediaType?: "image" | "video" | null;
+  proofMediaThumbnailUrl?: string | null;
 }
 
 export interface WorkoutProofEvent {
@@ -117,7 +123,10 @@ function mapWorkout(row: WorkoutRow): LoggedWorkoutSnapshot {
     totalVolumeKg: row.total_volume_kg,
     isPr: row.is_pr,
     source: row.source,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    proofMediaUrl: row.proof_media_url,
+    proofMediaType: row.proof_media_type,
+    proofMediaThumbnailUrl: row.proof_media_thumbnail_url
   };
 }
 
@@ -239,7 +248,7 @@ export class WorkoutService {
       this.supabase
         .from("workouts")
         .select(
-          "id,user_id,gym_id,title,workout_type,notes,started_at,ended_at,rpe,visibility,total_sets,total_volume_kg,is_pr,source,created_at"
+          "id,user_id,gym_id,title,workout_type,notes,started_at,ended_at,rpe,visibility,total_sets,total_volume_kg,is_pr,source,created_at,proof_media_url,proof_media_type,proof_media_thumbnail_url"
         )
         .eq("id", workoutId)
         .maybeSingle(),
@@ -282,4 +291,88 @@ export class WorkoutService {
       }
     };
   }
+
+  /**
+   * Uploads a proof photo/video to the `workout-proof` storage bucket and
+   * attaches its public URL to the workout row. Called after a workout is
+   * logged so the Proof Feed can render it full-bleed.
+   *
+   * Object path: `<userId>/<workoutId>.<ext>` (matches storage RLS policy).
+   */
+  async attachProofMedia(
+    workoutId: string,
+    media: { uri: string; mimeType?: string | null }
+  ): Promise<{ url: string; type: "image" | "video" }> {
+    const userId = await this.requireCurrentUserId();
+
+    const mimeType = media.mimeType ?? "image/jpeg";
+    const mediaType: "image" | "video" = mimeType.startsWith("video") ? "video" : "image";
+    const extension = extensionFromMimeType(mimeType);
+    const path = `${userId}/${workoutId}.${extension}`;
+
+    // Read the local file URI into bytes (works in Expo / React Native).
+    let bytes: Uint8Array;
+    try {
+      const response = await fetch(media.uri);
+      const buffer = await response.arrayBuffer();
+      bytes = new Uint8Array(buffer);
+    } catch (readError) {
+      throw new KruxtAppError(
+        "WORKOUT_PROOF_READ_FAILED",
+        "Unable to read the selected proof media file.",
+        readError
+      );
+    }
+
+    const storage = this.supabase.storage.from(PROOF_BUCKET);
+    const { error: uploadError } = await storage.upload(path, bytes, {
+      contentType: mimeType,
+      upsert: true,
+      cacheControl: "3600"
+    });
+
+    if (uploadError) {
+      throw new KruxtAppError(
+        "WORKOUT_PROOF_UPLOAD_FAILED",
+        `Proof upload failed. Confirm bucket "${PROOF_BUCKET}" exists and allows authenticated uploads.`,
+        uploadError
+      );
+    }
+
+    const {
+      data: { publicUrl }
+    } = storage.getPublicUrl(path);
+
+    if (!publicUrl) {
+      throw new KruxtAppError(
+        "WORKOUT_PROOF_URL_FAILED",
+        "Proof upload succeeded but URL generation failed."
+      );
+    }
+
+    const { error: updateError } = await this.supabase
+      .from("workouts")
+      .update({ proof_media_url: publicUrl, proof_media_type: mediaType })
+      .eq("id", workoutId)
+      .eq("user_id", userId);
+
+    throwIfError(updateError, "WORKOUT_PROOF_ATTACH_FAILED", "Unable to attach proof media to the workout.");
+
+    return { url: publicUrl, type: mediaType };
+  }
+}
+
+const PROOF_BUCKET = "workout-proof";
+
+function extensionFromMimeType(mimeType: string): string {
+  const map: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/heic": "heic",
+    "video/mp4": "mp4",
+    "video/quicktime": "mov"
+  };
+  return map[mimeType.toLowerCase()] ?? "bin";
 }
