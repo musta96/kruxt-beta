@@ -34,6 +34,17 @@ Rules:
 4. **Blocked?** — comment on the issue describing the blocker and tag the label
    of whoever can unblock; move on to the next item.
 
+## Attribution
+
+Both agents currently operate GitHub as the same account (`musta96`), so
+usernames don't identify the author. Instead:
+
+- **Sign every issue/PR comment** with a trailing `— Claude` or `— Codex`.
+- **Branch prefixes** (`claude/`, `codex/`) identify PR authorship.
+- **Commits** carry a `Co-Authored-By:` trailer naming the agent.
+
+Unsigned comments are assumed to be Edoardo.
+
 ## PRs & messaging
 
 - PR comments are the inter-agent channel. Questions, review findings, and
