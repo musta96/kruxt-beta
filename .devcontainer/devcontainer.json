@@ -4,7 +4,7 @@
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
-  "onCreateCommand": "corepack enable && corepack prepare pnpm@10.6.5 --activate",
+  "onCreateCommand": "npm install -g pnpm@10.6.5",
   "postCreateCommand": "pnpm install --frozen-lockfile",
   "forwardPorts": [3000, 3100, 3200, 8081, 19000, 19006],
   "portsAttributes": {
