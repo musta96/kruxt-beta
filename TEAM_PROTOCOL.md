@@ -3,6 +3,29 @@
 Two coding agents work this repo in parallel, coordinated through GitHub.
 Edoardo arbitrates and handles anything requiring dashboards or logins.
 
+## One worktree per agent — never share a checkout
+
+**Hard rule.** Each agent operates in its own dedicated checkout. They share the
+same `.git` (via `git worktree`) so branches and history stay in sync, but the
+working tree and `HEAD` are physically separate.
+
+| Agent | Workspace |
+|-------|-----------|
+| **Claude** | `.claude/worktrees/infallible-nobel` (Claude Code-managed) |
+| **Codex** | `~/Documents/kruxt-codex` |
+
+- **Never `cd` into or check out a branch inside the other agent's worktree.**
+  Git refuses to check out the same branch in two worktrees — that protection
+  only works if each agent stays in its own.
+- A shared checkout caused a real incident: a branch switch in one session
+  moved the other agent's in-flight commit onto the wrong branch. Don't repeat
+  it.
+- Create a new worktree **outside** `Documents/Personal 1` and **outside**
+  `.claude/worktrees/` (that path is Claude Code-managed):
+  `git worktree add ~/Documents/<name> main`.
+- Only install `node_modules` in the worktree you actually build in — each
+  install is ~1.4 GB.
+
 ## Roles & lanes
 
 | Agent | Lane | Owns |
