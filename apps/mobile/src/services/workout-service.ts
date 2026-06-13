@@ -7,6 +7,7 @@ import type {
   WorkoutVisibility
 } from "@kruxt/types";
 import { translateLegalText } from "@kruxt/types";
+import * as VideoThumbnails from "expo-video-thumbnails";
 
 import { KruxtAppError, throwIfError } from "./errors";
 
@@ -350,15 +351,74 @@ export class WorkoutService {
       );
     }
 
+    // For videos, generate a poster frame so the feed never flashes black
+    // before playback. Best-effort — a thumbnail failure must not fail the
+    // proof upload, so the feed falls back to no poster.
+    const update: {
+      proof_media_url: string;
+      proof_media_type: "image" | "video";
+      proof_media_thumbnail_url?: string | null;
+    } = { proof_media_url: publicUrl, proof_media_type: mediaType };
+
+    if (mediaType === "video") {
+      update.proof_media_thumbnail_url = await this.uploadVideoThumbnail(
+        userId,
+        workoutId,
+        media.uri
+      );
+    }
+
     const { error: updateError } = await this.supabase
       .from("workouts")
-      .update({ proof_media_url: publicUrl, proof_media_type: mediaType })
+      .update(update)
       .eq("id", workoutId)
       .eq("user_id", userId);
 
     throwIfError(updateError, "WORKOUT_PROOF_ATTACH_FAILED", "Unable to attach proof media to the workout.");
 
     return { url: publicUrl, type: mediaType };
+  }
+
+  /**
+   * Generate a poster frame from the local video and upload it alongside the
+   * proof. Returns the public URL, or null if anything fails — callers must
+   * treat a missing thumbnail as non-fatal.
+   */
+  private async uploadVideoThumbnail(
+    userId: string,
+    workoutId: string,
+    videoUri: string
+  ): Promise<string | null> {
+    try {
+      const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
+        time: 0,
+        quality: 0.7
+      });
+
+      const response = await fetch(thumbUri);
+      const buffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+
+      const path = `${userId}/${workoutId}_thumb.jpg`;
+      const storage = this.supabase.storage.from(PROOF_BUCKET);
+      const { error: uploadError } = await storage.upload(path, bytes, {
+        contentType: "image/jpeg",
+        upsert: true,
+        cacheControl: "3600"
+      });
+
+      if (uploadError) {
+        return null;
+      }
+
+      const {
+        data: { publicUrl }
+      } = storage.getPublicUrl(path);
+
+      return publicUrl ?? null;
+    } catch {
+      return null;
+    }
   }
 }
 

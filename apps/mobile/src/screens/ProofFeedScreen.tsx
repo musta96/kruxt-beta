@@ -238,6 +238,7 @@ export function ProofFeedScreen() {
               {/* Full-bleed video — autoplays only when this card is centered */}
               <ProofVideoCard
                 uri={workout.proofMediaUrl}
+                posterUri={workout.proofMediaThumbnailUrl}
                 isActive={activeKey === item.key}
               />
               <View style={styles.mediaScrim} pointerEvents="none" />
