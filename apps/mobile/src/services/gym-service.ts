@@ -151,6 +151,18 @@ export class GymService {
     return (data as GymRow[]).map(mapGym);
   }
 
+  async getGymById(gymId: string): Promise<Gym | null> {
+    const { data, error } = await this.supabase
+      .from("gyms")
+      .select("*")
+      .eq("id", gymId)
+      .maybeSingle();
+
+    throwIfError(error, "GYM_READ_FAILED", "Unable to load gym.");
+
+    return data ? mapGym(data as GymRow) : null;
+  }
+
   async getMembershipForGymUser(gymId: string, userId: string): Promise<GymMembership | null> {
     const { data, error } = await this.supabase
       .from("gym_memberships")
