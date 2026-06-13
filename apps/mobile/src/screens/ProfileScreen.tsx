@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -22,6 +22,7 @@ import {
   StatCard,
 } from "@kruxt/ui";
 import { darkTheme } from "@kruxt/ui/theme";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "../contexts/auth-context";
 import {
   createMobileSupabaseClient,
@@ -49,6 +50,7 @@ type SettingsSection = "account" | "preferences" | "security" | "support";
 
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const router = useRouter();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -117,9 +119,12 @@ export function ProfileScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+  // Reload on focus so edits made in the Edit Profile screen show on return.
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile]),
+  );
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -296,7 +301,7 @@ export function ProfileScreen() {
             theme={theme}
             label="Edit Profile"
             chevron
-            onPress={() => {/* TODO: navigate to edit profile */}}
+            onPress={() => router.push("/edit-profile")}
           />
           <ListRow
             theme={theme}
