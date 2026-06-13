@@ -9,7 +9,10 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kruxt.mobile"
+      "bundleIdentifier": "com.kruxt.mobile",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "KRUXT lets you choose a profile photo so your gym and training groups can recognize you."
+      }
     },
     "android": {
       "package": "com.kruxt.mobile"

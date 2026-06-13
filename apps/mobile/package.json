@@ -8,8 +8,9 @@
     "ios": "expo start --ios",
     "android": "expo start --android",
     "web": "expo start --web",
-    "build": "eas build --platform ios --profile preview",
-    "build:ios": "eas build --platform ios --profile preview",
+    "build": "eas build --platform ios --profile production",
+    "build:ios": "eas build --platform ios --profile production",
+    "submit:ios": "eas submit --platform ios --profile production",
     "lint": "echo 'Add eslint config for mobile app'",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "echo 'Add mobile test suite (jest + react-native-testing-library)'"

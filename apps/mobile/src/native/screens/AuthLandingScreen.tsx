@@ -39,18 +39,18 @@ export function AuthLandingScreen() {
       <Heading
         eyebrow="KRUXT Mobile"
         title="No log, no legend."
-        subtitle="Native member shell for feed, logging, profile, and gym-linked access."
+        subtitle="Native member app for weekly plans, workout logging, groups, and gym-linked access."
       />
 
       <Card>
         <View style={styles.pillRow}>
           <Pill tone="primary">Members</Pill>
-          <Pill>Gym-linked auth</Pill>
-          <Pill>Native baseline</Pill>
+          <Pill>Weekly plan</Pill>
+          <Pill>Gym-linked access</Pill>
         </View>
         <Text style={styles.copy}>
-          Founder and gym operations stay on web. The mobile app is the member-facing surface: claim account,
-          log sessions, review feed, and manage your own profile.
+          Founder and gym operations stay on web. The mobile app is the member-facing surface: claim your account,
+          follow your weekly plan, log or book sessions, share proof, and manage your own profile.
         </Text>
       </Card>
 

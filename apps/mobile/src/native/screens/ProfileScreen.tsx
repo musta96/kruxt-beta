@@ -156,6 +156,51 @@ export function ProfileScreen() {
       </Card>
 
       <Card>
+        <SectionTitle>Progress</SectionTitle>
+        <Heading
+          title="Launch-safe member progress"
+          subtitle="Progress, streaks, and rank stay visible in the app even while heavier admin operations remain outside the first native release."
+        />
+        <StatGrid
+          items={[
+            { label: "Gyms", value: String(profile?.memberships.length ?? 0) },
+            { label: "Profile", value: profile?.isPublic ? "Public" : "Private" }
+          ]}
+        />
+      </Card>
+
+      <Card>
+        <SectionTitle>Account</SectionTitle>
+        <Heading
+          title="Membership and access status"
+          subtitle="Use KRUXT to stay on top of access and eligibility. Edge-case admin tasks can stay with reception during the first launch wave."
+        />
+        {profile?.memberships.length ? (
+          profile.memberships.map((membership) => (
+            <View key={`${membership.gymId}:${membership.role}`} style={styles.membershipRow}>
+              <View style={styles.membershipCopy}>
+                <Text style={styles.membershipGym}>{membership.gymName ?? membership.gymId}</Text>
+                <Text style={styles.note}>
+                  {membership.role} · {membership.membershipStatus}
+                </Text>
+              </View>
+              <Pill tone={membership.membershipStatus === "active" ? "success" : "default"}>
+                {membership.membershipStatus}
+              </Pill>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.note}>No gym memberships linked yet.</Text>
+        )}
+        <Card>
+          <Heading
+            title="Payments and certificates are managed manually for launch"
+            subtitle="If something blocks your access, the app should show the status clearly while BZone and Wellness still handle the underlying admin steps directly."
+          />
+        </Card>
+      </Card>
+
+      <Card>
         <SectionTitle>Access</SectionTitle>
         <View style={styles.pillWrap}>
           {state.access.platformRole ? <Pill tone="primary">{state.access.platformRole}</Pill> : <Pill>member</Pill>}
@@ -167,31 +212,6 @@ export function ProfileScreen() {
           </InlineButton>
         ) : null}
       </Card>
-
-      <Card>
-        <SectionTitle>Memberships</SectionTitle>
-        {profile?.memberships.length ? (
-          profile.memberships.map((membership) => (
-            <View key={`${membership.gymId}:${membership.role}`} style={styles.membershipRow}>
-              <View style={styles.membershipCopy}>
-                <Text style={styles.membershipGym}>{membership.gymName ?? membership.gymId}</Text>
-                <Text style={styles.note}>
-                  {membership.role} · {membership.membershipStatus}
-                </Text>
-              </View>
-            </View>
-          ))
-        ) : (
-          <Text style={styles.note}>No gym memberships linked yet.</Text>
-        )}
-      </Card>
-
-      <StatGrid
-        items={[
-          { label: "Role", value: state.access.platformRole ?? (state.access.staffGymIds.length > 0 ? "staff" : "member") },
-          { label: "Gyms", value: String(profile?.memberships.length ?? 0) }
-        ]}
-      />
 
       <Button tone="danger" onPress={handleSignOut}>Sign out</Button>
     </ScreenScroll>
@@ -250,11 +270,16 @@ const styles = StyleSheet.create({
   },
   membershipRow: {
     paddingVertical: spacing.xs,
+    gap: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: palette.border
+    borderTopColor: palette.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
   },
   membershipCopy: {
-    gap: 4
+    gap: 4,
+    flex: 1
   },
   membershipGym: {
     color: palette.text,

@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ExpoLinking from "expo-linking";
 import { DarkTheme, NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -6,8 +7,11 @@ import { useEffect, useState } from "react";
 
 import { AcceptInviteScreen } from "./screens/AcceptInviteScreen";
 import { AuthLandingScreen } from "./screens/AuthLandingScreen";
-import { FeedScreen } from "./screens/FeedScreen";
+import { GroupsScreen } from "./screens/GroupsScreen";
+import { HomeScreen } from "./screens/HomeScreen";
 import { LogScreen } from "./screens/LogScreen";
+import { OnboardingGateScreen } from "./screens/OnboardingGateScreen";
+import { PlanScreen } from "./screens/PlanScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { NativeSessionProvider, useNativeSession } from "./session";
 import { palette } from "./theme";
@@ -44,8 +48,10 @@ function LoadingScreen() {
 }
 
 function emojiForRoute(routeName: string): string {
-  if (routeName === "Feed") return "🔥";
-  if (routeName === "Log") return "✍️";
+  if (routeName === "Home") return "🏠";
+  if (routeName === "Plan") return "🗓️";
+  if (routeName === "Record") return "✍️";
+  if (routeName === "Groups") return "🏋️";
   return "👤";
 }
 
@@ -68,6 +74,10 @@ function readInviteToken(url: string | null): string | null {
   return null;
 }
 
+function onboardingStorageKey(userId: string): string {
+  return `kruxt.nativeOnboardingComplete.${userId}.v1`;
+}
+
 function AuthenticatedTabs() {
   return (
     <NavigationContainer theme={navigationTheme}>
@@ -88,9 +98,11 @@ function AuthenticatedTabs() {
           )
         })}
       >
-        <Tabs.Screen name="Feed" component={FeedScreen} />
-        <Tabs.Screen name="Log" component={LogScreen} />
-        <Tabs.Screen name="Profile" component={ProfileScreen} />
+        <Tabs.Screen name="Home" component={HomeScreen} />
+        <Tabs.Screen name="Plan" component={PlanScreen} />
+        <Tabs.Screen name="Record" component={LogScreen} />
+        <Tabs.Screen name="Groups" component={GroupsScreen} />
+        <Tabs.Screen name="You" component={ProfileScreen} />
       </Tabs.Navigator>
     </NavigationContainer>
   );
@@ -100,6 +112,8 @@ function NativeRoot() {
   const { state } = useNativeSession();
   const url = ExpoLinking.useURL();
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const user = state.access.user;
+  const [onboardingStatus, setOnboardingStatus] = useState<"loading" | "pending" | "done">("loading");
 
   useEffect(() => {
     const token = readInviteToken(url);
@@ -108,16 +122,56 @@ function NativeRoot() {
     }
   }, [url]);
 
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadOnboardingState() {
+      if (!user?.id) {
+        setOnboardingStatus("loading");
+        return;
+      }
+
+      try {
+        const stored = await AsyncStorage.getItem(onboardingStorageKey(user.id));
+        if (!isActive) return;
+        setOnboardingStatus(stored === "done" ? "done" : "pending");
+      } catch {
+        if (!isActive) return;
+        setOnboardingStatus("pending");
+      }
+    }
+
+    void loadOnboardingState();
+
+    return () => {
+      isActive = false;
+    };
+  }, [user?.id]);
+
+  async function handleOnboardingComplete() {
+    if (!user?.id) return;
+    await AsyncStorage.setItem(onboardingStorageKey(user.id), "done");
+    setOnboardingStatus("done");
+  }
+
   if (state.status === "loading") {
     return <LoadingScreen />;
   }
 
-  if (!state.access.user) {
+  if (!user) {
     return <AuthLandingScreen />;
   }
 
   if (inviteToken) {
     return <AcceptInviteScreen token={inviteToken} onDone={() => setInviteToken(null)} />;
+  }
+
+  if (onboardingStatus === "loading") {
+    return <LoadingScreen />;
+  }
+
+  if (onboardingStatus === "pending") {
+    return <OnboardingGateScreen onComplete={handleOnboardingComplete} />;
   }
 
   return <AuthenticatedTabs />;
