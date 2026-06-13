@@ -1,0 +1,112 @@
+name: backfill-video-proof-thumbnails
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Dry-run scans only; apply uploads thumbnails and updates workout rows"
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+      limit:
+        description: "Maximum workouts to process (1-1000)"
+        required: true
+        default: "100"
+        type: number
+      frame_seconds:
+        description: "Preferred poster timestamp in seconds (0-60)"
+        required: true
+        default: "0"
+        type: string
+      workout_ids:
+        description: "Optional comma-separated workout UUIDs (maximum 100)"
+        required: false
+        type: string
+      confirm:
+        description: "Type BACKFILL to allow apply mode"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: staging-video-proof-thumbnail-backfill
+      cancel-in-progress: false
+    env:
+      STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+      STAGING_SUPABASE_PROJECT_REF: upwcpcjjfggdcmizgbka
+      REPORT_FILE: video-proof-thumbnail-backfill-report.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate staging guardrails
+        shell: bash
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ -z "${STAGING_SUPABASE_URL:-}" ] || [ -z "${STAGING_SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "Missing STAGING_SUPABASE_URL or STAGING_SUPABASE_SERVICE_ROLE_KEY." >&2
+            exit 1
+          fi
+
+          if [ "$MODE" = "apply" ] && [ "$CONFIRM" != "BACKFILL" ]; then
+            echo "Apply mode requires confirm=BACKFILL." >&2
+            exit 1
+          fi
+
+      - name: Ensure ffmpeg is available
+        shell: bash
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version
+
+      - name: Run focused tests
+        run: node --test packages/db/tests/backfill-video-proof-thumbnails.test.mjs
+
+      - name: Run backfill
+        shell: bash
+        env:
+          MODE: ${{ inputs.mode }}
+          LIMIT: ${{ inputs.limit }}
+          FRAME_SECONDS: ${{ inputs.frame_seconds }}
+          WORKOUT_IDS: ${{ inputs.workout_ids }}
+        run: |
+          args=(
+            --mode "$MODE"
+            --limit "$LIMIT"
+            --frame-seconds "$FRAME_SECONDS"
+            --output-file "$REPORT_FILE"
+          )
+
+          if [ -n "${WORKOUT_IDS:-}" ]; then
+            args+=(--workout-ids "$WORKOUT_IDS")
+          fi
+
+          node packages/db/scripts/backfill-video-proof-thumbnails.mjs "${args[@]}"
+
+      - name: Upload backfill report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-proof-thumbnail-backfill-${{ github.run_id }}
+          path: ${{ env.REPORT_FILE }}
+          if-no-files-found: warn
+          retention-days: 14

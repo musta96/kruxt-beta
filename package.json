@@ -23,7 +23,7 @@
     "clean:local": "node scripts/clean-local-caches.mjs",
     "clean:local:dry": "node scripts/clean-local-caches.mjs --dry-run",
     "clean:local:deps": "node scripts/clean-local-caches.mjs --include-node-modules",
-    "db:test": "bash packages/db/tests/run_smoke.sh"
+    "db:test": "bash packages/db/tests/run_smoke.sh && node --test packages/db/tests/backfill-video-proof-thumbnails.test.mjs"
   },
   "devDependencies": {
     "eslint": "^8.57.1",
