@@ -45,6 +45,37 @@ export class MobileAuthService {
     throwIfError(error, "AUTH_SIGNOUT_FAILED", "Unable to sign out.");
   }
 
+  /**
+   * Change the signed-in user's password. Reauthenticates with the current
+   * password first so a stolen/idle session can't silently rotate credentials.
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const { data: userData, error: userError } = await this.supabase.auth.getUser();
+    throwIfError(userError, "AUTH_GET_USER_FAILED", "Unable to read current user.");
+
+    const email = userData.user?.email;
+    if (!email) {
+      throw new KruxtAppError("AUTH_NO_EMAIL", "Current account has no email to reauthenticate.");
+    }
+
+    const { error: reauthError } = await this.supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword
+    });
+    if (reauthError) {
+      throw new KruxtAppError(
+        "AUTH_REAUTH_FAILED",
+        "Current password is incorrect.",
+        reauthError
+      );
+    }
+
+    const { error: updateError } = await this.supabase.auth.updateUser({
+      password: newPassword
+    });
+    throwIfError(updateError, "AUTH_PASSWORD_UPDATE_FAILED", "Unable to update password.");
+  }
+
   async getCurrentUser(): Promise<User | null> {
     const { data, error } = await this.supabase.auth.getUser();
     throwIfError(error, "AUTH_GET_USER_FAILED", "Unable to read current user.");
