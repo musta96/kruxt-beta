@@ -3,3 +3,4 @@ export * from "./events";
 export * from "./api";
 export * from "./domain";
 export * from "./legal-localization";
+export * from "./database";
