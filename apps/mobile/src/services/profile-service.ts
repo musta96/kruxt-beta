@@ -90,6 +90,42 @@ export class ProfileService {
     return mapProfile(data as ProfileRow);
   }
 
+  async setPreferredUnits(
+    userId: string,
+    units: "metric" | "imperial",
+  ): Promise<Profile> {
+    const { data, error } = await this.supabase
+      .from("profiles")
+      .update({ preferred_units: units })
+      .eq("id", userId)
+      .select("*")
+      .single();
+
+    throwIfError(error, "PROFILE_UNITS_UPDATE_FAILED", "Unable to update unit preference.");
+
+    return mapProfile(data as ProfileRow);
+  }
+
+  async getWorkoutTotals(
+    userId: string,
+  ): Promise<{ totalWorkouts: number; totalVolumeKg: number }> {
+    const { data, error, count } = await this.supabase
+      .from("workouts")
+      .select("total_volume_kg", { count: "exact" })
+      .eq("user_id", userId);
+
+    throwIfError(error, "PROFILE_WORKOUT_TOTALS_FAILED", "Unable to load workout totals.");
+
+    // numeric columns arrive as strings from PostgREST
+    const rows = (data ?? []) as { total_volume_kg: number | string | null }[];
+    const totalVolumeKg = rows.reduce(
+      (sum, row) => sum + Number(row.total_volume_kg ?? 0),
+      0,
+    );
+
+    return { totalWorkouts: count ?? rows.length, totalVolumeKg };
+  }
+
   async ensureProfile(
     userId: string,
     userEmail: string,

@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -22,6 +23,11 @@ import {
 } from "@kruxt/ui";
 import { darkTheme } from "@kruxt/ui/theme";
 import { useAuth } from "../contexts/auth-context";
+import {
+  createMobileSupabaseClient,
+  GymService,
+  ProfileService,
+} from "../services";
 
 const theme = darkTheme;
 
@@ -45,8 +51,10 @@ export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedSection, setExpandedSection] = useState<SettingsSection | null>(null);
+  const meIdRef = useRef<string | null>(null);
 
   // Preferences state
   const [unitSystem, setUnitSystem] = useState<"metric" | "imperial">("metric");
@@ -58,7 +66,50 @@ export function ProfileScreen() {
     setLoading(true);
     setError(null);
     try {
-      // Will wire to ProfileService once available
+      const supabase = createMobileSupabaseClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        throw new Error("You need to be signed in to view your profile.");
+      }
+      const meId = authData.user.id;
+      meIdRef.current = meId;
+
+      const profiles = new ProfileService(supabase);
+      const gyms = new GymService(supabase);
+
+      const [myProfile, totals] = await Promise.all([
+        profiles.getProfileById(meId),
+        profiles.getWorkoutTotals(meId),
+      ]);
+      if (!myProfile) {
+        throw new Error("Profile not set up yet. Complete onboarding to continue.");
+      }
+
+      const gym = myProfile.homeGymId
+        ? await gyms.getGymById(myProfile.homeGymId)
+        : null;
+
+      const memberSince = authData.user.created_at
+        ? new Date(authData.user.created_at).toLocaleDateString(undefined, {
+            month: "short",
+            year: "numeric",
+          })
+        : "—";
+
+      setProfile({
+        displayName: myProfile.displayName,
+        handle: myProfile.username,
+        avatarUrl: myProfile.avatarUrl ?? undefined,
+        bio: myProfile.bio ?? undefined,
+        tier: myProfile.rankTier,
+        chainDays: myProfile.chainDays,
+        totalWorkouts: totals.totalWorkouts,
+        totalVolumeKg: totals.totalVolumeKg,
+        xpTotal: myProfile.xpTotal,
+        memberSince,
+        gymName: gym?.name,
+      });
+      setUnitSystem(myProfile.preferredUnits);
       setLoading(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load profile");
@@ -69,6 +120,27 @@ export function ProfileScreen() {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadProfile();
+    setRefreshing(false);
+  }, [loadProfile]);
+
+  const handleUnitChange = useCallback((units: "metric" | "imperial") => {
+    setUnitSystem((prev) => {
+      if (prev === units) return prev;
+      const meId = meIdRef.current;
+      if (meId) {
+        const profiles = new ProfileService(createMobileSupabaseClient());
+        profiles.setPreferredUnits(meId, units).catch(() => {
+          // revert on failure so the UI never lies about what's persisted
+          setUnitSystem(prev);
+        });
+      }
+      return units;
+    });
+  }, []);
 
   const handleSignOut = useCallback(() => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -114,7 +186,16 @@ export function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#35D0FF"
+          />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>PROFILE</Text>
@@ -240,7 +321,7 @@ export function ProfileScreen() {
                   styles.unitOption,
                   unitSystem === "metric" && styles.unitOptionActive,
                 ]}
-                onPress={() => setUnitSystem("metric")}
+                onPress={() => handleUnitChange("metric")}
               >
                 <Text
                   style={[
@@ -256,7 +337,7 @@ export function ProfileScreen() {
                   styles.unitOption,
                   unitSystem === "imperial" && styles.unitOptionActive,
                 ]}
-                onPress={() => setUnitSystem("imperial")}
+                onPress={() => handleUnitChange("imperial")}
               >
                 <Text
                   style={[
