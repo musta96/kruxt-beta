@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from "react";
 import {
   Alert,
+  Linking,
   Pressable,
   RefreshControl,
   SafeAreaView,
@@ -24,6 +25,7 @@ import {
 import { darkTheme } from "@kruxt/ui/theme";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "../contexts/auth-context";
+import { APP_LINKS, supportMailto } from "../config/links";
 import {
   createMobileSupabaseClient,
   GymService,
@@ -145,6 +147,16 @@ export function ProfileScreen() {
       }
       return units;
     });
+  }, []);
+
+  const openExternal = useCallback(async (url: string) => {
+    try {
+      const ok = await Linking.canOpenURL(url);
+      if (!ok) throw new Error("unsupported");
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("Couldn't open link", "No app is available to handle this link.");
+    }
   }, []);
 
   const handleSignOut = useCallback(() => {
@@ -445,31 +457,31 @@ export function ProfileScreen() {
             theme={theme}
             label="Help Center"
             chevron
-            onPress={() => {/* TODO */}}
+            onPress={() => openExternal(APP_LINKS.help)}
           />
           <ListRow
             theme={theme}
             label="Report a Bug"
             chevron
-            onPress={() => {/* TODO */}}
+            onPress={() => openExternal(supportMailto("KRUXT Bug Report"))}
           />
           <ListRow
             theme={theme}
             label="Contact Support"
             chevron
-            onPress={() => {/* TODO */}}
+            onPress={() => openExternal(supportMailto("KRUXT Support Request"))}
           />
           <ListRow
             theme={theme}
             label="Terms of Service"
             chevron
-            onPress={() => {/* TODO */}}
+            onPress={() => openExternal(APP_LINKS.terms)}
           />
           <ListRow
             theme={theme}
             label="Privacy Policy"
             chevron
-            onPress={() => {/* TODO */}}
+            onPress={() => openExternal(APP_LINKS.privacy)}
           />
         </SettingsGroup>
 
