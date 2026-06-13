@@ -395,7 +395,7 @@ export function ProfileScreen() {
             theme={theme}
             label="Change Password"
             chevron
-            onPress={() => {/* TODO */}}
+            onPress={() => router.push("/change-password")}
           />
           <ListRow
             theme={theme}
