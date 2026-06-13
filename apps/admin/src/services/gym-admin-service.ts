@@ -43,6 +43,21 @@ type MembershipRow = {
   updated_at?: string | null;
 };
 
+type BulkMembershipMutationRow = {
+  operation_id: string;
+  membership_id: string;
+  user_id: string | null;
+  success: boolean;
+  result: string;
+  error_code: string | null;
+  error_message: string | null;
+  previous_role: GymRole | null;
+  new_role: GymRole | null;
+  previous_status: MembershipStatus | null;
+  new_status: MembershipStatus | null;
+  audit_log_id: string | null;
+};
+
 type ProfileRow = {
   id: string;
   display_name: string | null;
@@ -537,6 +552,28 @@ export interface SetGymCustomRolePermissionInput {
   reason?: string | null;
 }
 
+export interface BulkUpdateGymMembershipsInput {
+  membershipIds: string[];
+  membershipStatus?: MembershipStatus | null;
+  role?: GymRole | null;
+  reason: string;
+}
+
+export interface BulkMembershipMutationResult {
+  operationId: string;
+  membershipId: string;
+  userId?: string | null;
+  success: boolean;
+  result: string;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  previousRole?: GymRole | null;
+  newRole?: GymRole | null;
+  previousStatus?: MembershipStatus | null;
+  newStatus?: MembershipStatus | null;
+  auditLogId?: string | null;
+}
+
 function mapMembership(row: MembershipRow): GymMembership {
   return {
     id: row.id,
@@ -548,6 +585,23 @@ function mapMembership(row: MembershipRow): GymMembership {
     membershipPlanId: row.membership_plan_id,
     startedAt: row.started_at,
     endsAt: row.ends_at
+  };
+}
+
+function mapBulkMembershipMutation(row: BulkMembershipMutationRow): BulkMembershipMutationResult {
+  return {
+    operationId: row.operation_id,
+    membershipId: row.membership_id,
+    userId: row.user_id,
+    success: row.success,
+    result: row.result,
+    errorCode: row.error_code,
+    errorMessage: row.error_message,
+    previousRole: row.previous_role,
+    newRole: row.new_role,
+    previousStatus: row.previous_status,
+    newStatus: row.new_status,
+    auditLogId: row.audit_log_id
   };
 }
 
@@ -1029,37 +1083,31 @@ export class GymAdminService {
   async updateMembershipStatus(
     gymId: string,
     membershipId: string,
-    membershipStatus: MembershipStatus
+    membershipStatus: MembershipStatus,
+    reason = "Updated membership status from the staff console"
   ): Promise<GymMembership> {
-    await this.access.requireGymStaff(gymId);
-
-    const { data, error } = await this.supabase
-      .from("gym_memberships")
-      .update({ membership_status: membershipStatus })
-      .eq("id", membershipId)
-      .eq("gym_id", gymId)
-      .select("*")
-      .single();
-
-    throwIfAdminError(error, "ADMIN_MEMBERSHIP_UPDATE_FAILED", "Unable to update membership status.");
-
-    return mapMembership(data as MembershipRow);
+    const [result] = await this.bulkUpdateGymMemberships(gymId, {
+      membershipIds: [membershipId],
+      membershipStatus,
+      reason
+    });
+    this.assertMembershipMutationSucceeded(result);
+    return this.getGymMembership(gymId, membershipId);
   }
 
-  async assignMembershipRole(gymId: string, membershipId: string, role: GymRole): Promise<GymMembership> {
-    await this.access.requireGymStaff(gymId);
-
-    const { data, error } = await this.supabase
-      .from("gym_memberships")
-      .update({ role })
-      .eq("id", membershipId)
-      .eq("gym_id", gymId)
-      .select("*")
-      .single();
-
-    throwIfAdminError(error, "ADMIN_ROLE_ASSIGN_FAILED", "Unable to assign gym role.");
-
-    return mapMembership(data as MembershipRow);
+  async assignMembershipRole(
+    gymId: string,
+    membershipId: string,
+    role: GymRole,
+    reason = "Updated membership role from the staff console"
+  ): Promise<GymMembership> {
+    const [result] = await this.bulkUpdateGymMemberships(gymId, {
+      membershipIds: [membershipId],
+      role,
+      reason
+    });
+    this.assertMembershipMutationSucceeded(result);
+    return this.getGymMembership(gymId, membershipId);
   }
 
   async updateMembershipDetails(
@@ -1070,15 +1118,36 @@ export class GymAdminService {
       membershipStatus?: MembershipStatus;
       membershipPlanId?: string | null;
       endsAt?: string | null;
+      auditReason?: string;
     }
   ): Promise<GymMembership> {
     await this.access.requireGymStaff(gymId);
 
+    const currentMembership = await this.getGymMembership(gymId, membershipId);
+    const roleChanged = input.role !== undefined && input.role !== currentMembership.role;
+    const statusChanged =
+      input.membershipStatus !== undefined &&
+      input.membershipStatus !== currentMembership.membershipStatus;
+
+    if (roleChanged || statusChanged) {
+      const [result] = await this.bulkUpdateGymMemberships(gymId, {
+        membershipIds: [membershipId],
+        role: roleChanged ? input.role : null,
+        membershipStatus: statusChanged ? input.membershipStatus : null,
+        reason: input.auditReason ?? ""
+      });
+      this.assertMembershipMutationSucceeded(result);
+    }
+
     const payload: Record<string, unknown> = {};
-    if (input.role !== undefined) payload.role = input.role;
-    if (input.membershipStatus !== undefined) payload.membership_status = input.membershipStatus;
     if (input.membershipPlanId !== undefined) payload.membership_plan_id = input.membershipPlanId;
     if (input.endsAt !== undefined) payload.ends_at = input.endsAt;
+
+    if (Object.keys(payload).length === 0) {
+      return roleChanged || statusChanged
+        ? this.getGymMembership(gymId, membershipId)
+        : currentMembership;
+    }
 
     const { data, error } = await this.supabase
       .from("gym_memberships")
@@ -1114,7 +1183,65 @@ export class GymAdminService {
   }
 
   async approveMembership(gymId: string, membershipId: string): Promise<GymMembership> {
-    return this.updateMembershipStatus(gymId, membershipId, "active");
+    return this.updateMembershipStatus(gymId, membershipId, "active", "Approved pending gym membership");
+  }
+
+  async bulkUpdateGymMemberships(
+    gymId: string,
+    input: BulkUpdateGymMembershipsInput
+  ): Promise<BulkMembershipMutationResult[]> {
+    await this.access.requireGymStaff(gymId);
+
+    const membershipIds = Array.from(new Set(input.membershipIds.map((id) => id.trim()).filter(Boolean)));
+    if (membershipIds.length === 0) {
+      throw new KruxtAdminError("ADMIN_MEMBERSHIP_SELECTION_REQUIRED", "Select at least one member.");
+    }
+
+    const reason = input.reason.trim();
+    if (reason.length < 8) {
+      throw new KruxtAdminError(
+        "ADMIN_MEMBERSHIP_AUDIT_REASON_REQUIRED",
+        "Enter an audit reason of at least 8 characters."
+      );
+    }
+
+    const { data, error } = await this.supabase.rpc("bulk_update_gym_memberships", {
+      p_gym_id: gymId,
+      p_membership_ids: membershipIds,
+      p_membership_status: input.membershipStatus ?? null,
+      p_role: input.role ?? null,
+      p_reason: reason
+    });
+
+    throwIfAdminError(
+      error,
+      "ADMIN_BULK_MEMBERSHIP_UPDATE_FAILED",
+      "Unable to update the selected memberships."
+    );
+
+    return ((data as BulkMembershipMutationRow[]) ?? []).map(mapBulkMembershipMutation);
+  }
+
+  private assertMembershipMutationSucceeded(result?: BulkMembershipMutationResult): void {
+    if (!result?.success) {
+      throw new KruxtAdminError(
+        result?.errorCode ?? "ADMIN_MEMBERSHIP_UPDATE_FAILED",
+        result?.errorMessage ?? "Unable to update membership access.",
+        result
+      );
+    }
+  }
+
+  private async getGymMembership(gymId: string, membershipId: string): Promise<GymMembership> {
+    const { data, error } = await this.supabase
+      .from("gym_memberships")
+      .select("*")
+      .eq("id", membershipId)
+      .eq("gym_id", gymId)
+      .single();
+
+    throwIfAdminError(error, "ADMIN_MEMBERSHIP_READ_FAILED", "Unable to load the updated membership.");
+    return mapMembership(data as MembershipRow);
   }
 
   async addOrUpdateMembership(
@@ -1135,25 +1262,40 @@ export class GymAdminService {
       throw new KruxtAdminError("ADMIN_MEMBERSHIP_USER_REQUIRED", "User id is required.");
     }
 
+    const { data: existing, error: existingError } = await this.supabase
+      .from("gym_memberships")
+      .select("*")
+      .eq("gym_id", gymId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    throwIfAdminError(existingError, "ADMIN_MEMBERSHIP_LOOKUP_FAILED", "Unable to check existing membership.");
+
+    if (existing) {
+      return this.updateMembershipDetails(gymId, (existing as MembershipRow).id, {
+        role: input.role,
+        membershipStatus: input.membershipStatus,
+        membershipPlanId: input.membershipPlanId ?? null,
+        endsAt: input.endsAt ?? null,
+        auditReason: "Updated existing membership from Add Member"
+      });
+    }
+
     const { data, error } = await this.supabase
       .from("gym_memberships")
-      .upsert(
-        {
-          gym_id: gymId,
-          user_id: userId,
-          role: input.role,
-          membership_status: input.membershipStatus,
-          membership_plan_id: input.membershipPlanId ?? null,
-          started_at: input.startedAt ?? null,
-          ends_at: input.endsAt ?? null
-        },
-        { onConflict: "gym_id,user_id" }
-      )
+      .insert({
+        gym_id: gymId,
+        user_id: userId,
+        role: input.role,
+        membership_status: input.membershipStatus,
+        membership_plan_id: input.membershipPlanId ?? null,
+        started_at: input.startedAt ?? null,
+        ends_at: input.endsAt ?? null
+      })
       .select("*")
       .single();
 
-    throwIfAdminError(error, "ADMIN_MEMBERSHIP_UPSERT_FAILED", "Unable to add or update membership.");
-
+    throwIfAdminError(error, "ADMIN_MEMBERSHIP_INSERT_FAILED", "Unable to add membership.");
     return mapMembership(data as MembershipRow);
   }
 
