@@ -90,6 +90,19 @@ export class ProfileService {
     return mapProfile(data as ProfileRow);
   }
 
+  async setVisibility(userId: string, isPublic: boolean): Promise<Profile> {
+    const { data, error } = await this.supabase
+      .from("profiles")
+      .update({ is_public: isPublic })
+      .eq("id", userId)
+      .select("*")
+      .single();
+
+    throwIfError(error, "PROFILE_VISIBILITY_UPDATE_FAILED", "Unable to update profile visibility.");
+
+    return mapProfile(data as ProfileRow);
+  }
+
   async setPreferredUnits(
     userId: string,
     units: "metric" | "imperial",
