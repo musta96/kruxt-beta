@@ -5,7 +5,8 @@ create poster images for video proofs that predate thumbnail generation.
 
 ## Safety Model
 
-- The job only accepts staging credentials: `STAGING_SUPABASE_URL` and
+- The job only accepts staging credentials: `STAGING_SUPABASE_URL` plus
+  `STAGING_SUPABASE_SECRET_KEY` (preferred) or the legacy
   `STAGING_SUPABASE_SERVICE_ROLE_KEY`.
 - The script also verifies the URL resolves to the known staging project
   `upwcpcjjfggdcmizgbka`, preventing a production credential mix-up.
@@ -21,7 +22,8 @@ Do not configure these staging-prefixed secrets with production credentials.
 
 ## First Run
 
-1. Add the two staging secrets in GitHub repository settings.
+1. Add `STAGING_SUPABASE_URL` and `STAGING_SUPABASE_SECRET_KEY` in GitHub
+   repository settings. The legacy service-role key name remains supported.
 2. Open **Actions > backfill-video-proof-thumbnails > Run workflow**.
 3. Keep `mode` set to `dry-run` and use a small limit such as `10`.
 4. Review the job summary and downloaded JSON report.
@@ -44,7 +46,7 @@ The backfill itself requires staging credentials:
 
 ```sh
 STAGING_SUPABASE_URL="https://..." \
-STAGING_SUPABASE_SERVICE_ROLE_KEY="..." \
+STAGING_SUPABASE_SECRET_KEY="sb_secret_..." \
 node packages/db/scripts/backfill-video-proof-thumbnails.mjs \
   --mode dry-run \
   --limit 10

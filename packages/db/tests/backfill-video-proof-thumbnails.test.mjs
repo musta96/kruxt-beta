@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  buildPrivilegedHeaders,
   chooseSourceObject,
   extractVideoFrame,
   parseArgs,
@@ -170,6 +171,25 @@ test("validateStagingUrl only accepts the configured HTTPS project", () => {
       ),
     /Refusing to run/
   );
+});
+
+test("buildPrivilegedHeaders supports modern secret and legacy service-role keys", () => {
+  assert.deepEqual(
+    buildPrivilegedHeaders("sb_secret_example_checksum", {
+      "Content-Type": "application/json"
+    }),
+    {
+      apikey: "sb_secret_example_checksum",
+      "Content-Type": "application/json"
+    }
+  );
+
+  const jwt = "header.payload.signature";
+  assert.deepEqual(buildPrivilegedHeaders(jwt), {
+    apikey: jwt,
+    Authorization: `Bearer ${jwt}`
+  });
+  assert.throws(() => buildPrivilegedHeaders("sb_publishable_public"), /must be/);
 });
 
 test(

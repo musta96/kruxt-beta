@@ -41,6 +41,7 @@ jobs:
       cancel-in-progress: false
     env:
       STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      STAGING_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_SUPABASE_SECRET_KEY }}
       STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
       STAGING_SUPABASE_PROJECT_REF: upwcpcjjfggdcmizgbka
       REPORT_FILE: video-proof-thumbnail-backfill-report.json
@@ -59,8 +60,13 @@ jobs:
           MODE: ${{ inputs.mode }}
           CONFIRM: ${{ inputs.confirm }}
         run: |
-          if [ -z "${STAGING_SUPABASE_URL:-}" ] || [ -z "${STAGING_SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
-            echo "Missing STAGING_SUPABASE_URL or STAGING_SUPABASE_SERVICE_ROLE_KEY." >&2
+          if [ -z "${STAGING_SUPABASE_URL:-}" ]; then
+            echo "Missing STAGING_SUPABASE_URL." >&2
+            exit 1
+          fi
+
+          if [ -z "${STAGING_SUPABASE_SECRET_KEY:-}" ] && [ -z "${STAGING_SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "Missing STAGING_SUPABASE_SECRET_KEY (preferred) or legacy STAGING_SUPABASE_SERVICE_ROLE_KEY." >&2
             exit 1
           fi
 

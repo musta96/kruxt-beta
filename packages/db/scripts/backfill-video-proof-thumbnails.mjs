@@ -189,7 +189,8 @@ Options:
 
 Required environment:
   STAGING_SUPABASE_URL
-  STAGING_SUPABASE_SERVICE_ROLE_KEY`);
+  STAGING_SUPABASE_SECRET_KEY (preferred) or
+  STAGING_SUPABASE_SERVICE_ROLE_KEY (legacy JWT)`);
 }
 
 export function validateStagingUrl(supabaseUrl, expectedProjectRef) {
@@ -210,18 +211,32 @@ export function validateStagingUrl(supabaseUrl, expectedProjectRef) {
   return url.origin;
 }
 
+export function buildPrivilegedHeaders(apiKey, extra = {}) {
+  const isSecretKey = apiKey.startsWith("sb_secret_");
+  const isLegacyServiceRoleJwt = apiKey.split(".").length === 3;
+  if (!isSecretKey && !isLegacyServiceRoleJwt) {
+    throw new Error(
+      "Staging key must be an sb_secret key or legacy service_role JWT"
+    );
+  }
+
+  return {
+    apikey: apiKey,
+    ...(isLegacyServiceRoleJwt
+      ? { Authorization: `Bearer ${apiKey}` }
+      : {}),
+    ...extra
+  };
+}
+
 class SupabaseRestClient {
-  constructor(supabaseUrl, serviceRoleKey) {
+  constructor(supabaseUrl, privilegedKey) {
     this.supabaseUrl = supabaseUrl.replace(/\/+$/, "");
-    this.serviceRoleKey = serviceRoleKey;
+    this.privilegedKey = privilegedKey;
   }
 
   headers(extra = {}) {
-    return {
-      apikey: this.serviceRoleKey,
-      Authorization: `Bearer ${this.serviceRoleKey}`,
-      ...extra
-    };
+    return buildPrivilegedHeaders(this.privilegedKey, extra);
   }
 
   async fetchMissingWorkouts({ afterId, limit, workoutIds }) {
@@ -505,17 +520,19 @@ export async function main(argv = process.argv.slice(2)) {
   }
 
   const supabaseUrl = process.env.STAGING_SUPABASE_URL?.replace(/\/+$/, "");
-  const serviceRoleKey = process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceRoleKey) {
+  const privilegedKey =
+    process.env.STAGING_SUPABASE_SECRET_KEY ??
+    process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !privilegedKey) {
     throw new Error(
-      "STAGING_SUPABASE_URL and STAGING_SUPABASE_SERVICE_ROLE_KEY are required"
+      "STAGING_SUPABASE_URL and a staging secret/service-role key are required"
     );
   }
   const expectedProjectRef =
     process.env.STAGING_SUPABASE_PROJECT_REF ?? "upwcpcjjfggdcmizgbka";
   validateStagingUrl(supabaseUrl, expectedProjectRef);
 
-  const client = new SupabaseRestClient(supabaseUrl, serviceRoleKey);
+  const client = new SupabaseRestClient(supabaseUrl, privilegedKey);
   const workouts = await collectWorkouts(client, config);
   const results = [];
 
