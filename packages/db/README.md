@@ -7,6 +7,9 @@ Contains Supabase/Postgres SQL migrations and smoke tests.
 - `supabase/migrations/`: ordered migration set for full KRUXT foundation schema
 - `supabase/seeds/001_feature_flags.sql`: feature-flag defaults
 - `tests/rls_smoke.sql`: checks expected policy coverage by naming convention
+- `scripts/backfill-video-proof-thumbnails.mjs`: bounded staging backfill for
+  poster images on legacy video proofs; see
+  `../../docs/video-proof-thumbnail-backfill.md`
 
 ## Apply
 
