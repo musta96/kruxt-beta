@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -14,7 +14,12 @@ import { ProfileInviteForm } from "@/components/profile-invite-form";
 import { useGym } from "@/contexts/gym-context";
 import { useServices } from "@/hooks/use-services";
 import { useAsync } from "@/hooks/use-async";
-import type { GymJoinRequestDirectoryItem, GymMemberDirectoryItem, StaffProfileOption } from "@/services";
+import type {
+  BulkMembershipMutationResult,
+  GymJoinRequestDirectoryItem,
+  GymMemberDirectoryItem,
+  StaffProfileOption,
+} from "@/services";
 import type { GymInviteCode } from "@kruxt/types";
 import type { GymRole, MembershipStatus } from "@kruxt/types";
 
@@ -22,6 +27,7 @@ const INPUT =
   "w-full rounded-lg border border-border bg-kruxt-panel px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent/40";
 
 type StatusFilter = "all" | MembershipStatus;
+type BulkActionValue = `status:${MembershipStatus}` | `role:${GymRole}`;
 
 const statusFilters: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
@@ -30,6 +36,17 @@ const statusFilters: { value: StatusFilter; label: string }[] = [
   { value: "trial", label: "Trial" },
   { value: "paused", label: "Paused" },
   { value: "cancelled", label: "Cancelled" },
+];
+
+const bulkActions: { value: BulkActionValue; label: string }[] = [
+  { value: "status:active", label: "Set status: Active" },
+  { value: "status:trial", label: "Set status: Trial" },
+  { value: "status:paused", label: "Set status: Paused" },
+  { value: "status:cancelled", label: "Set status: Cancelled" },
+  { value: "role:member", label: "Set role: Member" },
+  { value: "role:coach", label: "Set role: PT / Coach" },
+  { value: "role:officer", label: "Set role: Officer" },
+  { value: "role:leader", label: "Set role: Owner" },
 ];
 
 interface AddMemberForm {
@@ -142,13 +159,20 @@ export default function MembersPage() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | undefined>();
-  const [actionId, setActionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | undefined>();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [showBulkAction, setShowBulkAction] = useState(false);
+  const [bulkAction, setBulkAction] = useState<BulkActionValue>("status:active");
+  const [bulkReason, setBulkReason] = useState("");
+  const [bulkConfirmation, setBulkConfirmation] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResults, setBulkResults] = useState<BulkMembershipMutationResult[]>([]);
   const [managedMember, setManagedMember] = useState<GymMemberDirectoryItem | null>(null);
   const [managedCoachId, setManagedCoachId] = useState("");
   const [managedRole, setManagedRole] = useState<GymRole>("member");
   const [managedStatus, setManagedStatus] = useState<MembershipStatus>("active");
   const [managedPlanId, setManagedPlanId] = useState("");
+  const [managedAuditReason, setManagedAuditReason] = useState("");
   const [planTitle, setPlanTitle] = useState("");
   const [planGoal, setPlanGoal] = useState("");
   const [planNotes, setPlanNotes] = useState("");
@@ -285,21 +309,40 @@ export default function MembersPage() {
     }
   };
 
-  const handleStatusChange = useCallback(
-    async (membershipId: string, newStatus: MembershipStatus) => {
-      setActionId(membershipId);
-      setActionError(undefined);
-      try {
-        await gym.updateMembershipStatus(gymId, membershipId, newStatus);
-        refetch();
-      } catch (e) {
-        setActionError(e instanceof Error ? e.message : "Action failed");
-      } finally {
-        setActionId(null);
+  const closeBulkAction = () => {
+    if (bulkLoading) return;
+    setShowBulkAction(false);
+    setBulkReason("");
+    setBulkConfirmation("");
+    setBulkResults([]);
+    setActionError(undefined);
+  };
+
+  const openBulkAction = (membershipIds?: string[], action?: BulkActionValue) => {
+    if (membershipIds) {
+      setSelectedIds(new Set(membershipIds));
+    }
+    if (action) {
+      setBulkAction(action);
+    }
+    setBulkReason("");
+    setBulkConfirmation("");
+    setBulkResults([]);
+    setActionError(undefined);
+    setShowBulkAction(true);
+  };
+
+  const toggleSelected = (membershipId: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(membershipId)) {
+        next.delete(membershipId);
+      } else {
+        next.add(membershipId);
       }
-    },
-    [gym, gymId, refetch]
-  );
+      return next;
+    });
+  };
 
   const openManageModal = (member: GymMemberDirectoryItem) => {
     setManagedMember(member);
@@ -307,6 +350,7 @@ export default function MembersPage() {
     setManagedRole(member.role);
     setManagedStatus(member.membershipStatus);
     setManagedPlanId(member.membershipPlanId ?? "");
+    setManagedAuditReason("");
     setPlanTitle("");
     setPlanGoal("");
     setPlanNotes("");
@@ -315,6 +359,12 @@ export default function MembersPage() {
 
   const handleSaveMemberDetails = async () => {
     if (!managedMember) return;
+    const accessChanged =
+      managedRole !== managedMember.role || managedStatus !== managedMember.membershipStatus;
+    if (accessChanged && managedAuditReason.trim().length < 8) {
+      setManageError("Enter an audit reason of at least 8 characters for role or status changes.");
+      return;
+    }
     setManageLoading(true);
     setManageError(undefined);
     try {
@@ -322,6 +372,7 @@ export default function MembersPage() {
         role: managedRole,
         membershipStatus: managedStatus,
         membershipPlanId: managedPlanId || null,
+        auditReason: managedAuditReason,
       });
       const selectedPlan = membershipPlanOptions.find((plan) => plan.id === managedPlanId);
       setManagedMember((member) =>
@@ -335,11 +386,51 @@ export default function MembersPage() {
             }
           : member
       );
+      setManagedAuditReason("");
       refetch();
     } catch (e) {
       setManageError(e instanceof Error ? e.message : "Unable to update member details.");
     } finally {
       setManageLoading(false);
+    }
+  };
+
+  const handleBulkMutation = async () => {
+    const membershipIds = Array.from(selectedIds);
+    if (membershipIds.length === 0) {
+      setActionError("Select at least one member.");
+      return;
+    }
+    if (bulkReason.trim().length < 8) {
+      setActionError("Enter an audit reason of at least 8 characters.");
+      return;
+    }
+
+    const [kind, value] = bulkAction.split(":") as ["status" | "role", MembershipStatus | GymRole];
+    const requiresTypedConfirmation = kind === "role" || value === "cancelled";
+    if (requiresTypedConfirmation && bulkConfirmation.trim().toUpperCase() !== "CHANGE") {
+      setActionError('Type "CHANGE" to confirm this high-impact action.');
+      return;
+    }
+
+    setBulkLoading(true);
+    setActionError(undefined);
+    setBulkResults([]);
+    try {
+      const results = await gym.bulkUpdateGymMemberships(gymId, {
+        membershipIds,
+        membershipStatus: kind === "status" ? (value as MembershipStatus) : null,
+        role: kind === "role" ? (value as GymRole) : null,
+        reason: bulkReason,
+      });
+      setBulkResults(results);
+      const failedIds = results.filter((result) => !result.success).map((result) => result.membershipId);
+      setSelectedIds(new Set(failedIds));
+      await refetch();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Unable to update selected members.");
+    } finally {
+      setBulkLoading(false);
     }
   };
 
@@ -485,8 +576,33 @@ export default function MembersPage() {
   const coachedCount = members.filter((m) => Boolean(m.coachUserId)).length;
   const pendingRequests = joinRequestsState.data ?? [];
   const activeInvites = (inviteCodesState.data ?? []).filter((invite) => invite.isActive);
+  const selectedVisibleCount = filtered.filter((member) => selectedIds.has(member.id)).length;
+  const allVisibleSelected = filtered.length > 0 && selectedVisibleCount === filtered.length;
+  const [bulkActionKind, bulkActionTarget] = bulkAction.split(":") as [
+    "status" | "role",
+    MembershipStatus | GymRole,
+  ];
+  const bulkRequiresTypedConfirmation =
+    bulkActionKind === "role" || bulkActionTarget === "cancelled";
+  const bulkSuccessCount = bulkResults.filter((result) => result.success).length;
+  const bulkFailureCount = bulkResults.length - bulkSuccessCount;
+  const bulkTargetCount = bulkResults.length > 0 ? bulkResults.length : selectedIds.size;
 
   const columns: Column<GymMemberDirectoryItem>[] = [
+    {
+      key: "select",
+      header: "",
+      className: "w-10",
+      render: (row) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(row.id)}
+          onChange={() => toggleSelected(row.id)}
+          aria-label={`Select ${memberLabel(row)}`}
+          className="h-4 w-4 accent-kruxt-accent"
+        />
+      ),
+    },
     {
       key: "name",
       header: "Member",
@@ -558,34 +674,30 @@ export default function MembersPage() {
       header: "",
       className: "w-44",
       render: (row) => {
-        const loading = actionId === row.id;
         return (
           <div className="flex flex-wrap gap-2">
             {row.membershipStatus === "pending" && (
               <button
-                onClick={() => handleStatusChange(row.id, "active")}
-                disabled={loading}
-                className="rounded-button bg-kruxt-success/15 px-2.5 py-1 text-xs font-medium text-kruxt-success transition-colors hover:bg-kruxt-success/25 disabled:opacity-50"
+                onClick={() => openBulkAction([row.id], "status:active")}
+                className="rounded-button bg-kruxt-success/15 px-2.5 py-1 text-xs font-medium text-kruxt-success transition-colors hover:bg-kruxt-success/25"
               >
-                {loading ? "..." : "Approve"}
+                Approve
               </button>
             )}
             {(row.membershipStatus === "active" || row.membershipStatus === "trial") && (
               <button
-                onClick={() => handleStatusChange(row.id, "paused")}
-                disabled={loading}
-                className="rounded-button border border-kruxt-warning/40 px-2.5 py-1 text-xs font-medium text-kruxt-warning transition-colors hover:bg-kruxt-warning/10 disabled:opacity-50"
+                onClick={() => openBulkAction([row.id], "status:paused")}
+                className="rounded-button border border-kruxt-warning/40 px-2.5 py-1 text-xs font-medium text-kruxt-warning transition-colors hover:bg-kruxt-warning/10"
               >
-                {loading ? "..." : "Pause"}
+                Pause
               </button>
             )}
             {row.membershipStatus === "paused" && (
               <button
-                onClick={() => handleStatusChange(row.id, "active")}
-                disabled={loading}
-                className="rounded-button bg-kruxt-accent/15 px-2.5 py-1 text-xs font-medium text-kruxt-accent transition-colors hover:bg-kruxt-accent/25 disabled:opacity-50"
+                onClick={() => openBulkAction([row.id], "status:active")}
+                className="rounded-button bg-kruxt-accent/15 px-2.5 py-1 text-xs font-medium text-kruxt-accent transition-colors hover:bg-kruxt-accent/25"
               >
-                {loading ? "..." : "Reactivate"}
+                Reactivate
               </button>
             )}
             <button
@@ -821,6 +933,49 @@ export default function MembersPage() {
             className="w-64 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (allVisibleSelected) {
+              setSelectedIds((current) => {
+                const next = new Set(current);
+                filtered.forEach((member) => next.delete(member.id));
+                return next;
+              });
+            } else {
+              setSelectedIds((current) => {
+                const next = new Set(current);
+                filtered.forEach((member) => next.add(member.id));
+                return next;
+              });
+            }
+          }}
+          disabled={filtered.length === 0}
+          className="rounded-button border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-kruxt-panel disabled:opacity-50"
+        >
+          {allVisibleSelected ? "Deselect visible" : "Select visible"}
+        </button>
+        {selectedIds.size > 0 && (
+          <>
+            <span className="text-xs font-semibold text-kruxt-accent">
+              {selectedIds.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={() => openBulkAction()}
+              className="rounded-button bg-kruxt-accent px-3 py-2 text-xs font-semibold text-kruxt-bg"
+            >
+              Bulk update
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded-button px-2 py-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              Clear
+            </button>
+          </>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -840,6 +995,108 @@ export default function MembersPage() {
       ) : (
         <DataTable columns={columns} data={filtered} keyExtractor={(row) => row.id} />
       )}
+
+      <Modal
+        open={showBulkAction}
+        onClose={closeBulkAction}
+        title={`Update ${bulkTargetCount} member${bulkTargetCount === 1 ? "" : "s"}`}
+        size="lg"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={closeBulkAction}
+              disabled={bulkLoading}
+              className="rounded-button border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-kruxt-panel disabled:opacity-50"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkMutation}
+              disabled={bulkLoading || selectedIds.size === 0}
+              className="rounded-button bg-kruxt-accent px-4 py-2 text-sm font-semibold text-kruxt-bg disabled:opacity-50"
+            >
+              {bulkLoading ? "Updating..." : "Apply update"}
+            </button>
+          </>
+        }
+      >
+        {actionError && (
+          <p className="rounded-lg bg-kruxt-danger/10 px-3 py-2 text-xs text-kruxt-danger">
+            {actionError}
+          </p>
+        )}
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Action</label>
+          <select
+            value={bulkAction}
+            onChange={(event) => {
+              setBulkAction(event.target.value as BulkActionValue);
+              setBulkConfirmation("");
+              setBulkResults([]);
+            }}
+            disabled={bulkLoading}
+            className={INPUT}
+          >
+            {bulkActions.map((action) => (
+              <option key={action.value} value={action.value}>
+                {action.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+            Audit reason
+          </label>
+          <textarea
+            rows={3}
+            value={bulkReason}
+            onChange={(event) => setBulkReason(event.target.value)}
+            disabled={bulkLoading}
+            className={INPUT}
+            placeholder="Why this access or role change is being made"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Stored with one immutable activity event per affected member.
+          </p>
+        </div>
+        {bulkRequiresTypedConfirmation && (
+          <div className="rounded-lg border border-kruxt-warning/40 bg-kruxt-warning/10 p-3">
+            <label className="mb-1.5 block text-xs font-semibold text-kruxt-warning">
+              Type CHANGE to confirm
+            </label>
+            <input
+              value={bulkConfirmation}
+              onChange={(event) => setBulkConfirmation(event.target.value)}
+              disabled={bulkLoading}
+              className={INPUT}
+              placeholder="CHANGE"
+            />
+          </div>
+        )}
+        {bulkResults.length > 0 && (
+          <div className="space-y-2 rounded-lg border border-border bg-kruxt-panel/40 p-3">
+            <p className="text-sm font-semibold text-foreground">
+              {bulkSuccessCount} succeeded / {bulkFailureCount} failed
+            </p>
+            {bulkResults
+              .filter((result) => !result.success)
+              .map((result) => (
+                <p key={result.membershipId} className="text-xs text-kruxt-danger">
+                  {memberLabel(members.find((member) => member.id === result.membershipId) ?? {
+                    id: result.membershipId,
+                    gymId,
+                    userId: result.userId ?? result.membershipId,
+                    role: result.previousRole ?? "member",
+                    membershipStatus: result.previousStatus ?? "pending",
+                  })}: {result.errorMessage ?? result.errorCode ?? "Update failed"}
+                </p>
+              ))}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={showAdd}
@@ -1036,6 +1293,20 @@ export default function MembersPage() {
                   </select>
                 </div>
               </div>
+              {(managedRole !== managedMember.role || managedStatus !== managedMember.membershipStatus) && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Audit reason
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={managedAuditReason}
+                    onChange={(event) => setManagedAuditReason(event.target.value)}
+                    className={INPUT}
+                    placeholder="Why this role or status is changing"
+                  />
+                </div>
+              )}
               <button
                 onClick={handleSaveMemberDetails}
                 disabled={manageLoading}
