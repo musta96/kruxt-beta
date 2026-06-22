@@ -8,15 +8,18 @@ import { resolvePostAuthPath, usePublicSession } from "@/components/public/usePu
 const MEMBER_NAV = [
   { href: "/feed", label: "Feed" },
   { href: "/plan", label: "Plan" },
-  { href: "/library", label: "Library" },
   { href: "/log", label: "Log" },
   { href: "/gyms", label: "Gyms" },
+  { href: "/profile", label: "Profile" }
+];
+
+const MEMBER_UTILITY_NAV = [
+  { href: "/library", label: "Library" },
   { href: "/guild", label: "Guild" },
   { href: "/rank", label: "Rank" },
   { href: "/integrations", label: "Integrations" },
   { href: "/privacy", label: "Privacy" },
-  { href: "/support", label: "Support" },
-  { href: "/profile", label: "Profile" }
+  { href: "/support", label: "Support" }
 ];
 
 export function MemberShell({
@@ -129,6 +132,18 @@ export function MemberShell({
             </button>
           </div>
         </header>
+
+        <nav className="member-secondary-nav" aria-label="Member utilities">
+          {MEMBER_UTILITY_NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`member-secondary-link ${pathname === item.href ? "is-active" : ""}`}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
 
         <section className="mobile-content">{children}</section>
 

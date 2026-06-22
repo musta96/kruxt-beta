@@ -149,11 +149,10 @@ export function AuthGateway() {
           <span>KRUXT</span>
         </a>
         <nav className="landing-nav-links" aria-label="KRUXT entry points">
-          <a href="/gyms">Gyms</a>
           <a href="/plan">Plan</a>
-          <a href="/rank">Rank</a>
+          <a href="/gyms">Gyms</a>
+          <a href="/feed">Feed</a>
           <a href={gymAdminUrl}>Gym admin</a>
-          <a href={platformUrl}>Platform</a>
         </nav>
       </header>
 
@@ -161,7 +160,7 @@ export function AuthGateway() {
         <section className="landing-copy">
           <h1 className="landing-title">KRUXT</h1>
           <p className="landing-subtitle">
-            The training app where proof, plans, rank, coaching, and gym operations finally move together.
+            Training plans, proof, coaching, and gym operations in one connected product.
           </p>
 
           <div className="landing-actions" aria-label="Primary login actions">
@@ -173,15 +172,15 @@ export function AuthGateway() {
           <div className="landing-promo">
             <a className="promo-panel" href="/feed">
               <span className="promo-label">Members</span>
-              <strong>Plan, log, post proof, rank up, and join gyms.</strong>
+              <strong>Follow the plan, log proof, join BZone, and keep progress visible.</strong>
             </a>
             <a className="promo-panel" href={gymAdminUrl}>
               <span className="promo-label">Gyms</span>
-              <strong>Members, staff, classes, coaching, waivers, billing, and public pages.</strong>
+              <strong>Operate members, staff, classes, coaching, waivers, billing, and pages.</strong>
             </a>
             <a className="promo-panel" href={platformUrl}>
               <span className="promo-label">Platform</span>
-              <strong>Tenant control, entitlements, support access, governance, and audits.</strong>
+              <strong>Control tenants, entitlements, support access, governance, and audits.</strong>
             </a>
           </div>
         </section>
@@ -285,7 +284,7 @@ export function AuthGateway() {
           <div className="mock-phone">
             <div className="mock-phone-bar">
               <span>Today</span>
-              <strong>Plan 72%</strong>
+              <strong>Plan ready</strong>
             </div>
             <div className="mock-session">
               <span className="promo-label">BZone Hybrid</span>
@@ -294,11 +293,11 @@ export function AuthGateway() {
             </div>
             <div className="mock-proof-row">
               <span>Proof feed</span>
-              <strong>+180 XP</strong>
+              <strong>Queued</strong>
             </div>
             <div className="mock-proof-row">
-              <span>Rank trial</span>
-              <strong>#12</strong>
+              <span>Gym visibility</span>
+              <strong>Coach view</strong>
             </div>
           </div>
         </aside>
