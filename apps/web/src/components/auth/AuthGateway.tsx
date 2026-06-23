@@ -149,48 +149,107 @@ export function AuthGateway() {
           <span>KRUXT</span>
         </a>
         <nav className="landing-nav-links" aria-label="KRUXT entry points">
-          <a href="/plan">Plan</a>
-          <a href="/gyms">Gyms</a>
-          <a href="/feed">Feed</a>
+          <a href="#product">Product</a>
+          <a href="#gyms">For gyms</a>
+          <a href="/support">Support</a>
           <a href={gymAdminUrl}>Gym admin</a>
+          <a href={platformUrl}>Platform</a>
         </nav>
       </header>
 
       <section className="landing-hero">
         <section className="landing-copy">
-          <h1 className="landing-title">KRUXT</h1>
+          <h1 className="landing-title">
+            Train.
+            <span>Prove.</span>
+            <span>Belong.</span>
+          </h1>
           <p className="landing-subtitle">
-            Training plans, proof, coaching, and gym operations in one connected product.
+            KRUXT connects the member app, the gym back office, and the platform control plane behind them.
           </p>
 
           <div className="landing-actions" aria-label="Primary login actions">
-            <a className="primary-cta" href="#member-login">Member login</a>
-            <a className="secondary-cta" href={gymAdminUrl}>Gym admin login</a>
-            <a className="secondary-cta" href={platformUrl}>Platform login</a>
+            <a className="primary-cta" href="#member-login">
+              Member login
+            </a>
+            <a className="secondary-cta" href={gymAdminUrl}>
+              Gym admin
+            </a>
           </div>
 
-          <div className="landing-promo">
-            <a className="promo-panel" href="/feed">
-              <span className="promo-label">Members</span>
-              <strong>Follow the plan, log proof, join BZone, and keep progress visible.</strong>
-            </a>
-            <a className="promo-panel" href={gymAdminUrl}>
-              <span className="promo-label">Gyms</span>
-              <strong>Operate members, staff, classes, coaching, waivers, billing, and pages.</strong>
-            </a>
-            <a className="promo-panel" href={platformUrl}>
-              <span className="promo-label">Platform</span>
-              <strong>Control tenants, entitlements, support access, governance, and audits.</strong>
-            </a>
+          <div className="landing-signal-row">
+            <span>BZone UAT</span>
+            <span>Plans + proof</span>
+            <span>Gym ops</span>
           </div>
         </section>
 
-        <section className="auth-panel" id="member-login">
+        <aside className="landing-product-panel" aria-label="KRUXT member product preview" id="product">
+          <div className="mock-phone">
+            <div className="mock-phone-bar">
+              <strong>KRUXT</strong>
+              <span>Plan</span>
+            </div>
+            <div className="mock-gym-row">
+              <div className="mock-gym-mark">BZ</div>
+              <div>
+                <strong>BZone Fitness</strong>
+                <span>Your home gym</span>
+              </div>
+              <span className="ghost-chip">Ready</span>
+            </div>
+            <div className="mock-session">
+              <span className="status-pill">Today</span>
+              <strong>Lower Strength</strong>
+              <p>Coach note · 60-75 min · proof after training</p>
+              <a className="primary-cta" href="/log">
+                Start session
+              </a>
+            </div>
+            <div className="mock-week-strip">
+              <span className="is-active">Mon</span>
+              <span>Tue</span>
+              <span>Wed</span>
+              <span>Thu</span>
+              <span>Fri</span>
+            </div>
+            <div className="mock-proof-row">
+              <span>Proof</span>
+              <strong>Queued after log</strong>
+            </div>
+            <div className="mock-proof-row">
+              <span>Coach visibility</span>
+              <strong>BZone staff</strong>
+            </div>
+          </div>
+        </aside>
+
+      </section>
+
+      <section className="landing-role-grid" aria-label="Choose your KRUXT workspace">
+        <a className="door-card" href="/plan">
+          <span className="promo-label">Member app</span>
+          <strong>Follow the plan, log proof, join gyms, and build your profile.</strong>
+          <span className="door-card-action">Go to app</span>
+        </a>
+        <a className="door-card" href={gymAdminUrl} id="gyms">
+          <span className="promo-label">Gym owner / staff</span>
+          <strong>Run members, coaching, classes, waivers, billing, and staff roles.</strong>
+          <span className="door-card-action">Open gym admin</span>
+        </a>
+        <a className="door-card door-card-platform" href={platformUrl}>
+          <span className="promo-label">Platform admin</span>
+          <strong>Manage tenants, entitlements, support access, audits, and rollout.</strong>
+          <span className="door-card-action">Open platform</span>
+        </a>
+      </section>
+
+      <section className="auth-panel landing-auth-row" id="member-login">
         <div className="auth-shell-card">
           <p className="eyebrow">{mode === "signin" ? "WELCOME BACK" : "CREATE ACCOUNT"}</p>
           <h2 className="section-title">{mode === "signin" ? "Sign in to KRUXT" : "Claim your KRUXT account"}</h2>
           <p className="section-copy">
-            Members continue into the app. Gym staff and platform operators can use the dedicated login buttons.
+            Members continue into the app. Staff and platform operators use their dedicated doors.
           </p>
 
           <div className="mode-toggle">
@@ -277,53 +336,6 @@ export function AuthGateway() {
               {loading ? "Please wait..." : mode === "signin" ? "Sign in" : "Create account"}
             </button>
           </form>
-        </div>
-      </section>
-
-        <aside className="landing-product-panel" aria-label="KRUXT product preview">
-          <div className="mock-phone">
-            <div className="mock-phone-bar">
-              <span>Today</span>
-              <strong>Plan ready</strong>
-            </div>
-            <div className="mock-session">
-              <span className="promo-label">BZone Hybrid</span>
-              <strong>Strength + Engine</strong>
-              <p>4 blocks · Coach note · Proof required</p>
-            </div>
-            <div className="mock-proof-row">
-              <span>Proof feed</span>
-              <strong>Queued</strong>
-            </div>
-            <div className="mock-proof-row">
-              <span>Gym visibility</span>
-              <strong>Coach view</strong>
-            </div>
-          </div>
-        </aside>
-      </section>
-
-      <section className="landing-section">
-        <div>
-          <h2 className="section-title">One product, three doors.</h2>
-          <p className="section-copy">
-            KRUXT keeps the consumer app, gym back office, and founder control plane connected without forcing every
-            person into the same workspace.
-          </p>
-        </div>
-        <div className="landing-door-grid">
-          <a className="door-card" href="/gyms">
-            <span className="promo-label">User app</span>
-            <strong>Discover gyms, follow a plan, log workouts, and compete with proof.</strong>
-          </a>
-          <a className="door-card" href={gymAdminUrl}>
-            <span className="promo-label">Gym workspace</span>
-            <strong>Run B2B operations: members, staff roles, coaching, classes, payments, and compliance.</strong>
-          </a>
-          <a className="door-card" href={platformUrl}>
-            <span className="promo-label">KRUXT platform</span>
-            <strong>Manage tenant access, feature entitlements, support sessions, marketplace, and audit trails.</strong>
-          </a>
         </div>
       </section>
 
