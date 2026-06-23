@@ -46,9 +46,10 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.replace("/login");
+      const nextPath = `${window.location.pathname}${window.location.search}`;
+      router.replace(`/login?next=${encodeURIComponent(nextPath)}`);
     }
-  }, [authLoading, user, router]);
+  }, [authLoading, router, user]);
 
   // 1) Auth still resolving
   if (authLoading) {

@@ -14,7 +14,10 @@ export function AuthGateway() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const gymAdminUrl = normalizeLoginUrl(
-    process.env.NEXT_PUBLIC_KRUXT_GYM_ADMIN_URL ?? process.env.NEXT_PUBLIC_KRUXT_ADMIN_URL ?? "http://localhost:3000"
+    process.env.NEXT_PUBLIC_KRUXT_GYM_ADMIN_URL ??
+      process.env.NEXT_PUBLIC_KRUXT_ADMIN_URL ??
+      process.env.NEXT_PUBLIC_ADMIN_APP_URL ??
+      "http://localhost:3000"
   );
   const platformUrl = normalizeLoginUrl(process.env.NEXT_PUBLIC_KRUXT_PLATFORM_URL ?? "http://localhost:3100");
   const [mode, setMode] = useState<AuthMode>("signin");
