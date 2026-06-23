@@ -539,13 +539,132 @@ main {
 
 .app-shell {
   min-height: 100vh;
-  padding: 0 0 7rem;
+  padding: 0 0 7.5rem;
 }
 
 .mobile-frame {
-  max-width: 1040px;
+  width: min(100%, 460px);
   margin: 0 auto;
-  padding: 1.25rem 1rem 0;
+  padding: 0.85rem 0.85rem 0;
+}
+
+.member-app-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin: -0.85rem -0.85rem 0;
+  padding: 0.8rem 0.85rem;
+  background: rgba(5, 7, 11, 0.9);
+  border-bottom: 1px solid rgba(105, 124, 151, 0.14);
+  backdrop-filter: blur(18px);
+}
+
+.member-brand,
+.member-header-actions,
+.member-utility-link,
+.profile-identity-block,
+.profile-hero-actions,
+.plan-today-header,
+.plan-action-bar,
+.plan-empty-actions,
+.gym-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.member-brand {
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.member-brand-mark {
+  width: 2.15rem;
+  height: 2.15rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #31d3f7;
+  color: #03121a;
+  font-weight: 950;
+  letter-spacing: -0.06em;
+}
+
+.member-header-actions {
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.member-session-chip {
+  max-width: 9.4rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid rgba(105, 124, 151, 0.18);
+  border-radius: 999px;
+  padding: 0.5rem 0.7rem;
+  color: #c8d4e4;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.member-utility-menu {
+  position: relative;
+}
+
+.member-utility-menu summary {
+  list-style: none;
+  border: 1px solid rgba(105, 124, 151, 0.2);
+  border-radius: 999px;
+  background: rgba(13, 19, 29, 0.82);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.5rem 0.72rem;
+}
+
+.member-utility-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.member-utility-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.55rem);
+  width: 210px;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border: 1px solid rgba(105, 124, 151, 0.22);
+  border-radius: 12px;
+  background: rgba(8, 12, 19, 0.98);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.34);
+}
+
+.member-utility-link {
+  justify-content: space-between;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 750;
+  padding: 0.64rem 0.7rem;
+}
+
+.member-utility-link:hover,
+.member-utility-link.is-active {
+  background: rgba(49, 211, 247, 0.1);
+  color: #9df2ff;
+}
+
+.member-page-intro {
+  padding: 1.35rem 0.1rem 0.2rem;
 }
 
 .mobile-topbar {
@@ -560,13 +679,14 @@ main {
 }
 
 .mobile-title {
-  font-size: clamp(1.8rem, 3.2vw, 2.55rem);
+  font-size: clamp(1.9rem, 11vw, 3rem);
+  line-height: 0.96;
 }
 
 .mobile-content {
   display: grid;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: 0.95rem;
+  margin-top: 0.9rem;
 }
 
 .member-secondary-nav {
@@ -1164,6 +1284,186 @@ main {
   font-weight: 700;
 }
 
+.status-pill {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(49, 211, 247, 0.28);
+  border-radius: 999px;
+  background: rgba(49, 211, 247, 0.1);
+  color: #9df2ff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 0.43rem 0.64rem;
+  text-transform: uppercase;
+}
+
+.plan-today-panel,
+.feed-hero-panel,
+.plan-empty-state,
+.profile-hero-card,
+.gym-discovery-panel,
+.plan-setup-panel {
+  border: 1px solid rgba(105, 124, 151, 0.22);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(49, 211, 247, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(13, 19, 29, 0.96), rgba(7, 11, 17, 0.95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 18px 44px rgba(0, 0, 0, 0.22);
+}
+
+.plan-today-panel,
+.feed-hero-panel,
+.profile-hero-card,
+.plan-empty-state {
+  display: grid;
+  gap: 1rem;
+  padding: 1.05rem;
+}
+
+.plan-today-main,
+.feed-hero-copy,
+.plan-empty-copy {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.plan-today-header {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.plan-today-title,
+.profile-display-name {
+  margin: 0;
+  font-size: clamp(2.05rem, 12vw, 3.35rem);
+  line-height: 0.92;
+  letter-spacing: -0.055em;
+}
+
+.plan-action-bar,
+.plan-empty-actions,
+.profile-hero-actions {
+  flex-wrap: wrap;
+}
+
+.plan-summary-rail,
+.feed-signal-panel {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.plan-summary-item,
+.feed-signal-panel > div {
+  border: 1px solid rgba(105, 124, 151, 0.18);
+  border-radius: 12px;
+  background: rgba(5, 9, 14, 0.52);
+  padding: 0.8rem;
+}
+
+.plan-summary-item strong,
+.feed-signal-panel strong {
+  display: block;
+  margin-top: 0.18rem;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.plan-empty-steps {
+  display: grid;
+  gap: 0.55rem;
+  padding-top: 0.2rem;
+}
+
+.plan-empty-steps span {
+  border-left: 2px solid rgba(49, 211, 247, 0.42);
+  color: #c6d2e1;
+  padding: 0.12rem 0 0.12rem 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.plan-setup-panel,
+.gym-discovery-panel {
+  padding: 1.05rem;
+}
+
+.feed-hero-panel {
+  background:
+    radial-gradient(circle at 82% 12%, rgba(45, 212, 191, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(13, 19, 29, 0.96), rgba(7, 11, 17, 0.95));
+}
+
+.proof-empty-state,
+.proof-post-card,
+.gym-directory-card {
+  border: 1px solid rgba(105, 124, 151, 0.22);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(13, 19, 29, 0.94), rgba(8, 13, 20, 0.92));
+  padding: 1.05rem;
+}
+
+.proof-empty-state {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.proof-post-card {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.proof-post-card .proof-media-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.proof-post-card .proof-media-tile {
+  width: 100%;
+  border-radius: 12px;
+}
+
+.gym-card-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.gym-directory-card {
+  overflow: hidden;
+}
+
+.gym-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.85rem;
+  align-items: flex-start;
+}
+
+.gym-card-title-row {
+  align-items: flex-start;
+}
+
+.gym-request-grid {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.profile-hero-card {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(213, 255, 95, 0.11), transparent 30%),
+    linear-gradient(180deg, rgba(13, 19, 29, 0.96), rgba(7, 11, 17, 0.95));
+}
+
+.profile-identity-block {
+  align-items: center;
+}
+
+.profile-hero-actions {
+  align-items: stretch;
+}
+
 .hyrox-preset-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 0.85fr);
@@ -1261,18 +1561,21 @@ main {
 }
 
 .mobile-nav {
-  position: sticky;
-  bottom: 0;
+  position: fixed;
+  left: 50%;
+  bottom: 0.8rem;
+  transform: translateX(-50%);
+  width: min(430px, calc(100% - 1.2rem));
   z-index: 10;
-  margin-top: 1rem;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.35rem;
-  padding: 0.55rem;
+  padding: 0.42rem;
   border: 1px solid rgba(105, 124, 151, 0.2);
-  border-radius: 12px;
-  background: rgba(7, 11, 17, 0.94);
-  backdrop-filter: blur(14px);
+  border-radius: 18px;
+  background: rgba(7, 11, 17, 0.9);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
 }
 
 .mobile-nav-link {
@@ -1281,16 +1584,16 @@ main {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  min-height: 54px;
-  padding: 0.7rem 0.45rem;
-  border-radius: 9px;
+  min-height: 50px;
+  padding: 0.62rem 0.35rem;
+  border-radius: 14px;
   color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.76rem;
+  font-weight: 800;
 }
 
 .mobile-nav-link.is-active {
-  background: rgba(49, 211, 247, 0.12);
+  background: rgba(49, 211, 247, 0.14);
   color: #9df2ff;
 }
 
@@ -1490,10 +1793,15 @@ main {
 }
 
 .mobile-nav-dot {
-  width: 0.42rem;
-  height: 0.42rem;
+  width: 0.36rem;
+  height: 0.36rem;
   border-radius: 999px;
   background: currentColor;
+  opacity: 0.55;
+}
+
+.mobile-nav-link.is-active .mobile-nav-dot {
+  opacity: 1;
 }
 
 @media (max-width: 760px) {
@@ -1511,6 +1819,7 @@ main {
   .plan-setup-grid,
   .plan-setup-wide,
   .session-prep-grid,
+  .proof-post-card .proof-media-grid,
   .hyrox-preset-grid,
   .template-grid,
   .board-grid,
@@ -1524,6 +1833,14 @@ main {
 
   .mobile-topbar {
     flex-direction: column;
+  }
+
+  .member-app-header {
+    gap: 0.55rem;
+  }
+
+  .member-session-chip {
+    display: none;
   }
 
   .landing-nav {
@@ -1547,7 +1864,10 @@ main {
   .profile-avatar-row,
   .profile-form-header,
   .membership-item,
-  .checkbox-row {
+  .checkbox-row,
+  .gym-card-header,
+  .profile-identity-block,
+  .profile-hero-actions {
     flex-direction: column;
     align-items: flex-start;
   }

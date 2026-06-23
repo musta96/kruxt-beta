@@ -129,13 +129,13 @@ export function PublicGymsScreen() {
   return (
     <MemberShell
       title="Gyms"
-      subtitle="Find a public gym, choose the membership plan you want, and request access to its private KRUXT area."
+      subtitle="Discover public gym pages, choose a plan, and request access to the private member area."
     >
-      <section className="glass-panel">
+      <section className="gym-discovery-panel">
         <div className="profile-form-header">
           <div>
-            <p className="eyebrow">DISCOVER</p>
-            <h2 className="section-title">Public gyms</h2>
+            <span className="status-pill">Directory</span>
+            <h2 className="section-title">Find your gym</h2>
           </div>
           <button type="button" className="secondary-cta" onClick={() => void loadGyms()} disabled={loading}>
             {loading ? "Loading..." : "Refresh"}
@@ -167,7 +167,7 @@ export function PublicGymsScreen() {
           </article>
         </section>
       ) : (
-        <section className="rank-list">
+        <section className="gym-card-list">
           {filteredGyms.map((gym) => {
             const brand = gym.brand;
             const displayName = brand?.displayName || gym.name;
@@ -177,10 +177,10 @@ export function PublicGymsScreen() {
             const requestEnabled = canRequest(gym);
 
             return (
-              <article key={gym.id} className="feed-card">
+              <article key={gym.id} className="gym-directory-card">
                 {banner ? <img src={banner} alt="" className="gym-card-banner" /> : null}
-                <div className="profile-form-header">
-                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <div className="gym-card-header">
+                  <div className="gym-card-title-row">
                     <div
                       className="avatar-preview"
                       style={{
@@ -198,7 +198,7 @@ export function PublicGymsScreen() {
                       )}
                     </div>
                     <div>
-                      <p className="eyebrow">{locationLabel(gym)}</p>
+                      <p className="feed-meta">{locationLabel(gym)}</p>
                       <h2 className="section-title">{displayName}</h2>
                       <p className="section-copy">{gym.motto || brand?.launchMessage || gym.description || "Open for member requests."}</p>
                     </div>
@@ -206,7 +206,7 @@ export function PublicGymsScreen() {
                   <span className="ghost-chip">{statusLabel(gym)}</span>
                 </div>
 
-                <div className="split-card" style={{ marginTop: 16 }}>
+                <div className="gym-request-grid">
                   <div>
                     <label className="label" htmlFor={`plan-${gym.id}`}>Membership plan</label>
                     <select
@@ -243,7 +243,7 @@ export function PublicGymsScreen() {
                   </div>
                 </div>
 
-                <div className="stack-actions" style={{ marginTop: 16 }}>
+                <div className="plan-action-bar">
                   <button
                     type="button"
                     className="primary-cta"

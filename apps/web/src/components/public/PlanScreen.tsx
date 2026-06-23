@@ -153,13 +153,13 @@ export function PlanScreen() {
   }
 
   const planSetupCard = (
-    <section className="glass-panel">
+    <section className="plan-setup-panel">
       <div className="profile-form-header">
         <div>
-          <p className="eyebrow">PLAN SETUP</p>
-          <h2 className="section-title">Constraints before workouts</h2>
+          <p className="eyebrow">SETUP</p>
+          <h2 className="section-title">Shape your week</h2>
         </div>
-        <span className="ghost-chip">{setupDraft.modalities.length} modalities</span>
+        <span className="ghost-chip">{setupDraft.modalities.length} selected</span>
       </div>
       <div className="plan-setup-grid">
         <label>
@@ -225,7 +225,7 @@ export function PlanScreen() {
       </div>
       <div className="stack-actions">
         <button type="button" className="primary-cta" onClick={() => setSetupPreviewed(true)}>
-          Preview plan outline
+          Preview outline
         </button>
         <Link href="/library" className="secondary-cta">
           Browse programs
@@ -243,7 +243,7 @@ export function PlanScreen() {
   return (
     <MemberShell
       title="Plan"
-      subtitle="Your weekly training operating system: coach-built sessions, booked classes, and proof-ready execution."
+      subtitle="Today, this week, and what your coach expects next."
     >
       {error ? <div className="status-banner status-danger">{error}</div> : null}
 
@@ -253,79 +253,76 @@ export function PlanScreen() {
         </section>
       ) : !snapshot?.activePlan ? (
         <>
-          <section className="hero-card">
-            <div>
-              <p className="eyebrow">NO ACTIVE PLAN</p>
-              <h2 className="section-title">Build from your gym, your coach, or your next KRUXT program.</h2>
+          <section className="plan-empty-state">
+            <div className="plan-empty-copy">
+              <span className="status-pill">Plan not started</span>
+              <h2 className="section-title">Start with your gym, your coach, or a KRUXT program.</h2>
               <p className="section-copy">
-                Join a gym, request coach assignment, or keep logging sessions while your plan is created. Logged workouts
-                still feed proof, streaks, rank, and challenges.
+                The plan becomes your weekly home once a gym, coach, or program is attached. Until then, every logged
+                session can still become proof.
               </p>
-              <div className="stack-actions">
-                <Link href="/gyms" className="primary-cta">
-                  Find gyms
-                </Link>
-                <Link href="/log" className="secondary-cta">
-                  Log a session
-                </Link>
-              </div>
             </div>
-            <div className="hero-stats">
-              <div className="metric-card">
-                <span className="metric-label">Level</span>
-                <strong className="metric-value">{snapshot?.level ?? 1}</strong>
-              </div>
-              <div className="metric-card">
-                <span className="metric-label">Rank</span>
-                <strong className="metric-value-sm">{snapshot?.rankTier ?? "initiate"}</strong>
-              </div>
+            <div className="plan-empty-actions">
+              <Link href="/gyms" className="primary-cta">
+                Find a gym
+              </Link>
+              <Link href="/log" className="secondary-cta">
+                Log training
+              </Link>
+            </div>
+            <div className="plan-empty-steps">
+              <span>Join or request BZone access</span>
+              <span>Get a coach/program assigned</span>
+              <span>Train, log proof, build rank</span>
             </div>
           </section>
           {planSetupCard}
         </>
       ) : (
         <>
-          <section className="hero-card">
-            <div>
-              <p className="eyebrow">TODAY</p>
-              <h2 className="section-title">{selectedDay?.label ?? snapshot.activePlan.title}</h2>
-              <p className="section-copy">
-                {selectedDay?.focus ?? snapshot.activePlan.goal ?? "Follow the plan, log the work, and turn it into proof."}
-              </p>
-              <div className="plan-meta-row">
+          <section className="plan-today-panel">
+            <div className="plan-today-main">
+              <div className="plan-today-header">
+                <span className="status-pill">Today</span>
                 <span className="ghost-chip">{snapshot.activePlan.gymName ?? "Independent"}</span>
-                <span className="ghost-chip">Coach: {snapshot.activePlan.coachName ?? "Not assigned"}</span>
-                <span className="ghost-chip">Version {snapshot.activePlan.versionNumber}</span>
               </div>
+              <h2 className="plan-today-title">{selectedDay?.label ?? snapshot.activePlan.title}</h2>
+              <p className="section-copy">
+                {selectedDay?.focus ?? snapshot.activePlan.goal ?? "Train the planned work, then turn it into proof."}
+              </p>
               {snapshot.activePlan.coachNotes ? (
                 <div className="plan-note">
                   <strong>Coach notes</strong>
                   <p>{snapshot.activePlan.coachNotes}</p>
                 </div>
               ) : null}
-              <div className="stack-actions">
+              <div className="plan-action-bar">
                 <Link href="/log" className="primary-cta">
-                  Start workout
+                  Start session
                 </Link>
                 <Link href="/feed" className="secondary-cta">
-                  View proof feed
+                  Proof feed
                 </Link>
               </div>
             </div>
 
-            <div className="hero-stats">
-              <div className="metric-card">
+            <div className="plan-summary-rail">
+              <div className="plan-summary-item">
                 <span className="metric-label">Adherence</span>
                 <strong className="metric-value">{snapshot.weeklyProgress.adherencePercent}%</strong>
               </div>
-              <div className="metric-card">
+              <div className="plan-summary-item">
                 <span className="metric-label">This week</span>
                 <strong className="metric-value-sm">
                   {snapshot.weeklyProgress.completedSessions}/{snapshot.weeklyProgress.plannedSessions} done
                 </strong>
               </div>
-              <div className="metric-card">
-                <span className="metric-label">Plan dates</span>
+              <div className="plan-summary-item">
+                <span className="metric-label">Coach</span>
+                <strong className="metric-value-sm">{snapshot.activePlan.coachName ?? "Not assigned"}</strong>
+              </div>
+              <div className="plan-summary-item">
+                <span className="metric-label">Dates</span>
                 <strong className="metric-value-sm">
                   {formatDate(snapshot.activePlan.startsAt)} - {formatDate(snapshot.activePlan.endsAt)}
                 </strong>
@@ -333,22 +330,20 @@ export function PlanScreen() {
             </div>
           </section>
 
-          {planSetupCard}
-
           <section className="split-card">
             <article className="glass-panel">
               <div className="profile-form-header">
                 <div>
                   <p className="eyebrow">WEEK</p>
-                  <h2 className="section-title">Rearrange the week</h2>
+                  <h2 className="section-title">This week</h2>
                 </div>
                 <button type="button" className="secondary-cta" onClick={resetWeekOrder}>
                   Reset week
                 </button>
               </div>
               <p className="supporting-copy">
-                Move sessions around before you train. The visible order updates immediately; coach-published plan
-                history remains versioned in the background.
+                Move sessions before you train. The visible order updates immediately while the coach-published plan
+                stays versioned.
               </p>
               {savingDraftOrder ? <div className="status-banner status-success">Draft order updated.</div> : null}
               <div className="plan-week-list">
@@ -375,7 +370,7 @@ export function PlanScreen() {
             </article>
 
             <article className="glass-panel">
-              <p className="eyebrow">SESSION DETAIL</p>
+              <p className="eyebrow">DETAIL</p>
               <h2 className="section-title">{selectedDay?.label ?? "Session"}</h2>
               {selectedDay?.notes ? <p className="section-copy">{selectedDay.notes}</p> : null}
               <div className="session-controls">
@@ -449,8 +444,8 @@ export function PlanScreen() {
 
           <section className="split-card">
             <article className="glass-panel">
-              <p className="eyebrow">GYM OPS LINK</p>
-              <h2 className="section-title">Booked classes in the plan</h2>
+              <p className="eyebrow">CLASSES</p>
+              <h2 className="section-title">Booked into the week</h2>
               <div className="rank-list">
                 {snapshot.upcomingClasses.length === 0 ? (
                   <p className="feed-body">No booked classes are attached to this week yet.</p>
@@ -470,11 +465,11 @@ export function PlanScreen() {
             </article>
 
             <article className="glass-panel">
-              <p className="eyebrow">CONTEXTUAL UNLOCK</p>
+              <p className="eyebrow">NEXT</p>
               <h2 className="section-title">Future weeks</h2>
               <p className="section-copy">
-                Future-week planning is intentionally surfaced here instead of a standalone Premium tab. This is where
-                advanced analytics, premium programs, and coach tools can unlock in context.
+                Future-week planning stays attached to the plan itself, so programs, analytics, and coach tools unlock
+                where members already make training decisions.
               </p>
               <div className="metric-card">
                 <span className="metric-label">Status</span>
