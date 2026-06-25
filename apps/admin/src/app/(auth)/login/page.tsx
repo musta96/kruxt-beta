@@ -35,7 +35,7 @@ export default function LoginPage() {
         if (result.error) {
           setError(result.error);
         } else {
-          router.replace("/");
+          router.replace(getLoginNextPath());
         }
       } else {
         const supabase = createAdminSupabaseClient();
@@ -46,7 +46,7 @@ export default function LoginPage() {
         if (signUpError) {
           setError(signUpError.message);
         } else if (data.session) {
-          router.replace("/");
+          router.replace(getLoginNextPath());
         } else {
           setInfo("Account created. Check your email to confirm, then sign in.");
           setMode("signin");
@@ -197,4 +197,14 @@ export default function LoginPage() {
       </p>
     </div>
   );
+}
+
+function safeInternalNextPath(value: string | null): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
+  return value;
+}
+
+function getLoginNextPath(): string {
+  if (typeof window === "undefined") return "/";
+  return safeInternalNextPath(new URLSearchParams(window.location.search).get("next"));
 }

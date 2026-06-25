@@ -10,13 +10,21 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type AuthMode = "signin" | "signup";
 
+const DEFAULT_GYM_ADMIN_URL =
+  process.env.NODE_ENV === "production" ? "https://kruxt-admin.vercel.app" : "http://localhost:3000";
+const DEFAULT_PLATFORM_URL =
+  process.env.NODE_ENV === "production" ? "https://kruxt-platform.vercel.app" : "http://localhost:3100";
+
 export function AuthGateway() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const gymAdminUrl = normalizeLoginUrl(
-    process.env.NEXT_PUBLIC_KRUXT_GYM_ADMIN_URL ?? process.env.NEXT_PUBLIC_KRUXT_ADMIN_URL ?? "http://localhost:3000"
+    process.env.NEXT_PUBLIC_KRUXT_GYM_ADMIN_URL ??
+      process.env.NEXT_PUBLIC_KRUXT_ADMIN_URL ??
+      process.env.NEXT_PUBLIC_ADMIN_APP_URL ??
+      DEFAULT_GYM_ADMIN_URL
   );
-  const platformUrl = normalizeLoginUrl(process.env.NEXT_PUBLIC_KRUXT_PLATFORM_URL ?? "http://localhost:3100");
+  const platformUrl = normalizeLoginUrl(process.env.NEXT_PUBLIC_KRUXT_PLATFORM_URL ?? DEFAULT_PLATFORM_URL);
   const [mode, setMode] = useState<AuthMode>("signin");
   const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);

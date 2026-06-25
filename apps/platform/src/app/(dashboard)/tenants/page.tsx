@@ -85,7 +85,13 @@ interface ImpactConfirmation {
   nextBool: boolean;
 }
 
-const adminAppUrl = process.env.NEXT_PUBLIC_ADMIN_APP_URL ?? "http://localhost:3000";
+const DEFAULT_ADMIN_APP_URL =
+  process.env.NODE_ENV === "production" ? "https://kruxt-admin.vercel.app" : "http://localhost:3000";
+const adminAppUrl =
+  process.env.NEXT_PUBLIC_KRUXT_GYM_ADMIN_URL ??
+  process.env.NEXT_PUBLIC_KRUXT_ADMIN_URL ??
+  process.env.NEXT_PUBLIC_ADMIN_APP_URL ??
+  DEFAULT_ADMIN_APP_URL;
 const DEFAULT_UAT_GYM_ID = process.env.NEXT_PUBLIC_KRUXT_UAT_GYM_ID ?? "61036acd-2f86-4745-866e-cd2f5539371f";
 
 const statusStyles: Record<TenantStatus, string> = {
