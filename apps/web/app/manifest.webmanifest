@@ -1,7 +1,7 @@
 {
   "name": "KRUXT",
   "short_name": "KRUXT",
-  "description": "Member-facing web app, organization workspace, and founder control plane for KRUXT.",
+  "description": "Mobile-first training, proof, community, coaching, and gym operations for KRUXT.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#020915",
