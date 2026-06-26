@@ -1,24 +1,25 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./marketing.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://kruxt-foundation-kit.vercel.app"),
+  metadataBase: new URL("https://kruxt-beta.vercel.app"),
   applicationName: "KRUXT",
   title: {
-    default: "KRUXT",
+    default: "KRUXT | Your training has a place now",
     template: "%s | KRUXT"
   },
   description:
-    "KRUXT member web app, organization workspace, and founder control plane running from a single Next.js deployment.",
+    "KRUXT connects training plans, proof, community, coaching, and gym operations in one mobile-first fitness platform.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "KRUXT"
   },
   openGraph: {
-    title: "KRUXT",
+    title: "KRUXT | Your training has a place now",
     description:
-      "Social fitness member experience, gym operations workspace, and founder-level control plane for KRUXT.",
+      "Plan every session, prove the work, train with your people, and keep gyms and coaches connected behind progress.",
     type: "website",
     siteName: "KRUXT"
   },
