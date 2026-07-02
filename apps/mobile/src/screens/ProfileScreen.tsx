@@ -29,6 +29,7 @@ import { APP_LINKS, supportMailto } from "../config/links";
 import {
   createMobileSupabaseClient,
   GymService,
+  PrivacyRequestService,
   ProfileService,
 } from "../services";
 
@@ -147,6 +148,30 @@ export function ProfileScreen() {
       }
       return units;
     });
+  }, []);
+
+  const submitPrivacyRequest = useCallback(async (type: "export" | "delete") => {
+    try {
+      const supabase = createMobileSupabaseClient();
+      const meId =
+        meIdRef.current ?? (await supabase.auth.getUser()).data.user?.id;
+      if (!meId) throw new Error("You need to be signed in.");
+      await new PrivacyRequestService(supabase).submit(meId, {
+        requestType: type,
+        reason: `Requested from mobile Profile (${type})`,
+      });
+      Alert.alert(
+        type === "export" ? "Export requested" : "Deletion requested",
+        type === "export"
+          ? "Your data export is being prepared. We'll notify you when it's ready."
+          : "Your deletion request was submitted. Our team will process it and confirm by email.",
+      );
+    } catch (e: unknown) {
+      Alert.alert(
+        "Request failed",
+        e instanceof Error ? e.message : "Unable to submit the request. Try again.",
+      );
+    }
   }, []);
 
   const openExternal = useCallback(async (url: string) => {
@@ -315,12 +340,6 @@ export function ProfileScreen() {
             chevron
             onPress={() => router.push("/edit-profile")}
           />
-          <ListRow
-            theme={theme}
-            label="Connected Devices"
-            chevron
-            onPress={() => {/* TODO: navigate to integrations */}}
-          />
         </SettingsGroup>
 
         {/* Preferences */}
@@ -411,22 +430,21 @@ export function ProfileScreen() {
           />
           <ListRow
             theme={theme}
-            label="Two-Factor Authentication"
-            value="Off"
-            chevron
-            onPress={() => {/* TODO */}}
-          />
-          <ListRow
-            theme={theme}
-            label="Privacy Settings"
-            chevron
-            onPress={() => {/* TODO */}}
-          />
-          <ListRow
-            theme={theme}
             label="Download My Data"
             chevron
-            onPress={() => {/* TODO */}}
+            onPress={() =>
+              Alert.alert(
+                "Download My Data",
+                "We'll prepare an export of your KRUXT data. You'll be notified when it's ready to download.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Request Export",
+                    onPress: () => submitPrivacyRequest("export"),
+                  },
+                ],
+              )
+            }
           />
           <ListRow
             theme={theme}
@@ -436,10 +454,14 @@ export function ProfileScreen() {
             onPress={() =>
               Alert.alert(
                 "Delete Account",
-                "This action is permanent and cannot be undone. All your data will be deleted.",
+                "This submits a permanent deletion request for your account and all your data. It cannot be undone once processed.",
                 [
                   { text: "Cancel", style: "cancel" },
-                  { text: "Delete", style: "destructive" },
+                  {
+                    text: "Request Deletion",
+                    style: "destructive",
+                    onPress: () => submitPrivacyRequest("delete"),
+                  },
                 ],
               )
             }
