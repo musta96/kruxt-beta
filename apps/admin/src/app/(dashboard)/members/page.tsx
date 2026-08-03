@@ -26,6 +26,9 @@ import type { GymRole, MembershipStatus } from "@kruxt/types";
 const INPUT =
   "w-full rounded-lg border border-border bg-kruxt-panel px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent/40";
 
+const DEFAULT_CONSUMER_WEB_URL =
+  process.env.NODE_ENV === "production" ? "https://kruxt-beta.vercel.app" : "http://localhost:3200";
+
 type StatusFilter = "all" | MembershipStatus;
 type BulkActionValue = `status:${MembershipStatus}` | `role:${GymRole}`;
 
@@ -100,18 +103,10 @@ function inviteUrl(code: string): string {
   const configuredOrigin =
     process.env.NEXT_PUBLIC_KRUXT_WEB_URL ||
     process.env.NEXT_PUBLIC_KRUXT_CONSUMER_WEB_URL ||
-    process.env.NEXT_PUBLIC_KRUXT_APP_URL;
+    process.env.NEXT_PUBLIC_KRUXT_APP_URL ||
+    DEFAULT_CONSUMER_WEB_URL;
 
-  if (configuredOrigin) {
-    return `${configuredOrigin.replace(/\/$/, "")}/join?code=${encodeURIComponent(code)}`;
-  }
-
-  const localOrigin = new URL(window.location.origin);
-  if (localOrigin.port === "3000" || localOrigin.port === "3100") {
-    localOrigin.port = "3200";
-  }
-
-  return `${localOrigin.toString().replace(/\/$/, "")}/join?code=${encodeURIComponent(code)}`;
+  return `${configuredOrigin.replace(/\/$/, "")}/join?code=${encodeURIComponent(code)}`;
 }
 
 function ProfileSearchResults({
