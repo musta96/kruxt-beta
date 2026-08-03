@@ -11,6 +11,7 @@ import { Modal } from "@/components/modal";
 import { useGym } from "@/contexts/gym-context";
 import { useServices } from "@/hooks/use-services";
 import { useAsync } from "@/hooks/use-async";
+import { useClassDetail } from "./use-class-detail";
 import type { StaffProfileOption } from "@/services";
 import type { ClassBooking, ClassWaitlistEntry, GymClass } from "@kruxt/types";
 
@@ -33,11 +34,6 @@ interface CreateClassForm {
   coachUserId: string;
   bookingOpensAt: string;
   bookingClosesAt: string;
-}
-
-interface ClassDetailState {
-  bookings: ClassBooking[];
-  waitlist: ClassWaitlistEntry[];
 }
 
 function toLocalInputValue(date: Date): string {
@@ -151,7 +147,7 @@ function classMatchesQuery(row: GymClass, coachName: string, query: string): boo
     .includes(needle);
 }
 
-function publicWebBaseUrl(): string {
+function memberWebBaseUrl(): string {
   return (
     process.env.NEXT_PUBLIC_KRUXT_WEB_URL ??
     process.env.NEXT_PUBLIC_KRUXT_PUBLIC_WEB_URL ??
@@ -172,8 +168,8 @@ export default function ClassesPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("schedule");
   const [query, setQuery] = useState("");
   const [bookingLinkCopied, setBookingLinkCopied] = useState(false);
-  const [promoting, setPromoting] = useState(false);
-  const [promoteError, setPromoteError] = useState<string | undefined>();
+  const [promotingClassId, setPromotingClassId] = useState<string | null>(null);
+  const [promoteError, setPromoteError] = useState<{ classId: string; message: string } | null>(null);
 
   const { status, data, error, refetch } = useAsync(
     () => ops.listGymClasses(gymId),
@@ -185,17 +181,18 @@ export default function ClassesPage() {
     [gymId]
   );
 
-  const detailState = useAsync<ClassDetailState>(
-    async () => {
-      if (!selectedClassId) return { bookings: [], waitlist: [] };
+  const loadClassDetail = useCallback(
+    async (targetGymId: string, targetClassId: string) => {
       const [bookings, waitlist] = await Promise.all([
-        ops.listClassBookings(gymId, selectedClassId),
-        ops.listClassWaitlist(gymId, selectedClassId)
+        ops.listClassBookings(targetGymId, targetClassId),
+        ops.listClassWaitlist(targetGymId, targetClassId)
       ]);
       return { bookings, waitlist };
     },
-    [gymId, selectedClassId]
+    [ops]
   );
+
+  const detailState = useClassDetail(gymId, selectedClassId, loadClassDetail);
 
   const classes = useMemo(() => [...(data ?? [])].sort(compareClassStart), [data]);
   const staffOptions = useMemo<StaffProfileOption[]>(() => staffState.data ?? [], [staffState.data]);
@@ -274,15 +271,17 @@ export default function ClassesPage() {
     }
   }, [classes, selectedClassId, status, upcomingClasses]);
 
-  const bookingPageUrl = `${publicWebBaseUrl()}/gyms?gymId=${encodeURIComponent(gymId)}`;
+  const bookingPageUrl = `${memberWebBaseUrl()}/gyms/${encodeURIComponent(gymId)}/classes`;
   const activeCount = upcomingClasses.length;
   const weekCapacity = thisWeekClasses.reduce((sum, row) => sum + (row.capacity ?? 0), 0);
   const openBookingCount = upcomingClasses.filter((row) => getBookingWindowState(row, now).label === "Open booking").length;
   const setupGaps = upcomingClasses.filter((row) => !hasBookingWindow(row)).length;
-  const detailBookings = detailState.data?.bookings ?? [];
-  const detailWaitlist = detailState.data?.waitlist ?? [];
+  const loadedDetail = detailState.data;
+  const detailBookings = loadedDetail?.bookings ?? [];
+  const detailWaitlist = loadedDetail?.waitlist ?? [];
   const detailBookedCount = bookingCount(detailBookings);
   const detailPendingWaitlistCount = pendingWaitlistCount(detailWaitlist);
+  const detailReady = detailState.status === "success" && Boolean(loadedDetail);
 
   const resetCreateForm = useCallback(() => {
     setForm(createDefaultForm());
@@ -363,18 +362,32 @@ export default function ClassesPage() {
   );
 
   const handlePromoteWaitlist = useCallback(async () => {
-    if (!selectedClass) return;
-    setPromoting(true);
-    setPromoteError(undefined);
+    if (
+      !selectedClass ||
+      !loadedDetail ||
+      loadedDetail.gymId !== gymId ||
+      loadedDetail.classId !== selectedClass.id ||
+      pendingWaitlistCount(loadedDetail.waitlist) === 0 ||
+      bookingCount(loadedDetail.bookings) >= selectedClass.capacity
+    ) {
+      return;
+    }
+
+    const targetClassId = loadedDetail.classId;
+    setPromotingClassId(targetClassId);
+    setPromoteError(null);
     try {
-      await ops.promoteWaitlistMember(gymId, selectedClass.id);
+      await ops.promoteWaitlistMember(loadedDetail.gymId, targetClassId);
       detailState.refetch();
     } catch (e) {
-      setPromoteError(e instanceof Error ? e.message : "Failed to promote waitlist member");
+      setPromoteError({
+        classId: targetClassId,
+        message: e instanceof Error ? e.message : "Failed to promote waitlist member"
+      });
     } finally {
-      setPromoting(false);
+      setPromotingClassId((current) => (current === targetClassId ? null : current));
     }
-  }, [detailState, gymId, ops, selectedClass]);
+  }, [detailState, gymId, loadedDetail, ops, selectedClass]);
 
   const handleCopyBookingLink = useCallback(async () => {
     if (typeof navigator === "undefined" || !navigator.clipboard) return;
@@ -502,7 +515,7 @@ export default function ClassesPage() {
         actions={
           <>
             <button type="button" onClick={() => void handleCopyBookingLink()} className={SECONDARY_BUTTON}>
-              {bookingLinkCopied ? "Copied" : "Copy booking link"}
+              {bookingLinkCopied ? "Copied" : "Copy member class link"}
             </button>
             <button
               type="button"
@@ -525,12 +538,12 @@ export default function ClassesPage() {
       <section className="rounded-card border border-border bg-card p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-kruxt-accent">Public booking page</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-kruxt-accent">Member class booking</p>
             <h2 className="mt-1 text-lg font-semibold text-foreground">
               {gymName || "Selected gym"} schedule
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Share one booking entry point with members. Classes with capacity, instructors, and booking windows are ready for the public gym page.
+              Members sign in here to inspect this gym&apos;s schedule, book open classes, or join a waitlist with an active or trial membership.
             </p>
           </div>
           <div className="rounded-lg border border-border bg-kruxt-panel px-3 py-2 text-xs text-muted-foreground">
@@ -680,7 +693,7 @@ export default function ClassesPage() {
             <div className="rounded-lg border border-border bg-kruxt-panel p-4">
               <p className="font-kruxt-mono text-xs text-kruxt-accent">02</p>
               <h3 className="mt-2 text-sm font-semibold text-foreground">Share the page</h3>
-              <p className="mt-1 text-xs text-muted-foreground">Send members to the gym page for requests, plan choice, and upcoming schedule context.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Send members to the authenticated class schedule for booking and waitlist actions.</p>
             </div>
             <div className="rounded-lg border border-border bg-kruxt-panel p-4">
               <p className="font-kruxt-mono text-xs text-kruxt-accent">03</p>
@@ -705,13 +718,13 @@ export default function ClassesPage() {
                 <div className="rounded-lg border border-border bg-kruxt-panel p-3">
                   <p className="text-xs text-muted-foreground">Booked</p>
                   <p className="mt-1 font-kruxt-mono text-2xl font-semibold text-foreground">
-                    {detailState.status === "loading" ? "..." : `${detailBookedCount}/${selectedClass.capacity}`}
+                    {detailReady ? `${detailBookedCount}/${selectedClass.capacity}` : "..."}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border bg-kruxt-panel p-3">
                   <p className="text-xs text-muted-foreground">Waitlist</p>
                   <p className="mt-1 font-kruxt-mono text-2xl font-semibold text-foreground">
-                    {detailState.status === "loading" ? "..." : detailPendingWaitlistCount}
+                    {detailReady ? detailPendingWaitlistCount : "..."}
                   </p>
                 </div>
               </div>
@@ -719,7 +732,9 @@ export default function ClassesPage() {
               {detailState.status === "error" ? (
                 <ErrorBanner message={detailState.error ?? "Unable to load class details."} onRetry={detailState.refetch} />
               ) : null}
-              {promoteError ? <ErrorBanner message={promoteError} onRetry={() => setPromoteError(undefined)} /> : null}
+              {promoteError?.classId === selectedClass.id ? (
+                <ErrorBanner message={promoteError.message} onRetry={() => setPromoteError(null)} />
+              ) : null}
 
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between gap-3">
@@ -747,10 +762,15 @@ export default function ClassesPage() {
               <button
                 type="button"
                 onClick={() => void handlePromoteWaitlist()}
-                disabled={promoting || detailPendingWaitlistCount === 0 || detailBookedCount >= selectedClass.capacity}
+                disabled={
+                  !detailReady ||
+                  promotingClassId !== null ||
+                  detailPendingWaitlistCount === 0 ||
+                  detailBookedCount >= selectedClass.capacity
+                }
                 className={PRIMARY_BUTTON}
               >
-                {promoting ? "Promoting..." : "Promote next waitlist"}
+                {promotingClassId === selectedClass.id ? "Promoting..." : "Promote next waitlist"}
               </button>
             </div>
           ) : (

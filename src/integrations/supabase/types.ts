@@ -7304,6 +7304,7 @@ export type Database = {
         Args: { p_user_id?: string }
         Returns: Json
       }
+      book_gym_class: { Args: { p_class_id: string }; Returns: string }
       calculate_level_from_xp: { Args: { _xp: number }; Returns: number }
       can_manage_discount_campaign: {
         Args: { _campaign_id: string; _viewer?: string }

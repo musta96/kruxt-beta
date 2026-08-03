@@ -8827,6 +8827,7 @@ export type Database = {
         Args: { p_user_id?: string }
         Returns: Json
       }
+      book_gym_class: { Args: { p_class_id: string }; Returns: string }
       bulk_update_gym_memberships: {
         Args: {
           p_gym_id: string
