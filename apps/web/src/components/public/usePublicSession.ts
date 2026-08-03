@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 
-import { resolveAdminAccess, type AdminAccessState } from "@/lib/auth/access";
+import { ensureProfileExistsForUser, resolveAdminAccess, type AdminAccessState } from "@/lib/auth/access";
+import { hasRequiredConsents } from "@/lib/auth/required-consents";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface ProfileSummary {
@@ -14,10 +15,11 @@ interface ProfileSummary {
 }
 
 interface PublicSessionState {
-  status: "loading" | "ready";
+  status: "loading" | "access_blocked" | "consent_required" | "error" | "ready";
   user: User | null;
   access: AdminAccessState | null;
   profile: ProfileSummary | null;
+  error: string | null;
 }
 
 function mapProfileLabel(profile: ProfileSummary | null, email: string | undefined): string {
@@ -48,7 +50,8 @@ export function usePublicSession() {
     status: "loading",
     user: null,
     access: null,
-    profile: null
+    profile: null,
+    error: null
   });
 
   useEffect(() => {
@@ -63,32 +66,67 @@ export function usePublicSession() {
           status: "ready",
           user: null,
           access,
-          profile: null
+          profile: null,
+          error: null
         });
         return;
       }
 
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("id,display_name,username,avatar_url")
-        .eq("id", access.user.id)
-        .maybeSingle();
+      try {
+        await ensureProfileExistsForUser(supabase, {
+          userId: access.user.id,
+          email: access.user.email ?? "member@kruxt.app",
+          username:
+            typeof access.user.user_metadata.username === "string" ? access.user.user_metadata.username : undefined,
+          displayName:
+            typeof access.user.user_metadata.display_name === "string"
+              ? access.user.user_metadata.display_name
+              : undefined
+        });
 
-      if (!active) return;
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("id,display_name,username,avatar_url")
+          .eq("id", access.user.id)
+          .maybeSingle();
 
-      setState({
-        status: "ready",
-        user: access.user,
-        access,
-        profile: profileData
-          ? {
-              id: profileData.id as string,
-              displayName: (profileData.display_name as string | null | undefined) ?? null,
-              username: (profileData.username as string | null | undefined) ?? null,
-              avatarUrl: (profileData.avatar_url as string | null | undefined) ?? null
-            }
-          : null
-      });
+        if (profileError) throw profileError;
+
+        const accessIsBlocked =
+          access.activationStatus === "pending_activation" || access.activationStatus === "disabled";
+        const requiredConsentsAreCurrent = accessIsBlocked
+          ? false
+          : await hasRequiredConsents(supabase, access.user.id);
+        if (!active) return;
+
+        setState({
+          status: accessIsBlocked
+            ? "access_blocked"
+            : requiredConsentsAreCurrent
+              ? "ready"
+              : "consent_required",
+          user: access.user,
+          access,
+          profile: profileData
+            ? {
+                id: profileData.id as string,
+                displayName: (profileData.display_name as string | null | undefined) ?? null,
+                username: (profileData.username as string | null | undefined) ?? null,
+                avatarUrl: (profileData.avatar_url as string | null | undefined) ?? null
+              }
+            : null,
+          error: null
+        });
+      } catch (profileError) {
+        if (!active) return;
+        setState({
+          status: "error",
+          user: access.user,
+          access,
+          profile: null,
+          error: profileError instanceof Error ? profileError.message : "Unable to prepare your profile."
+        });
+      }
     }
 
     const listener = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, _session: Session | null) => {

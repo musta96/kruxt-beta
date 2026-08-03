@@ -325,8 +325,9 @@ export function LegalMarketingPage({ gymAdminUrl, title, intro, sections }: Lega
           <p>{intro}</p>
         </header>
         <aside>
-          KRUXT is currently in beta. These public notices describe the product&apos;s intended handling and should
-          receive legal review before broad commercial launch.
+          Informational beta summary only. This page is not an approved policy version and KRUXT does not record
+          acceptance against it. Required consent screens link to the exact published document and version being
+          accepted. These summaries still require legal review before broad commercial launch.
         </aside>
         {sections.map((section) => (
           <section key={section.heading}>

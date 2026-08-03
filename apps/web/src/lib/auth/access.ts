@@ -73,7 +73,7 @@ export async function ensureProfileForUser(
   input: { userId: string; email: string; username?: string; displayName?: string }
 ): Promise<void> {
   const fallbackUsername = input.email.split("@")[0]?.toLowerCase().replace(/[^a-z0-9_]/g, "") || "user";
-  const username = (input.username?.trim() || fallbackUsername).slice(0, 32);
+  const username = (input.username?.trim() || fallbackUsername).slice(0, 24);
 
   const payload = {
     id: input.userId,
@@ -88,4 +88,15 @@ export async function ensureProfileForUser(
   if (error) {
     throw new Error(error.message || "Unable to upsert profile.");
   }
+}
+
+export async function ensureProfileExistsForUser(
+  client: SupabaseClient,
+  input: { userId: string; email: string; username?: string; displayName?: string }
+): Promise<void> {
+  const { data, error } = await client.from("profiles").select("id").eq("id", input.userId).maybeSingle();
+  if (error) throw new Error(error.message || "Unable to check your profile.");
+  if (data) return;
+
+  await ensureProfileForUser(client, input);
 }

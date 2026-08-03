@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
+import { RequiredConsentReview } from "@/components/consent/RequiredConsentReview";
 import { resolvePostAuthPath, usePublicSession } from "@/components/public/usePublicSession";
 
 const MEMBER_NAV = [
@@ -30,7 +31,11 @@ export function MemberShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { state, signOut, displayLabel } = usePublicSession();
+  const { supabase, state, signOut, refresh, displayLabel } = usePublicSession();
+
+  const handleConsentSignOut = () => {
+    void signOut().then(() => router.push("/"));
+  };
 
   if (state.status === "loading") {
     return (
@@ -57,6 +62,25 @@ export function MemberShell({
             <div className="stack-actions">
               <button className="primary-cta" onClick={() => router.push("/")}>
                 Go to sign in
+              </button>
+            </div>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
+  if (state.error) {
+    return (
+      <main className="app-shell">
+        <div className="mobile-frame">
+          <section className="glass-panel">
+            <p className="eyebrow">KRUXT</p>
+            <h1 className="mobile-title">Account setup unavailable</h1>
+            <p className="mobile-copy">{state.error}</p>
+            <div className="stack-actions">
+              <button className="secondary-cta" onClick={handleConsentSignOut}>
+                Sign out
               </button>
             </div>
           </section>
@@ -97,6 +121,18 @@ export function MemberShell({
           </section>
         </div>
       </main>
+    );
+  }
+
+  if (state.status === "consent_required") {
+    return (
+      <RequiredConsentReview
+        client={supabase}
+        userId={state.user.id}
+        onComplete={refresh}
+        onSignOut={handleConsentSignOut}
+        variant="member"
+      />
     );
   }
 

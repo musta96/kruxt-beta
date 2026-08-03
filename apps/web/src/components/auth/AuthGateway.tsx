@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 
+import { RequiredConsentReview } from "@/components/consent/RequiredConsentReview";
 import { MarketingHome } from "@/components/marketing/MarketingHome";
-import { ensureProfileForUser, resolveAdminAccess } from "@/lib/auth/access";
+import { ensureProfileExistsForUser, ensureProfileForUser, resolveAdminAccess } from "@/lib/auth/access";
+import { hasRequiredConsents } from "@/lib/auth/required-consents";
 import { resolvePostAuthPath } from "@/components/public/usePublicSession";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -27,16 +29,36 @@ export function AuthGateway() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [consentUserId, setConsentUserId] = useState<string | null>(null);
+  const authOperationActive = useRef(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
 
-  const resolveNextPath = useCallback(async (): Promise<string> => {
+  const continueAuthenticatedUser = useCallback(async (user: User): Promise<void> => {
     const access = await resolveAdminAccess(supabase);
-    return resolvePostAuthPath(access);
-  }, [supabase]);
+    const nextPath = resolvePostAuthPath(access);
+
+    if (nextPath === "/feed") {
+      await ensureProfileExistsForUser(supabase, {
+        userId: user.id,
+        email: user.email ?? "member@kruxt.app",
+        username: typeof user.user_metadata.username === "string" ? user.user_metadata.username : undefined,
+        displayName: typeof user.user_metadata.display_name === "string" ? user.user_metadata.display_name : undefined
+      });
+
+      if (!(await hasRequiredConsents(supabase, user.id))) {
+        setConsentUserId(user.id);
+        setCheckingSession(false);
+        return;
+      }
+    }
+
+    setConsentUserId(null);
+    router.replace(nextPath);
+  }, [router, supabase]);
 
   useEffect(() => {
     let active = true;
@@ -45,8 +67,13 @@ export function AuthGateway() {
       const { data } = await supabase.auth.getUser();
       if (!active) return;
       if (data.user) {
-        const nextPath = await resolveNextPath();
-        router.replace(nextPath);
+        try {
+          await continueAuthenticatedUser(data.user);
+        } catch (sessionError) {
+          if (!active) return;
+          setError(sessionError instanceof Error ? sessionError.message : "Unable to validate account access.");
+          setCheckingSession(false);
+        }
         return;
       }
 
@@ -55,11 +82,15 @@ export function AuthGateway() {
 
     const listener = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (!active) return;
-      if (event === "SIGNED_IN" && session?.user) {
-        void resolveNextPath().then((nextPath) => {
+      if (event === "SIGNED_IN" && session?.user && !authOperationActive.current) {
+        window.setTimeout(() => {
           if (!active) return;
-          router.replace(nextPath);
-        });
+          void continueAuthenticatedUser(session.user).catch((sessionError) => {
+            if (!active) return;
+            setError(sessionError instanceof Error ? sessionError.message : "Unable to validate account access.");
+            setCheckingSession(false);
+          });
+        }, 0);
       }
     });
 
@@ -69,12 +100,13 @@ export function AuthGateway() {
       active = false;
       listener.data.subscription.unsubscribe();
     };
-  }, [resolveNextPath, router, supabase]);
+  }, [continueAuthenticatedUser, supabase]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    authOperationActive.current = true;
 
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -86,18 +118,25 @@ export function AuthGateway() {
         });
         if (signInError) throw signInError;
 
-        const nextPath = await resolveNextPath();
-        router.replace(nextPath);
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) throw new Error("Sign-in completed without an authenticated user.");
+        await continueAuthenticatedUser(userData.user);
         return;
       }
 
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
-        password
+        password,
+        options: {
+          data: {
+            display_name: displayName.trim(),
+            username: username.trim()
+          }
+        }
       });
       if (signUpError) throw signUpError;
 
-      if (signUpData.user) {
+      if (signUpData.user && signUpData.session) {
         await ensureProfileForUser(supabase, {
           userId: signUpData.user.id,
           email: normalizedEmail,
@@ -119,11 +158,19 @@ export function AuthGateway() {
         return;
       }
 
-      const nextPath = await resolveNextPath();
-      router.replace(nextPath);
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error("Account created without an authenticated session.");
+      await ensureProfileForUser(supabase, {
+        userId: userData.user.id,
+        email: normalizedEmail,
+        username,
+        displayName
+      });
+      await continueAuthenticatedUser(userData.user);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Authentication failed.");
     } finally {
+      authOperationActive.current = false;
       setLoading(false);
     }
   }
@@ -140,79 +187,111 @@ export function AuthGateway() {
     );
   }
 
+  const handleConsentComplete = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) throw new Error("Your session ended before consent verification completed.");
+    await continueAuthenticatedUser(data.user);
+  };
+
+  const handleConsentSignOut = async () => {
+    await supabase.auth.signOut();
+    setConsentUserId(null);
+    setCheckingSession(false);
+  };
+
   const authPanel = (
     <div className="marketing-auth-card">
-      <div className="marketing-auth-toggle">
-        <button type="button" className={mode === "signin" ? "is-active" : ""} onClick={() => setMode("signin")}>
-          Sign in
-        </button>
-        <button type="button" className={mode === "signup" ? "is-active" : ""} onClick={() => setMode("signup")}>
-          Create account
-        </button>
-      </div>
+      {consentUserId ? (
+        <RequiredConsentReview
+          client={supabase}
+          userId={consentUserId}
+          onComplete={handleConsentComplete}
+          onSignOut={() => void handleConsentSignOut()}
+        />
+      ) : (
+        <>
+          <div className="marketing-auth-toggle">
+            <button
+              type="button"
+              className={mode === "signin" ? "is-active" : ""}
+              onClick={() => setMode("signin")}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              className={mode === "signup" ? "is-active" : ""}
+              onClick={() => setMode("signup")}
+            >
+              Create account
+            </button>
+          </div>
 
-      <form onSubmit={handleSubmit} className="marketing-auth-form">
-        {mode === "signup" ? (
-          <div className="marketing-auth-name-grid">
+          <form onSubmit={handleSubmit} className="marketing-auth-form">
+            {mode === "signup" ? (
+              <div className="marketing-auth-name-grid">
+                <label>
+                  <span>Name</span>
+                  <input
+                    autoComplete="name"
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    placeholder="Your name"
+                  />
+                </label>
+                <label>
+                  <span>Username</span>
+                  <input
+                    autoComplete="username"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    placeholder="yourname"
+                  />
+                </label>
+              </div>
+            ) : null}
+
             <label>
-              <span>Name</span>
+              <span>Email</span>
               <input
-                autoComplete="name"
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="Your name"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
               />
             </label>
             <label>
-              <span>Username</span>
+              <span>Password</span>
               <input
-                autoComplete="username"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                placeholder="yourname"
+                type="password"
+                required
+                minLength={mode === "signup" ? 8 : 1}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
               />
             </label>
-          </div>
-        ) : null}
 
-        <label>
-          <span>Email</span>
-          <input
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-          />
-        </label>
-        <label>
-          <span>Password</span>
-          <input
-            type="password"
-            required
-            minLength={mode === "signup" ? 8 : 1}
-            autoComplete={mode === "signup" ? "new-password" : "current-password"}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
-          />
-        </label>
+            {error ? (
+              <div className="marketing-auth-error" role="alert">
+                {error}
+              </div>
+            ) : null}
 
-        {error ? (
-          <div className="marketing-auth-error" role="alert">
-            {error}
-          </div>
-        ) : null}
-
-        <button type="submit" className="marketing-button marketing-button-primary" disabled={loading}>
-          {loading ? "Please wait..." : mode === "signin" ? "Sign in to KRUXT" : "Create my account"}
-        </button>
-        <p>
-          By continuing, you agree to the <a href="/legal/terms">Terms</a> and acknowledge the{" "}
-          <a href="/legal/privacy">Privacy Notice</a>.
-        </p>
-      </form>
+            <button type="submit" className="marketing-button marketing-button-primary" disabled={loading}>
+              {loading ? "Please wait..." : mode === "signin" ? "Sign in to KRUXT" : "Create my account"}
+            </button>
+            <p>
+              {mode === "signup"
+                ? "Creating an account does not accept a policy. After authentication, you must review and explicitly accept the active required versions before entering KRUXT."
+                : "Signing in does not create a consent record. KRUXT requests review whenever a required policy version changes."}
+            </p>
+          </form>
+        </>
+      )}
     </div>
   );
 
