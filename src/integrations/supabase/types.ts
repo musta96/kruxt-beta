@@ -7304,6 +7304,11 @@ export type Database = {
         Args: { p_user_id?: string }
         Returns: Json
       }
+      book_gym_class: { Args: { p_class_id: string }; Returns: string }
+      cancel_gym_class_booking: {
+        Args: { p_booking_id: string }
+        Returns: string
+      }
       calculate_level_from_xp: { Args: { _xp: number }; Returns: number }
       can_manage_discount_campaign: {
         Args: { _campaign_id: string; _viewer?: string }
@@ -7556,6 +7561,10 @@ export type Database = {
       join_challenge: { Args: { p_challenge_id: string }; Returns: string }
       join_waitlist: { Args: { p_class_id: string }; Returns: string }
       leave_challenge: { Args: { p_challenge_id: string }; Returns: boolean }
+      leave_class_waitlist: {
+        Args: { p_waitlist_id: string }
+        Returns: string
+      }
       legal_locale_fallback_chain: {
         Args: { p_locale?: string }
         Returns: string[]
