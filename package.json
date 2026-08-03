@@ -23,9 +23,16 @@
     "clean:local": "node scripts/clean-local-caches.mjs",
     "clean:local:dry": "node scripts/clean-local-caches.mjs --dry-run",
     "clean:local:deps": "node scripts/clean-local-caches.mjs --include-node-modules",
-    "db:test": "bash packages/db/tests/run_smoke.sh && node --test packages/db/tests/backfill-video-proof-thumbnails.test.mjs"
+    "db:test": "bash packages/db/tests/run_smoke.sh && node --test packages/db/tests/backfill-video-proof-thumbnails.test.mjs",
+    "uat:bzone:preflight": "node tests/uat/bzone/preflight.mjs",
+    "uat:bzone:typecheck": "tsc --noEmit -p tests/uat/bzone/tsconfig.json",
+    "uat:bzone:list": "playwright test --config=tests/uat/bzone/playwright.config.ts --list",
+    "uat:bzone": "playwright test --config=tests/uat/bzone/playwright.config.ts",
+    "uat:bzone:strict": "node tests/uat/bzone/preflight.mjs --strict && KRUXT_UAT_STRICT=1 playwright test --config=tests/uat/bzone/playwright.config.ts"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "^22.14.1",
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.35",
     "turbo": "^2.4.4",
