@@ -10,6 +10,7 @@ node_modules
 dist
 build
 coverage
+demo-data-purge-report.json
 supabase/.temp
 packages/db/supabase/migrations_archive/
 
