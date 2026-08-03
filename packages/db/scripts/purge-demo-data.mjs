@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { open, readFile, rename, unlink } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 export const BZONE_DEMO_USERS = [
@@ -60,6 +61,10 @@ const STORAGE_SCOPES = [
   },
   { bucket: "privacy-exports", prefixes: (userId) => [`${userId}/`] }
 ];
+export const STORAGE_DELETE_BATCH_SIZE = 100;
+const MAX_STORAGE_DEPTH = 20;
+const MAX_STORAGE_OBJECTS_PER_SCOPE = 10_000;
+const REPORT_SCHEMA_VERSION = 2;
 
 const DEFAULTS = {
   mode: "dry-run",
@@ -143,12 +148,7 @@ export function validateApplyConfirmation(config, projectRef) {
 }
 
 function hasDemoMetadata(user) {
-  return (
-    user?.app_metadata?.demo_persona === true ||
-    user?.raw_app_meta_data?.demo_persona === true ||
-    user?.user_metadata?.demo_persona === true ||
-    user?.raw_user_meta_data?.demo_persona === true
-  );
+  return user?.app_metadata?.demo_persona === true;
 }
 
 export function classifyAuthUser(user) {
@@ -220,6 +220,17 @@ export class SupabaseAdminClient {
     return users;
   }
 
+  async getAuthUser(userId) {
+    const url = `${this.supabaseUrl}/auth/v1/admin/users/${userId}`;
+    const response = await this.fetchImpl(url, { headers: this.headers() });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new Error(`Supabase request failed (${response.status}): ${await response.text()}`);
+    }
+    const payload = await response.json();
+    return payload?.user ?? payload;
+  }
+
   async select(table, { select = "*", filters = {}, limit = 5000 } = {}) {
     const url = new URL(`${this.supabaseUrl}/rest/v1/${table}`);
     url.searchParams.set("select", select);
@@ -252,8 +263,8 @@ export class SupabaseAdminClient {
     }
   }
 
-  async listStorageObjects(bucket, prefix) {
-    const objects = [];
+  async listStorageEntries(bucket, prefix) {
+    const entries = [];
     for (let offset = 0; ; offset += 1000) {
       const url = `${this.supabaseUrl}/storage/v1/object/list/${bucket}`;
       const response = await this.fetchImpl(url, {
@@ -275,17 +286,22 @@ export class SupabaseAdminClient {
         throw new Error(`Storage list failed (${response.status}): ${await response.text()}`);
       }
       const page = await response.json();
-      objects.push(...page.map((object) => ({
-        bucket,
-        path: `${prefix}${object.name}`
-      })));
+      entries.push(...page);
       if (page.length < 1000) break;
     }
-    return objects;
+    return entries;
   }
 
   async removeStorageObjects(bucket, paths) {
     if (paths.length === 0) return;
+    if (paths.length > STORAGE_DELETE_BATCH_SIZE) {
+      throw new Error(
+        `Storage deletion exceeds ${STORAGE_DELETE_BATCH_SIZE}-object safety limit`
+      );
+    }
+    if (paths.some((path) => typeof path !== "string" || path.length === 0 || path.endsWith("/"))) {
+      throw new Error("Storage deletion requires exact object paths, not folder prefixes");
+    }
     const url = `${this.supabaseUrl}/storage/v1/object/${bucket}`;
     await this.requestJson(url, {
       method: "DELETE",
@@ -349,12 +365,61 @@ export function qualifyBzoneGym(gym, evidence = {}) {
   };
 }
 
+function isStorageFolder(entry) {
+  return entry?.id == null && entry?.metadata == null;
+}
+
+export async function enumerateStorageObjects(
+  client,
+  bucket,
+  rootPrefix,
+  {
+    maxDepth = MAX_STORAGE_DEPTH,
+    maxObjects = MAX_STORAGE_OBJECTS_PER_SCOPE
+  } = {}
+) {
+  const objects = [];
+  const pending = [{ prefix: rootPrefix, depth: 0 }];
+  const visitedPrefixes = new Set();
+
+  while (pending.length > 0) {
+    const { prefix, depth } = pending.pop();
+    if (visitedPrefixes.has(prefix)) continue;
+    visitedPrefixes.add(prefix);
+
+    const entries = await client.listStorageEntries(bucket, prefix);
+    for (const entry of entries) {
+      const name = String(entry?.name ?? "");
+      if (!name || name === "." || name === ".." || name.includes("/")) {
+        throw new Error(`Storage listing returned an unsafe child name in ${bucket}:${prefix}`);
+      }
+      const path = `${prefix}${name}`;
+      if (isStorageFolder(entry)) {
+        if (depth >= maxDepth) {
+          throw new Error(`Storage traversal exceeded depth ${maxDepth} in ${bucket}:${rootPrefix}`);
+        }
+        pending.push({ prefix: `${path}/`, depth: depth + 1 });
+        continue;
+      }
+
+      objects.push({ bucket, path });
+      if (objects.length > maxObjects) {
+        throw new Error(
+          `Storage traversal exceeded ${maxObjects} objects in ${bucket}:${rootPrefix}`
+        );
+      }
+    }
+  }
+
+  return objects.sort((left, right) => left.path.localeCompare(right.path));
+}
+
 async function collectStorageObjects(client, userIds) {
   const objects = [];
   for (const userId of userIds) {
     for (const scope of STORAGE_SCOPES) {
       for (const prefix of scope.prefixes(userId)) {
-        const scopedObjects = await client.listStorageObjects(scope.bucket, prefix);
+        const scopedObjects = await enumerateStorageObjects(client, scope.bucket, prefix);
         objects.push(...scopedObjects.map((object) => ({ ...object, userId })));
       }
     }
@@ -524,7 +589,34 @@ export async function auditDemoData(client) {
   };
 }
 
-export async function applyPurge(client, audit, config) {
+export function chunkItems(items, size = STORAGE_DELETE_BATCH_SIZE) {
+  if (!Number.isInteger(size) || size < 1) {
+    throw new Error("Chunk size must be a positive integer");
+  }
+  const chunks = [];
+  for (let start = 0; start < items.length; start += size) {
+    chunks.push(items.slice(start, start + size));
+  }
+  return chunks;
+}
+
+function operationId(type, target) {
+  const digest = createHash("sha256")
+    .update(`${type}:${JSON.stringify(target)}`)
+    .digest("hex")
+    .slice(0, 20);
+  return `${type}:${digest}`;
+}
+
+function storagePathBelongsToUserScope(bucket, path, userId) {
+  return STORAGE_SCOPES.some(
+    (scope) =>
+      scope.bucket === bucket &&
+      scope.prefixes(userId).some((prefix) => path.startsWith(prefix))
+  );
+}
+
+export function validatePurgePreflight(audit, config) {
   if (audit.auth.suspiciousDemoMarkers.length > 0) {
     throw new Error("Refusing apply while ambiguous BZone demo markers require manual review");
   }
@@ -548,23 +640,278 @@ export async function applyPurge(client, audit, config) {
       throw new Error(`Refusing to quarantine unverified BZone demo gym: ${gymId}`);
     }
   }
+}
 
-  for (const gymId of config.quarantineGymIds) {
-    await client.quarantineGym(gymId);
-  }
+export function buildPurgeOperations(audit, config) {
+  validatePurgePreflight(audit, config);
+  const operations = [];
+  const verifiedUserIds = new Set(
+    audit.auth.verifiedBzoneDemoUsers.map((user) => user.id)
+  );
   const storageByBucket = new Map();
   for (const object of audit.storage?.objects ?? []) {
     if (!verifiedUserIds.has(object.userId)) continue;
-    const paths = storageByBucket.get(object.bucket) ?? [];
-    paths.push(object.path);
+    if (
+      typeof object.bucket !== "string" ||
+      typeof object.path !== "string" ||
+      object.path.length === 0 ||
+      object.path.endsWith("/") ||
+      !storagePathBelongsToUserScope(object.bucket, object.path, object.userId)
+    ) {
+      throw new Error("Audit contains a storage folder or invalid object path");
+    }
+    const paths = storageByBucket.get(object.bucket) ?? new Set();
+    paths.add(object.path);
     storageByBucket.set(object.bucket, paths);
   }
-  for (const [bucket, paths] of storageByBucket) {
-    await client.removeStorageObjects(bucket, paths);
+
+  for (const bucket of [...storageByBucket.keys()].sort()) {
+    const paths = [...storageByBucket.get(bucket)].sort();
+    for (const batch of chunkItems(paths)) {
+      const target = { bucket, paths: batch };
+      operations.push({
+        id: operationId("storage.delete", target),
+        type: "storage.delete",
+        target,
+        status: "pending",
+        attempts: 0
+      });
+    }
   }
-  for (const user of audit.auth.verifiedBzoneDemoUsers) {
-    await client.deleteAuthUser(user.id);
+
+  for (const user of [...audit.auth.verifiedBzoneDemoUsers].sort((a, b) =>
+    a.id.localeCompare(b.id)
+  )) {
+    const target = { id: user.id, email: user.email };
+    operations.push({
+      id: operationId("auth-user.delete", target),
+      type: "auth-user.delete",
+      target,
+      status: "pending",
+      attempts: 0
+    });
   }
+
+  // Gym quarantine is deliberately last so a partial purge never hides a gym
+  // before the more precise object and identity operations have completed.
+  for (const gymId of config.quarantineGymIds) {
+    const target = { id: gymId };
+    operations.push({
+      id: operationId("gym.quarantine", target),
+      type: "gym.quarantine",
+      target,
+      status: "pending",
+      attempts: 0
+    });
+  }
+
+  return operations;
+}
+
+export async function writeOwnerOnlyJson(filePath, value) {
+  const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+  let handle;
+  try {
+    handle = await open(temporaryPath, "wx", 0o600);
+    await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await handle.sync();
+    await handle.chmod(0o600);
+    await handle.close();
+    handle = null;
+    await rename(temporaryPath, filePath);
+  } catch (error) {
+    if (handle) await handle.close().catch(() => {});
+    await unlink(temporaryPath).catch(() => {});
+    throw error;
+  }
+}
+
+export async function readPurgeReport(filePath) {
+  try {
+    return JSON.parse(await readFile(filePath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw new Error(`Unable to read existing purge report: ${error.message}`);
+  }
+}
+
+function serializeError(error, at) {
+  return {
+    at,
+    name: error?.name ?? "Error",
+    message: error?.message ?? String(error)
+  };
+}
+
+function resumableReport(existingReport, projectRef) {
+  return existingReport?.schemaVersion === REPORT_SCHEMA_VERSION &&
+    existingReport?.mode === "apply" &&
+    existingReport?.projectRef === projectRef
+    ? existingReport
+    : null;
+}
+
+function mergeOperations(existingOperations, plannedOperations, at) {
+  const plannedIds = new Set(plannedOperations.map((operation) => operation.id));
+  const existingById = new Map(
+    (existingOperations ?? []).map((operation) => [operation.id, operation])
+  );
+  const history = (existingOperations ?? [])
+    .filter((operation) => !plannedIds.has(operation.id))
+    .map((operation) =>
+      ["pending", "running"].includes(operation.status)
+        ? { ...operation, status: "superseded", finishedAt: at }
+        : operation
+    );
+  const current = plannedOperations.map((operation) => {
+    const previous = existingById.get(operation.id);
+    return {
+      ...operation,
+      attempts: Number(previous?.attempts ?? 0)
+    };
+  });
+  return [...history, ...current];
+}
+
+async function executeOperation(client, operation) {
+  if (operation.type === "storage.delete") {
+    await client.removeStorageObjects(
+      operation.target.bucket,
+      operation.target.paths
+    );
+    return { deletedPaths: operation.target.paths.length };
+  }
+
+  if (operation.type === "auth-user.delete") {
+    const currentUser = await client.getAuthUser(operation.target.id);
+    if (!currentUser) return { alreadyAbsent: true };
+    const classification = classifyAuthUser(currentUser);
+    if (
+      currentUser.id !== operation.target.id ||
+      String(currentUser.email ?? "").toLowerCase() !== operation.target.email ||
+      !classification.verified
+    ) {
+      throw new Error(
+        `Refusing to delete revalidated user ${operation.target.id}; exact app_metadata marker or identity changed`
+      );
+    }
+    await client.deleteAuthUser(operation.target.id);
+    return { deleted: true };
+  }
+
+  if (operation.type === "gym.quarantine") {
+    await client.quarantineGym(operation.target.id);
+    return { quarantined: true };
+  }
+
+  throw new Error(`Unknown purge operation: ${operation.type}`);
+}
+
+export async function executePurgeRun({
+  client,
+  before,
+  config,
+  projectRef,
+  supabaseOrigin,
+  outputFile,
+  existingReport = null,
+  auditFn = auditDemoData,
+  writeReport = writeOwnerOnlyJson,
+  clock = () => new Date().toISOString()
+}) {
+  const plannedOperations = buildPurgeOperations(before, config);
+  const prior = resumableReport(existingReport, projectRef);
+  const startedAt = clock();
+  const report = {
+    schemaVersion: REPORT_SCHEMA_VERSION,
+    runId: prior?.runId ?? randomUUID(),
+    projectRef,
+    supabaseOrigin,
+    mode: "apply",
+    phase: "preflight",
+    startedAt: prior?.startedAt ?? startedAt,
+    updatedAt: startedAt,
+    quarantineGymIds: [...config.quarantineGymIds],
+    preflights: [
+      ...(prior?.preflights ?? []),
+      { auditedAt: startedAt, audit: before }
+    ],
+    before,
+    after: null,
+    operations: mergeOperations(prior?.operations, plannedOperations, startedAt),
+    errors: [...(prior?.errors ?? [])]
+  };
+  const plannedIds = new Set(plannedOperations.map((operation) => operation.id));
+  let primaryError = null;
+  let finalizationError = null;
+
+  const checkpoint = async () => {
+    report.updatedAt = clock();
+    await writeReport(outputFile, report);
+  };
+
+  try {
+    // This owner-only preflight checkpoint must succeed before any mutation.
+    await checkpoint();
+    report.phase = "running";
+
+    for (const operation of report.operations) {
+      if (!plannedIds.has(operation.id) || operation.status !== "pending") continue;
+
+      operation.status = "running";
+      operation.attempts += 1;
+      operation.startedAt = clock();
+      delete operation.finishedAt;
+      delete operation.result;
+      delete operation.error;
+      await checkpoint();
+
+      try {
+        operation.result = await executeOperation(client, operation);
+        operation.status = "completed";
+        operation.finishedAt = clock();
+        await checkpoint();
+      } catch (error) {
+        operation.status = "failed";
+        operation.finishedAt = clock();
+        operation.error = serializeError(error, operation.finishedAt);
+        report.errors.push({ operationId: operation.id, ...operation.error });
+        try {
+          await checkpoint();
+        } catch (checkpointError) {
+          report.errors.push({
+            operationId: operation.id,
+            stage: "failure-checkpoint",
+            ...serializeError(checkpointError, clock())
+          });
+        }
+        throw error;
+      }
+    }
+  } catch (error) {
+    primaryError = error;
+    if (!report.errors.some((entry) => entry.message === error?.message)) {
+      report.errors.push({ stage: "run", ...serializeError(error, clock()) });
+    }
+  } finally {
+    try {
+      report.after = await auditFn(client);
+    } catch (error) {
+      finalizationError = error;
+      report.errors.push({ stage: "final-audit", ...serializeError(error, clock()) });
+    }
+
+    report.phase = primaryError || finalizationError ? "failed" : "completed";
+    try {
+      await checkpoint();
+    } catch (error) {
+      finalizationError ??= error;
+    }
+  }
+
+  if (primaryError) throw primaryError;
+  if (finalizationError) throw finalizationError;
+  return report;
 }
 
 function printHelp() {
@@ -611,21 +958,38 @@ export async function main(argv = process.argv.slice(2)) {
   const before = await auditDemoData(client);
 
   if (config.mode === "apply") {
-    await applyPurge(client, before, config);
+    const existingReport = await readPurgeReport(config.outputFile);
+    const report = await executePurgeRun({
+      client,
+      before,
+      config,
+      projectRef,
+      supabaseOrigin: origin,
+      outputFile: config.outputFile,
+      existingReport
+    });
+    console.log(`Report written to ${config.outputFile}`);
+    console.log(`Ready for real testing: ${report.after?.readyForRealTesting ? "yes" : "no"}`);
+    return;
   }
 
-  const after = config.mode === "apply" ? await auditDemoData(client) : null;
   const report = {
+    schemaVersion: REPORT_SCHEMA_VERSION,
+    runId: randomUUID(),
     generatedAt: new Date().toISOString(),
+    projectRef,
     supabaseOrigin: origin,
     mode: config.mode,
+    phase: "dry-run",
     quarantineGymIds: config.quarantineGymIds,
     before,
-    after
+    after: null,
+    operations: [],
+    errors: []
   };
-  await writeFile(config.outputFile, `${JSON.stringify(report, null, 2)}\n`);
+  await writeOwnerOnlyJson(config.outputFile, report);
   console.log(`Report written to ${config.outputFile}`);
-  console.log(`Ready for real testing: ${(after ?? before).readyForRealTesting ? "yes" : "no"}`);
+  console.log(`Ready for real testing: ${before.readyForRealTesting ? "yes" : "no"}`);
 }
 
 const isEntryPoint =
