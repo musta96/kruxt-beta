@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 
 import { ensureProfileExistsForUser, resolveAdminAccess, type AdminAccessState } from "@/lib/auth/access";
-import { hasRequiredConsents } from "@/lib/auth/required-consents";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface ProfileSummary {
@@ -58,32 +57,72 @@ export function usePublicSession() {
     let active = true;
 
     async function loadSession() {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        if (!active) return;
+        setState({
+          status: "error",
+          user: authData.user ?? null,
+          access: null,
+          profile: null,
+          error: authError.message || "Unable to validate your session."
+        });
+        return;
+      }
+
+      if (authData.user) {
+        try {
+          await ensureProfileExistsForUser(supabase, {
+            userId: authData.user.id,
+            email: authData.user.email ?? "member@kruxt.app",
+            username:
+              typeof authData.user.user_metadata.username === "string"
+                ? authData.user.user_metadata.username
+                : undefined,
+            displayName:
+              typeof authData.user.user_metadata.display_name === "string"
+                ? authData.user.user_metadata.display_name
+                : undefined
+          });
+        } catch (profileError) {
+          if (!active) return;
+          setState({
+            status: "error",
+            user: authData.user,
+            access: null,
+            profile: null,
+            error: profileError instanceof Error ? profileError.message : "Unable to prepare your profile."
+          });
+          return;
+        }
+      }
+
       const access = await resolveAdminAccess(supabase);
       if (!active) return;
 
       if (!access.user) {
         setState({
-          status: "ready",
+          status: access.status === "error" ? "error" : "ready",
           user: null,
           access,
           profile: null,
-          error: null
+          error: access.error
+        });
+        return;
+      }
+
+      if (access.status === "error") {
+        setState({
+          status: "error",
+          user: access.user,
+          access,
+          profile: null,
+          error: access.error || "Unable to validate account access."
         });
         return;
       }
 
       try {
-        await ensureProfileExistsForUser(supabase, {
-          userId: access.user.id,
-          email: access.user.email ?? "member@kruxt.app",
-          username:
-            typeof access.user.user_metadata.username === "string" ? access.user.user_metadata.username : undefined,
-          displayName:
-            typeof access.user.user_metadata.display_name === "string"
-              ? access.user.user_metadata.display_name
-              : undefined
-        });
-
         const { data: profileData, error: profileError } = await supabase
           .from("profiles")
           .select("id,display_name,username,avatar_url")
@@ -92,19 +131,12 @@ export function usePublicSession() {
 
         if (profileError) throw profileError;
 
-        const accessIsBlocked =
-          access.activationStatus === "pending_activation" || access.activationStatus === "disabled";
-        const requiredConsentsAreCurrent = accessIsBlocked
-          ? false
-          : await hasRequiredConsents(supabase, access.user.id);
-        if (!active) return;
-
         setState({
-          status: accessIsBlocked
+          status: access.status === "activation_required" || access.status === "disabled"
             ? "access_blocked"
-            : requiredConsentsAreCurrent
-              ? "ready"
-              : "consent_required",
+            : access.status === "consent_required"
+              ? "consent_required"
+              : "ready",
           user: access.user,
           access,
           profile: profileData

@@ -17,6 +17,7 @@ type PolicyRow = {
   version: string;
   label: string | null;
   document_url: string;
+  checksum: string | null;
   effective_at: string;
   is_active: boolean;
   change_summary: string | null;
@@ -29,6 +30,7 @@ export type RequiredConsentPolicy = {
   version: string;
   label: string;
   documentUrl: string;
+  checksum: string;
   effectiveAt: string;
   changeSummary: string | null;
   reason: string;
@@ -54,11 +56,15 @@ function isRequiredConsentType(value: string): value is RequiredConsentType {
 
 function isReviewableDocumentUrl(value: string): boolean {
   try {
-    const url = new URL(value, "https://kruxt.app");
-    return url.protocol === "https:" || url.protocol === "http:";
+    const url = new URL(value);
+    return url.protocol === "https:" && Boolean(url.hostname);
   } catch {
     return false;
   }
+}
+
+function isSha256Binding(value: string | null): value is string {
+  return Boolean(value && /^(sha256:)?[0-9a-f]{64}$/i.test(value.trim()));
 }
 
 export async function hasRequiredConsents(client: SupabaseClient, userId: string): Promise<boolean> {
@@ -89,14 +95,14 @@ export async function loadRequiredConsentPolicies(
   const missingPublishedPolicy = gaps.find((gap) => !gap.required_policy_version_id);
   if (missingPublishedPolicy) {
     throw new Error(
-      `Account access is paused because no active ${DEFAULT_POLICY_LABELS[missingPublishedPolicy.consent_type as RequiredConsentType]} is published.`
+      `Account access is paused because no approved, consent-ready ${DEFAULT_POLICY_LABELS[missingPublishedPolicy.consent_type as RequiredConsentType]} is published.`
     );
   }
 
   const policyIds = [...new Set(gaps.map((gap) => gap.required_policy_version_id as string))];
   const { data: policyData, error: policyError } = await client
     .from("policy_version_tracking")
-    .select("id,policy_type,version,label,document_url,effective_at,is_active,change_summary")
+    .select("id,policy_type,version,label,document_url,checksum,effective_at,is_active,change_summary")
     .in("id", policyIds);
 
   if (policyError) throw new Error(policyError.message || "Unable to load published policy versions.");
@@ -120,7 +126,8 @@ export async function loadRequiredConsentPolicies(
       !Number.isFinite(effectiveAt) ||
       effectiveAt > now ||
       !policy.version.trim() ||
-      !isReviewableDocumentUrl(policy.document_url)
+      !isReviewableDocumentUrl(policy.document_url) ||
+      !isSha256Binding(policy.checksum)
     ) {
       throw new Error(`The active ${DEFAULT_POLICY_LABELS[consentType]} is not available for review.`);
     }
@@ -133,6 +140,7 @@ export async function loadRequiredConsentPolicies(
         version: policy.version.trim(),
         label: policy.label?.trim() || DEFAULT_POLICY_LABELS[consentType],
         documentUrl: policy.document_url.trim(),
+        checksum: policy.checksum.trim().toLowerCase(),
         effectiveAt: policy.effective_at,
         changeSummary: policy.change_summary,
         reason: gap.reason
@@ -159,23 +167,13 @@ export async function acceptRequiredConsentPolicies(
   }
 
   const locale = typeof navigator === "undefined" ? null : navigator.language;
-  const userAgent = typeof navigator === "undefined" ? null : navigator.userAgent;
-
   for (const policy of currentPolicies) {
     const { error } = await client.rpc("record_user_consent", {
       p_consent_type: policy.consentType,
       p_granted: true,
       p_policy_version_id: policy.id,
       p_source: "web",
-      p_locale: locale,
-      p_user_id: userId,
-      p_user_agent: userAgent,
-      p_evidence: {
-        explicit_acceptance: true,
-        reviewed_document_url: policy.documentUrl,
-        reviewed_policy_label: policy.label,
-        reviewed_policy_version: policy.version
-      }
+      p_locale: locale
     });
 
     if (error) throw new Error(error.message || `Unable to record acceptance for ${policy.label}.`);

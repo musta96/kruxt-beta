@@ -8,6 +8,7 @@
   gap: 0.45rem;
 }
 
+.heading h1,
 .heading h2,
 .heading p,
 .policy h3,
@@ -16,9 +17,15 @@
   margin: 0;
 }
 
+.heading h1,
 .heading h2 {
   font-size: 1.35rem;
   line-height: 1.2;
+}
+
+.heading h1:focus-visible {
+  outline: 2px solid #61d9f8;
+  outline-offset: 4px;
 }
 
 .heading p,
@@ -140,4 +147,16 @@
 .memberPanel {
   width: min(100%, 680px);
   margin: 0 auto;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

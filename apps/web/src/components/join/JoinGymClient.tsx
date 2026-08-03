@@ -99,6 +99,18 @@ export function JoinGymClient() {
 
     const normalizedEmail = email.trim().toLowerCase();
 
+    const prepareProfile = async () => {
+      const { data, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!data.user) throw new Error("Authentication completed without a user session.");
+      await ensureProfileForUser(supabase, {
+        userId: data.user.id,
+        email: data.user.email ?? normalizedEmail,
+        username: mode === "signup" ? username : undefined,
+        displayName: mode === "signup" ? displayName : undefined
+      });
+    };
+
     try {
       if (mode === "signin") {
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -106,25 +118,17 @@ export function JoinGymClient() {
           password
         });
         if (signInError) throw signInError;
+        await prepareProfile();
         setSessionUserEmail(normalizedEmail);
         if (code.trim()) await redeemCode();
         return;
       }
 
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password
       });
       if (signUpError) throw signUpError;
-
-      if (signUpData.user) {
-        await ensureProfileForUser(supabase, {
-          userId: signUpData.user.id,
-          email: normalizedEmail,
-          username,
-          displayName
-        });
-      }
 
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
@@ -139,6 +143,7 @@ export function JoinGymClient() {
         return;
       }
 
+      await prepareProfile();
       setSessionUserEmail(normalizedEmail);
       if (code.trim()) await redeemCode();
     } catch (authError) {
@@ -223,6 +228,7 @@ export function JoinGymClient() {
                       value={displayName}
                       onChange={(event) => setDisplayName(event.target.value)}
                       placeholder="Mario Rossi"
+                      maxLength={80}
                       required
                     />
                   </div>
@@ -236,6 +242,8 @@ export function JoinGymClient() {
                       placeholder="mario"
                       minLength={3}
                       maxLength={24}
+                      pattern="[A-Za-z0-9_]{3,24}"
+                      title="Use 3 to 24 letters, numbers, or underscores."
                       required
                     />
                   </div>

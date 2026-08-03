@@ -131,7 +131,7 @@ export function MemberShell({
         userId={state.user.id}
         onComplete={refresh}
         onSignOut={handleConsentSignOut}
-        variant="member"
+        variant="standalone"
       />
     );
   }

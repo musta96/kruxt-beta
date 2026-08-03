@@ -6,8 +6,7 @@ import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 
 import { RequiredConsentReview } from "@/components/consent/RequiredConsentReview";
 import { MarketingHome } from "@/components/marketing/MarketingHome";
-import { ensureProfileExistsForUser, ensureProfileForUser, resolveAdminAccess } from "@/lib/auth/access";
-import { hasRequiredConsents } from "@/lib/auth/required-consents";
+import { ensureProfileExistsForUser, resolveAdminAccess } from "@/lib/auth/access";
 import { resolvePostAuthPath } from "@/components/public/usePublicSession";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -38,34 +37,39 @@ export function AuthGateway() {
   const [username, setUsername] = useState("");
 
   const continueAuthenticatedUser = useCallback(async (user: User): Promise<void> => {
+    await ensureProfileExistsForUser(supabase, {
+      userId: user.id,
+      email: user.email ?? "member@kruxt.app",
+      username: typeof user.user_metadata.username === "string" ? user.user_metadata.username : undefined,
+      displayName: typeof user.user_metadata.display_name === "string" ? user.user_metadata.display_name : undefined
+    });
+
     const access = await resolveAdminAccess(supabase);
-    const nextPath = resolvePostAuthPath(access);
+    if (access.status === "error") {
+      throw new Error(access.error || "Unable to validate account access.");
+    }
 
-    if (nextPath === "/feed") {
-      await ensureProfileExistsForUser(supabase, {
-        userId: user.id,
-        email: user.email ?? "member@kruxt.app",
-        username: typeof user.user_metadata.username === "string" ? user.user_metadata.username : undefined,
-        displayName: typeof user.user_metadata.display_name === "string" ? user.user_metadata.display_name : undefined
-      });
-
-      if (!(await hasRequiredConsents(supabase, user.id))) {
-        setConsentUserId(user.id);
-        setCheckingSession(false);
-        return;
-      }
+    if (access.status === "consent_required") {
+      setConsentUserId(user.id);
+      setCheckingSession(false);
+      return;
     }
 
     setConsentUserId(null);
-    router.replace(nextPath);
+    router.replace(resolvePostAuthPath(access));
   }, [router, supabase]);
 
   useEffect(() => {
     let active = true;
 
     const checkSession = async () => {
-      const { data } = await supabase.auth.getUser();
+      const { data, error: userError } = await supabase.auth.getUser();
       if (!active) return;
+      if (userError) {
+        setError(userError.message || "Unable to validate your session.");
+        setCheckingSession(false);
+        return;
+      }
       if (data.user) {
         try {
           await continueAuthenticatedUser(data.user);
@@ -118,13 +122,14 @@ export function AuthGateway() {
         });
         if (signInError) throw signInError;
 
-        const { data: userData } = await supabase.auth.getUser();
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError) throw userError;
         if (!userData.user) throw new Error("Sign-in completed without an authenticated user.");
         await continueAuthenticatedUser(userData.user);
         return;
       }
 
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
         options: {
@@ -135,15 +140,6 @@ export function AuthGateway() {
         }
       });
       if (signUpError) throw signUpError;
-
-      if (signUpData.user && signUpData.session) {
-        await ensureProfileForUser(supabase, {
-          userId: signUpData.user.id,
-          email: normalizedEmail,
-          username,
-          displayName
-        });
-      }
 
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
@@ -158,14 +154,9 @@ export function AuthGateway() {
         return;
       }
 
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
       if (!userData.user) throw new Error("Account created without an authenticated session.");
-      await ensureProfileForUser(supabase, {
-        userId: userData.user.id,
-        email: normalizedEmail,
-        username,
-        displayName
-      });
       await continueAuthenticatedUser(userData.user);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Authentication failed.");
@@ -188,7 +179,8 @@ export function AuthGateway() {
   }
 
   const handleConsentComplete = async () => {
-    const { data } = await supabase.auth.getUser();
+    const { data, error: userError } = await supabase.auth.getUser();
+    if (userError) throw userError;
     if (!data.user) throw new Error("Your session ended before consent verification completed.");
     await continueAuthenticatedUser(data.user);
   };
@@ -234,6 +226,7 @@ export function AuthGateway() {
                   <span>Name</span>
                   <input
                     autoComplete="name"
+                    maxLength={80}
                     value={displayName}
                     onChange={(event) => setDisplayName(event.target.value)}
                     placeholder="Your name"
@@ -243,6 +236,10 @@ export function AuthGateway() {
                   <span>Username</span>
                   <input
                     autoComplete="username"
+                    minLength={3}
+                    maxLength={24}
+                    pattern="[A-Za-z0-9_]{3,24}"
+                    title="Use 3 to 24 letters, numbers, or underscores."
                     value={username}
                     onChange={(event) => setUsername(event.target.value)}
                     placeholder="yourname"
