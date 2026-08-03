@@ -47,45 +47,54 @@ export default function DashboardPage() {
     [gymId]
   );
 
-  // If any core data is loading, show skeleton
-  const isLoading =
-    summary.status === "loading" || summary.status === "idle";
+  const dashboardSources = [
+    { label: "Operations summary", result: summary },
+    { label: "Memberships", result: memberships },
+    { label: "Classes", result: classes },
+    { label: "Check-ins", result: checkins },
+    { label: "Support tickets", result: tickets },
+  ];
+  const isLoading = dashboardSources.some(
+    ({ result }) => result.status === "loading" || result.status === "idle"
+  );
 
   if (isLoading) {
     return <PageSkeleton />;
   }
 
-  // If summary failed, show error with retry
-  if (summary.status === "error") {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Overview"
-          description="Your gym at a glance. Data refreshed in real-time."
-        />
-        <ErrorBanner message={summary.error} onRetry={summary.refetch} />
-      </div>
-    );
-  }
-
-  const memberList = memberships.data ?? [];
-  const activeMembers = memberList.filter((m) => m.membershipStatus === "active").length;
-  const pendingMembers = memberList.filter((m) => m.membershipStatus === "pending").length;
-  const activeClasses = (classes.data ?? []).filter((c) => c.status === "scheduled").length;
-  const recentCheckinList = (checkins.data ?? []).slice(0, 8);
-  const openTickets = (tickets.data ?? []).length;
+  const failedSources = dashboardSources.filter(({ result }) => result.status === "error");
+  const memberList = memberships.status === "success" ? memberships.data : undefined;
+  const classList = classes.status === "success" ? classes.data : undefined;
+  const checkinList = checkins.status === "success" ? checkins.data : undefined;
+  const ticketList = tickets.status === "success" ? tickets.data : undefined;
+  const activeMembers = memberList?.filter((m) => m.membershipStatus === "active").length;
+  const pendingMembers = memberList?.filter((m) => m.membershipStatus === "pending").length;
+  const activeClasses = classList?.filter((c) => c.status === "scheduled").length;
+  const recentCheckinList = checkinList?.slice(0, 8);
+  const openTickets = ticketList?.length;
 
   // Build activity items from real check-ins
-  const activityItems = recentCheckinList.map((ci, i) => ({
+  const activityItems = recentCheckinList?.map((ci, i) => ({
     id: ci.id ?? String(i),
     message: `Check-in recorded (${ci.sourceChannel ?? "manual"})`,
     time: ci.checkedInAt
       ? new Date(ci.checkedInAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
       : "—",
     type: "checkin" as const,
-  }));
+  })) ?? [];
 
-  const pendingActions = pendingMembers + openTickets;
+  const pendingActions =
+    pendingMembers !== undefined && openTickets !== undefined
+      ? pendingMembers + openTickets
+      : undefined;
+  const pendingActionsSubtext =
+    pendingActions !== undefined
+      ? `${pendingMembers} memberships, ${openTickets} tickets`
+      : memberList === undefined && ticketList === undefined
+        ? "Memberships and support tickets unavailable"
+        : memberList === undefined
+          ? "Memberships unavailable"
+          : "Support tickets unavailable";
 
   return (
     <div className="space-y-6">
@@ -94,29 +103,40 @@ export default function DashboardPage() {
         description="Your gym at a glance. Data refreshed in real-time."
       />
 
+      {failedSources.map(({ label, result }) => (
+        <ErrorBanner
+          key={label}
+          message={`${label} failed to load${result.error ? `: ${result.error}` : "."}`}
+          onRetry={result.refetch}
+        />
+      ))}
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total Members"
-          value={memberList.length}
-          trend={activeMembers > 0 ? { value: `${activeMembers} active`, positive: true } : undefined}
+          value={memberList?.length ?? "N/A"}
+          subtext={memberList === undefined ? "Memberships unavailable" : undefined}
+          trend={activeMembers && activeMembers > 0 ? { value: `${activeMembers} active`, positive: true } : undefined}
+          accent={memberList === undefined ? "danger" : "default"}
         />
         <StatCard
           label="Active Today"
-          value={recentCheckinList.length}
-          subtext="checked in"
-          accent="success"
+          value={recentCheckinList?.length ?? "N/A"}
+          subtext={recentCheckinList === undefined ? "Check-ins unavailable" : "checked in"}
+          accent={recentCheckinList === undefined ? "danger" : "success"}
         />
         <StatCard
           label="Active Classes"
-          value={activeClasses}
-          subtext={`${(classes.data ?? []).length} total`}
+          value={activeClasses ?? "N/A"}
+          subtext={classList === undefined ? "Classes unavailable" : `${classList.length} total`}
+          accent={classList === undefined ? "danger" : "default"}
         />
         <StatCard
           label="Pending Actions"
-          value={pendingActions}
-          subtext={`${pendingMembers} memberships, ${openTickets} tickets`}
-          accent={pendingActions > 0 ? "warning" : "default"}
+          value={pendingActions ?? "N/A"}
+          subtext={pendingActionsSubtext}
+          accent={pendingActions === undefined ? "danger" : pendingActions > 0 ? "warning" : "default"}
         />
       </div>
 
@@ -128,7 +148,12 @@ export default function DashboardPage() {
               Recent Activity
             </h2>
           </div>
-          {activityItems.length === 0 ? (
+          {recentCheckinList === undefined ? (
+            <div className="px-5 py-8 text-center">
+              <p className="text-sm text-kruxt-danger">Recent activity is unavailable.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Retry the check-ins request above.</p>
+            </div>
+          ) : activityItems.length === 0 ? (
             <div className="px-5 py-8 text-center">
               <p className="text-sm text-muted-foreground">No recent activity yet.</p>
             </div>
@@ -190,7 +215,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Alerts from real data */}
-          {pendingActions > 0 && (
+          {pendingActions !== undefined && pendingActions > 0 && (
             <div className="rounded-card border border-kruxt-warning/30 bg-kruxt-warning/5 p-4">
               <div className="flex items-center gap-2">
                 <svg className="h-4 w-4 text-kruxt-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -201,12 +226,12 @@ export default function DashboardPage() {
                 </span>
               </div>
               <ul className="mt-2 space-y-1">
-                {pendingMembers > 0 && (
+                {pendingMembers !== undefined && pendingMembers > 0 && (
                   <li className="text-xs text-muted-foreground">
                     {pendingMembers} membership request{pendingMembers > 1 ? "s" : ""} pending approval
                   </li>
                 )}
-                {openTickets > 0 && (
+                {openTickets !== undefined && openTickets > 0 && (
                   <li className="text-xs text-muted-foreground">
                     {openTickets} open support ticket{openTickets > 1 ? "s" : ""}
                   </li>
