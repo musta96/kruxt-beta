@@ -66,8 +66,27 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
-            echo "Missing required repo secrets SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY." >&2
+          missing=()
+          if [ -z "${SUPABASE_URL:-}" ]; then missing+=("SUPABASE_URL"); fi
+          if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then missing+=("SUPABASE_SERVICE_ROLE_KEY"); fi
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            MISSING_SECRETS="$(IFS=,; echo "${missing[*]}")" node <<'NODE'
+          const { writeFileSync } = require("node:fs");
+
+          const missingSecrets = process.env.MISSING_SECRETS.split(",").filter(Boolean);
+          const report = {
+            status: "configuration_error",
+            requestedAt: new Date().toISOString(),
+            runId: process.env.GITHUB_RUN_ID,
+            eventName: process.env.GITHUB_EVENT_NAME,
+            missingSecrets,
+            message: "The rank recompute did not run because required Actions secrets are missing."
+          };
+
+          writeFileSync("rank-recompute-report.json", `${JSON.stringify(report, null, 2)}\n`);
+          NODE
+            echo "Missing required repo secrets: ${missing[*]}." >&2
             exit 1
           fi
 
@@ -98,6 +117,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
+            const canonicalIssueNumber = 103;
             const title = `[OPS] Rank recompute failed (${new Date().toISOString().slice(0, 10)})`;
             const body = [
               "Rank recompute scheduler reported a failure.",
@@ -107,6 +127,26 @@ jobs:
               "",
               "Inspect the `rank-recompute-report` workflow artifact for detailed diagnostics."
             ].join("\n");
+
+            try {
+              const { data: canonicalIssue } = await github.rest.issues.get({
+                owner,
+                repo,
+                issue_number: canonicalIssueNumber
+              });
+
+              if (canonicalIssue.state === "open") {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: canonicalIssueNumber,
+                  body
+                });
+                return;
+              }
+            } catch (error) {
+              core.warning(`Unable to update canonical issue #${canonicalIssueNumber}: ${error.message}`);
+            }
 
             await github.rest.issues.create({
               owner,
