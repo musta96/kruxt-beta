@@ -10,6 +10,10 @@ import type {
 import { translateLegalText } from "@kruxt/types";
 
 import { KruxtAppError, throwIfError } from "./errors";
+import {
+  isExplicitOptIn,
+  reviewedBaselinePoliciesAreCurrent
+} from "./onboarding-semantics";
 
 type PolicyRow = {
   id: string;
@@ -88,6 +92,12 @@ type BaselinePolicyIds = {
   privacyPolicyId: string;
   healthDataPolicyId: string;
 };
+
+export interface BaselinePolicies {
+  terms: PolicyVersion;
+  privacy: PolicyVersion;
+  healthData: PolicyVersion;
+}
 
 export interface BaselineConsentInput extends Partial<BaselinePolicyIds> {
   acceptTerms?: boolean;
@@ -301,51 +311,123 @@ export class PolicyService {
     );
   }
 
-  private resolvePolicyByType(
-    policies: PolicyVersion[],
-    policyType: PolicyVersion["policyType"]
-  ): PolicyVersion | undefined {
-    return policies.find((policy) => policy.policyType === policyType);
-  }
+  private async getCurrentPolicyVersionId(
+    policyType: PolicyVersion["policyType"],
+    asOf: string
+  ): Promise<string> {
+    const { data, error } = await this.supabase.rpc("current_policy_version_id", {
+      p_policy_type: policyType,
+      p_as_of: asOf
+    });
 
-  private async resolveBaselinePolicyIds(input: BaselineConsentInput): Promise<BaselinePolicyIds> {
-    if (input.termsPolicyId && input.privacyPolicyId && input.healthDataPolicyId) {
-      return {
-        termsPolicyId: input.termsPolicyId,
-        privacyPolicyId: input.privacyPolicyId,
-        healthDataPolicyId: input.healthDataPolicyId
-      };
-    }
+    throwIfError(error, "POLICY_CURRENT_VERSION_LOOKUP_FAILED", "Unable to resolve current policy version.");
 
-    const policies = await this.listActivePolicies();
-    const termsPolicy = input.termsPolicyId
-      ? { id: input.termsPolicyId }
-      : this.resolvePolicyByType(policies, "terms");
-    const privacyPolicy = input.privacyPolicyId
-      ? { id: input.privacyPolicyId }
-      : this.resolvePolicyByType(policies, "privacy");
-    const healthDataPolicy = input.healthDataPolicyId
-      ? { id: input.healthDataPolicyId }
-      : this.resolvePolicyByType(policies, "health_data");
-
-    if (!termsPolicy?.id || !privacyPolicy?.id || !healthDataPolicy?.id) {
+    const policyVersionId = data as string | null;
+    if (!policyVersionId) {
       throw new KruxtAppError(
-        "POLICY_BASELINE_MISSING",
-        translateLegalText("legal.error.policy_baseline_missing", this.localization)
+        "POLICY_CURRENT_VERSION_MISSING",
+        `No active policy version found for policy type ${policyType}.`
       );
     }
 
+    return policyVersionId;
+  }
+
+  async getCurrentBaselinePolicies(): Promise<BaselinePolicies> {
+    const asOf = new Date().toISOString();
+    const [termsId, privacyId, healthDataId] = await Promise.all([
+      this.getCurrentPolicyVersionId("terms", asOf),
+      this.getCurrentPolicyVersionId("privacy", asOf),
+      this.getCurrentPolicyVersionId("health_data", asOf)
+    ]);
+    const expectedIds = [termsId, privacyId, healthDataId];
+
+    if (new Set(expectedIds).size !== expectedIds.length) {
+      throw new KruxtAppError("POLICY_BASELINE_INVALID", "Required policy versions are not configured correctly.");
+    }
+
+    const { data, error } = await this.supabase
+      .from("policy_version_tracking")
+      .select("*")
+      .in("id", expectedIds);
+
+    throwIfError(error, "POLICIES_READ_FAILED", "Unable to load active policies.");
+
+    const policies = ((data as PolicyRow[] | null) ?? []).map(mapPolicy);
+    const byId = new Map(policies.map((policy) => [policy.id, policy]));
+    const terms = byId.get(termsId);
+    const privacy = byId.get(privacyId);
+    const healthData = byId.get(healthDataId);
+
+    const requiredPolicies = [terms, privacy, healthData];
+    if (
+      requiredPolicies.some(
+        (policy) =>
+          !policy ||
+          !policy.isActive ||
+          !policy.label?.trim() ||
+          !policy.version.trim() ||
+          !/^https:\/\//i.test(policy.documentUrl.trim()) ||
+          new Date(policy.effectiveAt).getTime() > new Date(asOf).getTime()
+      )
+    ) {
+      throw new KruxtAppError(
+        "POLICY_BASELINE_INVALID",
+        "The required policy documents are unavailable or incomplete. Please try again later."
+      );
+    }
+
+    if (
+      terms?.policyType !== "terms" ||
+      privacy?.policyType !== "privacy" ||
+      healthData?.policyType !== "health_data"
+    ) {
+      throw new KruxtAppError("POLICY_BASELINE_INVALID", "Required policy types do not match their active records.");
+    }
+
+    return { terms, privacy, healthData } as BaselinePolicies;
+  }
+
+  private policyIdsFromBaseline(policies: BaselinePolicies): BaselinePolicyIds {
     return {
-      termsPolicyId: termsPolicy.id,
-      privacyPolicyId: privacyPolicy.id,
-      healthDataPolicyId: healthDataPolicy.id
+      termsPolicyId: policies.terms.id,
+      privacyPolicyId: policies.privacy.id,
+      healthDataPolicyId: policies.healthData.id
     };
   }
 
+  private async assertBaselinePolicyIdsCurrent(policyIds: BaselinePolicyIds): Promise<void> {
+    const current = this.policyIdsFromBaseline(await this.getCurrentBaselinePolicies());
+    if (!reviewedBaselinePoliciesAreCurrent(policyIds, current)) {
+      throw new KruxtAppError(
+        "POLICY_BASELINE_CHANGED",
+        "A required policy changed while you were reviewing it. Review the current documents before continuing."
+      );
+    }
+  }
+
+  private async resolveBaselinePolicyIds(input: BaselineConsentInput): Promise<BaselinePolicyIds> {
+    const current = this.policyIdsFromBaseline(await this.getCurrentBaselinePolicies());
+    const reviewed = {
+      termsPolicyId: input.termsPolicyId ?? current.termsPolicyId,
+      privacyPolicyId: input.privacyPolicyId ?? current.privacyPolicyId,
+      healthDataPolicyId: input.healthDataPolicyId ?? current.healthDataPolicyId
+    };
+
+    if (!reviewedBaselinePoliciesAreCurrent(reviewed, current)) {
+      throw new KruxtAppError(
+        "POLICY_BASELINE_CHANGED",
+        "A required policy changed while you were reviewing it. Review the current documents before continuing."
+      );
+    }
+
+    return reviewed;
+  }
+
   async captureBaselineConsents(userId: string, input: BaselineConsentInput): Promise<ConsentRecord[]> {
-    const acceptTerms = input.acceptTerms ?? true;
-    const acceptPrivacy = input.acceptPrivacy ?? true;
-    const acceptHealthData = input.acceptHealthData ?? true;
+    const acceptTerms = isExplicitOptIn(input.acceptTerms);
+    const acceptPrivacy = isExplicitOptIn(input.acceptPrivacy);
+    const acceptHealthData = isExplicitOptIn(input.acceptHealthData);
 
     if (!acceptTerms || !acceptPrivacy || !acceptHealthData) {
       throw new KruxtAppError(
@@ -381,14 +463,14 @@ export class PolicyService {
       },
       {
         consentType: "marketing_email",
-        granted: Boolean(input.marketingEmailOptIn),
+        granted: isExplicitOptIn(input.marketingEmailOptIn),
         policyVersionId: policyIds.privacyPolicyId,
         locale: input.locale,
         source
       },
       {
         consentType: "push_notifications",
-        granted: input.pushNotificationsOptIn ?? true,
+        granted: isExplicitOptIn(input.pushNotificationsOptIn),
         policyVersionId: policyIds.privacyPolicyId,
         locale: input.locale,
         source
@@ -399,6 +481,8 @@ export class PolicyService {
     for (const write of writes) {
       records.push(await this.upsertConsent(userId, write));
     }
+
+    await this.assertBaselinePolicyIdsCurrent(policyIds);
 
     return records;
   }

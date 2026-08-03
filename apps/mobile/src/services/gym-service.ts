@@ -15,6 +15,19 @@ import type {
 import { KruxtAppError, throwIfError } from "./errors";
 import { slugify } from "./utils";
 
+export interface SearchVisibleGymsInput {
+  query?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface GymSearchPage {
+  gyms: Gym[];
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
 type GymRow = {
   id: string;
   slug: string;
@@ -139,16 +152,53 @@ function rankRole(role: GymRole): number {
 export class GymService {
   constructor(private readonly supabase: SupabaseClient) {}
 
-  async listVisibleGyms(limit = 50): Promise<Gym[]> {
-    const { data, error } = await this.supabase
+  async listVisibleGyms(limit: number): Promise<Gym[]> {
+    const requested = Math.max(0, Math.floor(limit));
+    const gyms: Gym[] = [];
+    let page = 0;
+
+    while (gyms.length < requested) {
+      const result = await this.searchVisibleGyms({
+        page,
+        pageSize: Math.min(50, requested - gyms.length)
+      });
+      gyms.push(...result.gyms);
+      if (!result.hasMore) break;
+      page += 1;
+    }
+
+    return gyms;
+  }
+
+  async searchVisibleGyms(input: SearchVisibleGymsInput = {}): Promise<GymSearchPage> {
+    const page = Math.max(0, Math.floor(input.page ?? 0));
+    const pageSize = Math.min(50, Math.max(1, Math.floor(input.pageSize ?? 20)));
+    const from = page * pageSize;
+    const query = input.query?.trim();
+
+    let request = this.supabase
       .from("gyms")
       .select("*")
-      .order("created_at", { ascending: false })
-      .limit(limit);
+      .order("name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + pageSize);
+
+    if (query) {
+      const escapedQuery = query.replace(/[\\%_]/g, (character) => `\\${character}`);
+      request = request.ilike("name", `%${escapedQuery}%`);
+    }
+
+    const { data, error } = await request;
 
     throwIfError(error, "GYM_LIST_FAILED", "Unable to load gyms.");
 
-    return (data as GymRow[]).map(mapGym);
+    const rows = (data as GymRow[] | null) ?? [];
+    return {
+      gyms: rows.slice(0, pageSize).map(mapGym),
+      page,
+      pageSize,
+      hasMore: rows.length > pageSize
+    };
   }
 
   async getGymById(gymId: string): Promise<Gym | null> {
