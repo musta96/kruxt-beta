@@ -11,7 +11,7 @@ const requireEnvironmentAlignment = strict || args.has("--require-environment-al
 const canonicalSupabaseRef = "hgomsmhsybrxjdxbgkjy";
 const productionConfirmation = "I_CONFIRM_DISPOSABLE_PRODUCTION_UAT";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const disposableMarkerPattern = /(\.test\b|uat)/i;
+const disposableMarkerPattern = /(?:\.test\b|\buat\b)/i;
 
 const urls = [
   ["KRUXT_UAT_PLATFORM_URL", "https://kruxt-platform.vercel.app"],
@@ -107,6 +107,9 @@ for (const [name, fallback] of urls) {
     const parsed = new URL(actual);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       throw new Error("expected http or https");
+    }
+    if (isProductionLike(parsed) && parsed.protocol !== "https:") {
+      throw new Error("non-local targets must use https");
     }
     parsedUrls.set(name, parsed);
     console.log(`[PASS] ${name}: ${parsed.origin}`);

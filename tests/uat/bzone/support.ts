@@ -27,13 +27,16 @@ export const EXACT_BULK_TARGET_ENV = [
 ] as const;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const disposableMarkerPattern = /(\.test\b|uat)/i;
+const disposableMarkerPattern = /(?:\.test\b|\buat\b)/i;
 
 function configuredUrl(name: string, fallback: string): string {
   const value = process.env[name]?.trim() || fallback;
   const url = new URL(value);
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error(`${name} must use http or https.`);
+  }
+  if (!new Set(["localhost", "127.0.0.1", "::1"]).has(url.hostname) && url.protocol !== "https:") {
+    throw new Error(`${name} must use https for non-local targets.`);
   }
   return url.toString().replace(/\/$/, "");
 }
