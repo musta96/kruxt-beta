@@ -8,7 +8,7 @@ import { PageSkeleton } from "@/components/loading-skeleton";
 import { useGym } from "@/contexts/gym-context";
 import { useServices } from "@/hooks/use-services";
 import { useAsync } from "@/hooks/use-async";
-import { seedBzoneDemoData } from "@/services";
+import { isDemoSeedClientEnabled, seedBzoneDemoData } from "@/services";
 import type { GymBrandAssetKind } from "@/services";
 import type { GymBrandSettings, GymPublicPageBrandDraft, UpsertGymBrandSettingsInput } from "@kruxt/types";
 
@@ -158,7 +158,7 @@ export default function SettingsPage() {
   const plans = plansState.data ?? [];
   const allPlansSelected = plans.length > 0 && selectedPlanIds.length === plans.length;
   const previewHref = useMemo(() => buildPreviewHref(gymId, supportSessionId), [gymId, supportSessionId]);
-  const showDemoSeed = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED === "true";
+  const showDemoSeed = isDemoSeedClientEnabled();
   const draftStatusLabel = draftState.data
     ? draftState.data.status === "published"
       ? "Published draft"
