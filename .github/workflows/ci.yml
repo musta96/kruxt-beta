@@ -32,6 +32,12 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: UAT scaffold typecheck
+        run: pnpm uat:bzone:typecheck
+
+      - name: UAT scaffold enumeration
+        run: pnpm uat:bzone:list
+
       - name: Test
         run: pnpm test
 
