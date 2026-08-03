@@ -8,15 +8,18 @@ import { resolvePostAuthPath, usePublicSession } from "@/components/public/usePu
 const MEMBER_NAV = [
   { href: "/feed", label: "Feed" },
   { href: "/plan", label: "Plan" },
-  { href: "/library", label: "Library" },
   { href: "/log", label: "Log" },
   { href: "/gyms", label: "Gyms" },
+  { href: "/profile", label: "Profile" }
+];
+
+const MEMBER_UTILITY_NAV = [
+  { href: "/library", label: "Library" },
   { href: "/guild", label: "Guild" },
   { href: "/rank", label: "Rank" },
   { href: "/integrations", label: "Integrations" },
   { href: "/privacy", label: "Privacy" },
-  { href: "/support", label: "Support" },
-  { href: "/profile", label: "Profile" }
+  { href: "/support", label: "Support" }
 ];
 
 export function MemberShell({
@@ -106,14 +109,28 @@ export function MemberShell({
   return (
     <main className="app-shell">
       <div className="mobile-frame">
-        <header className="mobile-topbar">
-          <div>
-            <p className="eyebrow">KRUXT MEMBER</p>
-            <h1 className="mobile-title">{title}</h1>
-            <p className="mobile-copy">{subtitle}</p>
-          </div>
-          <div className="mobile-topbar-actions">
-            <span className="identity-chip">{displayLabel}</span>
+        <header className="member-app-header">
+          <Link href="/plan" className="member-brand">
+            <span className="member-brand-mark">K</span>
+            <span>KRUXT</span>
+          </Link>
+
+          <div className="member-header-actions">
+            <span className="member-session-chip">{displayLabel}</span>
+            <details className="member-utility-menu">
+              <summary>More</summary>
+              <nav className="member-utility-popover" aria-label="Member utilities">
+                {MEMBER_UTILITY_NAV.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`member-utility-link ${pathname === item.href ? "is-active" : ""}`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </nav>
+            </details>
             {hasBackofficeAccess && (
               <Link href={adminPath} className="ghost-chip">
                 {adminPath === "/admin" ? "Platform" : "Org"}
@@ -129,6 +146,13 @@ export function MemberShell({
             </button>
           </div>
         </header>
+
+        <section className="member-page-intro">
+          <div>
+            <h1 className="mobile-title">{title}</h1>
+            <p className="mobile-copy">{subtitle}</p>
+          </div>
+        </section>
 
         <section className="mobile-content">{children}</section>
 

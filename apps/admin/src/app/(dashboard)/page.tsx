@@ -47,25 +47,16 @@ export default function DashboardPage() {
     [gymId]
   );
 
-  // If any core data is loading, show skeleton
+  // The ops summary RPC is useful but should not be the single point of failure
+  // for the first screen. Fall back to the page-level service calls below.
   const isLoading =
-    summary.status === "loading" || summary.status === "idle";
+    (summary.status === "loading" || summary.status === "idle") &&
+    (memberships.status === "loading" || memberships.status === "idle") &&
+    (classes.status === "loading" || classes.status === "idle") &&
+    (checkins.status === "loading" || checkins.status === "idle");
 
   if (isLoading) {
     return <PageSkeleton />;
-  }
-
-  // If summary failed, show error with retry
-  if (summary.status === "error") {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Overview"
-          description="Your gym at a glance. Data refreshed in real-time."
-        />
-        <ErrorBanner message={summary.error} onRetry={summary.refetch} />
-      </div>
-    );
   }
 
   const memberList = memberships.data ?? [];
@@ -93,6 +84,13 @@ export default function DashboardPage() {
         title="Overview"
         description="Your gym at a glance. Data refreshed in real-time."
       />
+
+      {summary.status === "error" && (
+        <ErrorBanner
+          message={`${summary.error} Showing the rest of the dashboard from live page data.`}
+          onRetry={summary.refetch}
+        />
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

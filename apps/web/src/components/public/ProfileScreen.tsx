@@ -183,66 +183,83 @@ export function ProfileScreen() {
   return (
     <MemberShell
       title="Profile"
-      subtitle="Account identity, linked gym access, and the member settings area that now lives in the rebuilt app."
+      subtitle="Your identity, gym access, proof-backed progress, and member settings."
     >
-      <section className="split-card">
-        <article className="glass-panel">
-          <p className="eyebrow">ACCOUNT</p>
-          <h2 className="section-title">{displayLabel}</h2>
-          <dl className="data-list">
-            <div>
-              <dt>Email</dt>
-              <dd>{state.user?.email ?? "—"}</dd>
-            </div>
-            <div>
-              <dt>Username</dt>
-              <dd>{profile?.username ? `@${profile.username}` : "Not set"}</dd>
-            </div>
-            <div>
-              <dt>Role</dt>
-              <dd>
-                {state.access?.platformRole
-                  ? "Platform"
-                  : state.access?.staffGymIds.length
-                  ? "Gym staff"
-                  : "Member"}
-              </dd>
-            </div>
-          </dl>
-        </article>
-
-        <article className="glass-panel">
-          <p className="eyebrow">GYM ACCESS</p>
-          <h2 className="section-title">Linked memberships</h2>
-          <ul className="membership-list">
-            {(profile?.memberships ?? []).map((membership) => (
-              <li key={`${membership.gymId}_${membership.role}`} className="membership-item">
-                <div>
-                  <strong>{membership.gymName}</strong>
-                  <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
-                    {membership.role} · {membership.membershipStatus}
-                  </p>
-                </div>
-                <span className="ghost-chip">
-                  {membership.startedAt ? new Date(membership.startedAt).toLocaleDateString() : "No start date"}
-                </span>
-              </li>
-            ))}
-            {(profile?.memberships.length ?? 0) === 0 && (
-              <li className="membership-item">
-                <div>
-                  <strong>No linked gyms yet</strong>
-                  <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
-                    Request access from a public gym, accept an invite, or get added by a gym admin.
-                  </p>
-                </div>
-                <Link href="/gyms" className="secondary-cta">
-                  Find gyms
-                </Link>
-              </li>
+      <section className="profile-hero-card">
+        <div className="profile-identity-block">
+          <div className="avatar-preview">
+            {profile?.avatarDisplayUrl ? (
+              <img src={profile.avatarDisplayUrl} alt={displayLabel} className="avatar-preview-image" />
+            ) : (
+              <span className="avatar-fallback">{avatarInitial}</span>
             )}
-          </ul>
-        </article>
+          </div>
+          <div>
+            <span className="status-pill">{profile?.username ? `@${profile.username}` : "Member profile"}</span>
+            <h2 className="profile-display-name">{displayLabel}</h2>
+            <p className="section-copy">
+              {state.access?.platformRole
+                ? "Platform access"
+                : state.access?.staffGymIds.length
+                  ? "Gym staff + member"
+                  : "Member"}
+              {state.user?.email ? ` · ${state.user.email}` : ""}
+            </p>
+          </div>
+        </div>
+        <div className="profile-hero-actions">
+          <Link href="/plan" className="primary-cta">
+            Open plan
+          </Link>
+          <Link href="/gyms" className="secondary-cta">
+            Gym access
+          </Link>
+          {showBackofficeLink && (
+            <Link href={backofficePath} className="ghost-chip">
+              {backofficePath === "/admin" ? "Platform" : "Org"}
+            </Link>
+          )}
+        </div>
+      </section>
+
+      <section className="glass-panel">
+        <div className="profile-form-header">
+          <div>
+            <p className="eyebrow">GYM ACCESS</p>
+            <h2 className="section-title">Linked memberships</h2>
+          </div>
+          <Link href="/gyms" className="secondary-cta">
+            Browse gyms
+          </Link>
+        </div>
+        <ul className="membership-list">
+          {(profile?.memberships ?? []).map((membership) => (
+            <li key={`${membership.gymId}_${membership.role}`} className="membership-item">
+              <div>
+                <strong>{membership.gymName}</strong>
+                <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
+                  {membership.role} · {membership.membershipStatus}
+                </p>
+              </div>
+              <span className="ghost-chip">
+                {membership.startedAt ? new Date(membership.startedAt).toLocaleDateString() : "No start date"}
+              </span>
+            </li>
+          ))}
+          {(profile?.memberships.length ?? 0) === 0 && (
+            <li className="membership-item">
+              <div>
+                <strong>No linked gyms yet</strong>
+                <p className="feed-body" style={{ margin: "0.25rem 0 0" }}>
+                  Request access from a public gym, accept an invite, or get added by a gym admin.
+                </p>
+              </div>
+              <Link href="/gyms" className="secondary-cta">
+                Find gyms
+              </Link>
+            </li>
+          )}
+        </ul>
       </section>
 
       <section className="glass-panel">

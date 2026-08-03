@@ -212,18 +212,18 @@ export function FeedScreen() {
 
   return (
     <MemberShell
-      title="Proof Feed"
-      subtitle="Recent workout activity, proof events, and what your gym community is actually logging right now."
+      title="Feed"
+      subtitle="Proof from your training circle: sessions, PRs, comments, and gym activity."
     >
-      <section className="hero-card">
-        <div>
-          <p className="eyebrow">LIVE FEED</p>
-          <h2 className="section-title">Your training record is now wired to live data.</h2>
+      <section className="feed-hero-panel">
+        <div className="feed-hero-copy">
+          <span className="status-pill">Proof stream</span>
+          <h2 className="section-title">Log work. React to proof. Keep the chain alive.</h2>
           <p className="section-copy">
-            Signed in as {displayLabel}. This feed now reads the live workout and proof event tables instead of
-            placeholder content.
+            Signed in as {displayLabel}. Your completed sessions and verified moments appear here with the people and
+            gyms that can see them.
           </p>
-          <div className="stack-actions">
+          <div className="plan-action-bar">
             <Link href="/log" className="primary-cta">
               Log workout
             </Link>
@@ -241,18 +241,18 @@ export function FeedScreen() {
           </div>
         </div>
 
-        <div className="hero-stats">
-          <div className="metric-card">
-            <span className="metric-label">Your events</span>
-            <strong className="metric-value">{stats.ownLogs}</strong>
+        <div className="feed-signal-panel">
+          <div>
+            <span className="metric-label">Your proof</span>
+            <strong>{stats.ownLogs} events</strong>
           </div>
-          <div className="metric-card">
-            <span className="metric-label">PR events</span>
-            <strong className="metric-value">{stats.prCount}</strong>
+          <div>
+            <span className="metric-label">PRs</span>
+            <strong>{stats.prCount} verified</strong>
           </div>
-          <div className="metric-card">
-            <span className="metric-label">Gyms visible</span>
-            <strong className="metric-value">{stats.visibleGyms}</strong>
+          <div>
+            <span className="metric-label">Visibility</span>
+            <strong>{stats.visibleGyms} gyms</strong>
           </div>
         </div>
       </section>
@@ -267,17 +267,26 @@ export function FeedScreen() {
         </section>
       ) : items.length === 0 ? (
         <section className="section-stack">
-          <article className="feed-card">
-            <p className="feed-title">No feed activity yet</p>
+          <article className="proof-empty-state">
+            <span className="status-pill">No proof yet</span>
+            <p className="feed-title">Create the first training signal.</p>
             <p className="feed-body">
-              Once workouts are logged, proof events will appear here. Use the workout logger to create the first one.
+              Once workouts are logged, proof events appear here for your gym, coach, groups, and rank progression.
             </p>
+            <div className="plan-action-bar">
+              <Link href="/log" className="primary-cta">
+                Log first workout
+              </Link>
+              <Link href="/plan" className="secondary-cta">
+                Open plan
+              </Link>
+            </div>
           </article>
         </section>
       ) : (
         <section className="section-stack">
           {items.map((item) => (
-            <article key={item.id} className="feed-card">
+            <article key={item.id} className="proof-post-card">
               <div className="feed-card-header">
                 <div>
                   <p className="feed-meta">
