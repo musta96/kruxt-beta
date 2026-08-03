@@ -191,21 +191,13 @@ export async function cancelGymClassBooking(
   client: SupabaseClient,
   input: { bookingId: string }
 ): Promise<void> {
-  const userId = await requireUserId(client);
-  const { data, error } = await client
-    .from("class_bookings")
-    .update({ status: "cancelled" })
-    .eq("id", input.bookingId)
-    .eq("user_id", userId)
-    .in("status", ["booked", "waitlisted"])
-    .select("id")
-    .maybeSingle();
+  await requireUserId(client);
+  const { error } = await client.rpc("cancel_gym_class_booking", {
+    p_booking_id: input.bookingId
+  });
 
   if (error) {
     throw new Error(error.message || "Unable to cancel this booking.");
-  }
-  if (!data) {
-    throw new Error("This booking is no longer available to cancel.");
   }
 }
 
@@ -225,20 +217,12 @@ export async function leaveGymClassWaitlist(
   client: SupabaseClient,
   input: { waitlistId: string }
 ): Promise<void> {
-  const userId = await requireUserId(client);
-  const { data, error } = await client
-    .from("class_waitlist")
-    .update({ status: "cancelled" })
-    .eq("id", input.waitlistId)
-    .eq("user_id", userId)
-    .eq("status", "pending")
-    .select("id")
-    .maybeSingle();
+  await requireUserId(client);
+  const { error } = await client.rpc("leave_class_waitlist", {
+    p_waitlist_id: input.waitlistId
+  });
 
   if (error) {
     throw new Error(error.message || "Unable to leave this waitlist.");
-  }
-  if (!data) {
-    throw new Error("This waitlist entry is no longer active.");
   }
 }
