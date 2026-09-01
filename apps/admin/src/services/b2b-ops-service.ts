@@ -804,6 +804,36 @@ export class B2BOpsService {
 
   async createGymClass(gymId: string, input: CreateGymClassInput): Promise<GymClass> {
     await this.access.requireGymStaff(gymId);
+    const status = input.status ?? "scheduled";
+    const bookingClosesAt = input.bookingClosesAt ?? input.startsAt;
+    const now = Date.now();
+    const bookingClosesAtMs = new Date(bookingClosesAt).getTime();
+    const bookingOpensAt =
+      input.bookingOpensAt ??
+      (Number.isFinite(bookingClosesAtMs)
+        ? new Date(Math.min(now, bookingClosesAtMs)).toISOString()
+        : "");
+    const startsAtMs = new Date(input.startsAt).getTime();
+    const endsAtMs = new Date(input.endsAt).getTime();
+    const bookingOpensAtMs = new Date(bookingOpensAt).getTime();
+
+    if (
+      ![startsAtMs, endsAtMs, bookingOpensAtMs, bookingClosesAtMs].every(Number.isFinite) ||
+      endsAtMs <= startsAtMs ||
+      bookingOpensAtMs > bookingClosesAtMs ||
+      bookingClosesAtMs > startsAtMs
+    ) {
+      throw new KruxtAdminError(
+        "ADMIN_CLASS_SCHEDULE_INVALID",
+        "Class booking window must open before it closes and close by class start."
+      );
+    }
+    if (status === "scheduled" && bookingClosesAtMs <= now) {
+      throw new KruxtAdminError(
+        "ADMIN_CLASS_BOOKING_WINDOW_CLOSED",
+        "Scheduled classes need a booking close time in the future."
+      );
+    }
 
     const { data, error } = await this.supabase
       .from("gym_classes")
@@ -813,11 +843,11 @@ export class B2BOpsService {
         title: input.title,
         description: input.description ?? null,
         capacity: input.capacity,
-        status: input.status ?? "scheduled",
+        status,
         starts_at: input.startsAt,
         ends_at: input.endsAt,
-        booking_opens_at: input.bookingOpensAt ?? null,
-        booking_closes_at: input.bookingClosesAt ?? null
+        booking_opens_at: bookingOpensAt,
+        booking_closes_at: bookingClosesAt
       })
       .select("*")
       .single();
@@ -830,6 +860,23 @@ export class B2BOpsService {
   async updateGymClass(gymId: string, classId: string, input: UpdateGymClassInput): Promise<GymClass> {
     await this.access.requireGymStaff(gymId);
     await this.assertClassBelongsToGym(classId, gymId);
+
+    if (input.status === "cancelled") {
+      await this.setGymClassStatus(gymId, classId, "cancelled");
+      const { status: _cancelledStatus, ...remainingInput } = input;
+      if (Object.values(remainingInput).every((value) => value === undefined)) {
+        const { data, error } = await this.supabase
+          .from("gym_classes")
+          .select("*")
+          .eq("id", classId)
+          .eq("gym_id", gymId)
+          .single();
+
+        throwIfAdminError(error, "ADMIN_CLASS_CANCELLED_READ_FAILED", "Unable to reload cancelled class.");
+        return mapClass(data as GymClassRow);
+      }
+      return this.updateGymClass(gymId, classId, remainingInput);
+    }
 
     const payload = {
       coach_user_id: input.coachUserId,
@@ -859,6 +906,29 @@ export class B2BOpsService {
   async setGymClassStatus(gymId: string, classId: string, status: GymClass["status"]): Promise<GymClass> {
     await this.access.requireGymStaff(gymId);
     await this.assertClassBelongsToGym(classId, gymId);
+
+    if (status === "cancelled") {
+      const { error: cancelError } = await this.supabase.rpc("cancel_gym_class", {
+        p_class_id: classId
+      });
+
+      throwIfAdminError(cancelError, "ADMIN_CLASS_CANCEL_FAILED", "Unable to cancel class.");
+
+      const { data: cancelledClass, error: cancelledClassError } = await this.supabase
+        .from("gym_classes")
+        .select("*")
+        .eq("id", classId)
+        .eq("gym_id", gymId)
+        .single();
+
+      throwIfAdminError(
+        cancelledClassError,
+        "ADMIN_CLASS_CANCELLED_READ_FAILED",
+        "Class was cancelled but could not be reloaded."
+      );
+
+      return mapClass(cancelledClass as GymClassRow);
+    }
 
     const { data, error } = await this.supabase
       .from("gym_classes")

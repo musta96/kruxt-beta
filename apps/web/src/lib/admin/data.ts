@@ -723,18 +723,44 @@ export async function createGymClasses(
   input: CreateGymClassInput[]
 ): Promise<void> {
   if (input.length === 0) return;
-  const payload = input.map((item) => ({
-    gym_id: item.gymId,
-    coach_user_id: item.coachUserId?.trim() || null,
-    title: item.title.trim(),
-    description: serializeClassDescription({ location: item.location, notes: item.notes }),
-    capacity: Math.max(1, Math.floor(item.capacity)),
-    status: "scheduled" as const,
-    starts_at: item.startsAt,
-    ends_at: item.endsAt,
-    booking_opens_at: item.bookingOpensAt || null,
-    booking_closes_at: item.bookingClosesAt || null
-  }));
+  const createdAt = new Date().toISOString();
+  const createdAtMs = new Date(createdAt).getTime();
+  const payload = input.map((item) => {
+    const bookingClosesAt = item.bookingClosesAt || item.startsAt;
+    const bookingClosesAtMs = new Date(bookingClosesAt).getTime();
+    const bookingOpensAt =
+      item.bookingOpensAt ||
+      (Number.isFinite(bookingClosesAtMs)
+        ? new Date(Math.min(createdAtMs, bookingClosesAtMs)).toISOString()
+        : "");
+    const startsAtMs = new Date(item.startsAt).getTime();
+    const endsAtMs = new Date(item.endsAt).getTime();
+    const bookingOpensAtMs = new Date(bookingOpensAt).getTime();
+    if (
+      ![startsAtMs, endsAtMs, bookingOpensAtMs, bookingClosesAtMs].every(Number.isFinite) ||
+      endsAtMs <= startsAtMs ||
+      bookingOpensAtMs > bookingClosesAtMs ||
+      bookingClosesAtMs > startsAtMs
+    ) {
+      throw new Error("Class booking window must open before it closes and close by class start.");
+    }
+    if (bookingClosesAtMs <= createdAtMs) {
+      throw new Error("Class booking close time must be in the future.");
+    }
+
+    return {
+      gym_id: item.gymId,
+      coach_user_id: item.coachUserId?.trim() || null,
+      title: item.title.trim(),
+      description: serializeClassDescription({ location: item.location, notes: item.notes }),
+      capacity: Math.max(1, Math.floor(item.capacity)),
+      status: "scheduled" as const,
+      starts_at: item.startsAt,
+      ends_at: item.endsAt,
+      booking_opens_at: bookingOpensAt,
+      booking_closes_at: bookingClosesAt
+    };
+  });
 
   const { error } = await client.from("gym_classes").insert(payload);
   if (error) {
@@ -787,6 +813,14 @@ export async function setGymClassStatus(
   classId: string,
   status: ClassStatus
 ): Promise<void> {
+  if (status === "cancelled") {
+    const { error } = await client.rpc("cancel_gym_class", { p_class_id: classId });
+    if (error) {
+      throw new Error(error.message || "Unable to cancel class.");
+    }
+    return;
+  }
+
   const { error } = await client.from("gym_classes").update({ status }).eq("id", classId);
   if (error) {
     throw new Error(error.message || "Unable to update class status.");

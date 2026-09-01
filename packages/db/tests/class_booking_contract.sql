@@ -16,6 +16,8 @@ declare
   v_promotion_class uuid := '7a000000-0000-0000-0000-000000000022';
   v_ended_class uuid := '7a000000-0000-0000-0000-000000000023';
   v_cancelled_class uuid := '7a000000-0000-0000-0000-000000000024';
+  v_default_window_class uuid := '7a000000-0000-0000-0000-000000000025';
+  v_lifecycle_class uuid := '7a000000-0000-0000-0000-000000000026';
   v_stale_waitlist uuid := '7a000000-0000-0000-0000-000000000030';
   v_eligible_waitlist uuid := '7a000000-0000-0000-0000-000000000031';
   v_booking_one uuid;
@@ -23,6 +25,13 @@ declare
   v_promoted_booking uuid;
   v_waitlist_one uuid;
   v_waitlist_two uuid;
+  v_late_booking uuid;
+  v_late_waitlist uuid;
+  v_ended_booking uuid;
+  v_ended_waitlist uuid;
+  v_lifecycle_booking_one uuid;
+  v_lifecycle_booking_two uuid;
+  v_lifecycle_waitlist uuid;
   v_position_one integer;
   v_position_two integer;
   v_booking_before public.class_bookings%rowtype;
@@ -163,7 +172,70 @@ begin
       now() + interval '1 hour'
     );
 
+  insert into public.gym_classes (
+    id,
+    gym_id,
+    coach_user_id,
+    title,
+    capacity,
+    status,
+    starts_at,
+    ends_at
+  )
+  values
+    (
+      v_default_window_class,
+      v_gym,
+      v_owner,
+      'Default Booking Window Test',
+      2,
+      'scheduled',
+      now() + interval '4 hours',
+      now() + interval '5 hours'
+    ),
+    (
+      v_lifecycle_class,
+      v_gym,
+      v_owner,
+      'Class Lifecycle Test',
+      2,
+      'scheduled',
+      now() + interval '4 hours',
+      now() + interval '5 hours'
+    );
+
+  if not exists (
+    select 1
+    from public.gym_classes gc
+    where gc.id = v_default_window_class
+      and gc.booking_opens_at is not null
+      and gc.booking_closes_at is not null
+      and gc.booking_opens_at <= gc.booking_closes_at
+      and gc.booking_closes_at <= gc.starts_at
+  ) then
+    raise exception 'admin schedule-to-bookability invariant failed: booking window was not defaulted';
+  end if;
+
   perform set_config('request.jwt.claim.role', 'authenticated', true);
+  perform set_config('request.jwt.claim.sub', v_member_three::text, true);
+  if public.book_gym_class(v_default_window_class) is null then
+    raise exception 'admin schedule-to-bookability invariant failed: defaulted class was not bookable';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', v_member_two::text, true);
+  v_rejected := false;
+  begin
+    perform public.join_waitlist(v_default_window_class);
+  exception when others then
+    if position('available capacity' in sqlerrm) = 0 then
+      raise;
+    end if;
+    v_rejected := true;
+  end;
+  if not v_rejected then
+    raise exception 'waitlist fairness invariant failed: member queued while seats were available';
+  end if;
+
   perform set_config('request.jwt.claim.sub', v_member_one::text, true);
   v_booking_one := public.book_gym_class(v_open_class);
 
@@ -282,6 +354,60 @@ begin
     raise exception 'waitlist-window invariant failed: closed class accepted waitlist';
   end if;
 
+  insert into public.class_bookings(class_id, user_id, status, source_channel)
+  values (v_closed_class, v_member_three, 'booked', 'late_cancel_fixture')
+  returning id into v_late_booking;
+
+  insert into public.class_waitlist(class_id, user_id, position, status)
+  values (v_closed_class, v_member_one, 1, 'pending')
+  returning id into v_late_waitlist;
+
+  perform set_config('request.jwt.claim.sub', v_member_three::text, true);
+  if public.cancel_gym_class_booking(v_late_booking) <> v_late_booking then
+    raise exception 'late cancellation invariant failed: booking close blocked cancellation';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', v_member_one::text, true);
+  if public.leave_class_waitlist(v_late_waitlist) <> v_late_waitlist then
+    raise exception 'late cancellation invariant failed: booking close blocked waitlist exit';
+  end if;
+
+  insert into public.class_bookings(class_id, user_id, status, source_channel)
+  values (v_ended_class, v_member_two, 'booked', 'ended_cancel_fixture')
+  returning id into v_ended_booking;
+
+  insert into public.class_waitlist(class_id, user_id, position, status)
+  values (v_ended_class, v_member_one, 1, 'pending')
+  returning id into v_ended_waitlist;
+
+  perform set_config('request.jwt.claim.sub', v_member_two::text, true);
+  v_rejected := false;
+  begin
+    perform public.cancel_gym_class_booking(v_ended_booking);
+  exception when others then
+    if position('Class has ended' in sqlerrm) = 0 then
+      raise;
+    end if;
+    v_rejected := true;
+  end;
+  if not v_rejected then
+    raise exception 'late cancellation invariant failed: ended class booking was cancelled';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', v_member_one::text, true);
+  v_rejected := false;
+  begin
+    perform public.leave_class_waitlist(v_ended_waitlist);
+  exception when others then
+    if position('Class has ended' in sqlerrm) = 0 then
+      raise;
+    end if;
+    v_rejected := true;
+  end;
+  if not v_rejected then
+    raise exception 'late cancellation invariant failed: ended class waitlist was left';
+  end if;
+
   perform set_config('request.jwt.claim.sub', v_member_two::text, true);
   select * into v_booking_before
   from public.class_bookings
@@ -311,6 +437,19 @@ begin
       v_booking_before.source_channel
     ) then
     raise exception 'cancel_gym_class_booking immutable-column invariant failed';
+  end if;
+
+  v_rejected := false;
+  begin
+    perform public.book_gym_class(v_open_class);
+  exception when others then
+    if position('pending waitlist' in sqlerrm) = 0 then
+      raise;
+    end if;
+    v_rejected := true;
+  end;
+  if not v_rejected then
+    raise exception 'booking fairness invariant failed: fresh booking bypassed pending queue';
   end if;
 
   perform set_config('request.jwt.claim.sub', v_member_one::text, true);
@@ -371,7 +510,7 @@ begin
     select 1
     from public.class_waitlist cw
     where cw.id = v_stale_waitlist
-      and cw.status = 'pending'
+      and cw.status = 'expired'
   ) or not exists (
     select 1
     from public.class_waitlist cw
@@ -407,6 +546,99 @@ begin
     raise exception 'promotion status invariant failed: cancelled class accepted promotion';
   end if;
 
+  insert into public.class_bookings(class_id, user_id, status, source_channel)
+  values (v_lifecycle_class, v_member_one, 'booked', 'lifecycle_fixture')
+  returning id into v_lifecycle_booking_one;
+
+  insert into public.class_bookings(class_id, user_id, status, source_channel)
+  values (v_lifecycle_class, v_member_two, 'booked', 'lifecycle_fixture')
+  returning id into v_lifecycle_booking_two;
+
+  insert into public.class_waitlist(class_id, user_id, position, status)
+  values (v_lifecycle_class, v_member_three, 1, 'pending')
+  returning id into v_lifecycle_waitlist;
+
+  v_rejected := false;
+  begin
+    update public.gym_classes
+    set capacity = 1
+    where id = v_lifecycle_class;
+  exception when others then
+    if position('cannot be lower than active bookings' in sqlerrm) = 0 then
+      raise;
+    end if;
+    v_rejected := true;
+  end;
+  if not v_rejected then
+    raise exception 'capacity reduction invariant failed: capacity dropped below active bookings';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', v_owner::text, true);
+  if public.cancel_gym_class(v_lifecycle_class) <> v_lifecycle_class then
+    raise exception 'class cancellation invariant failed: RPC did not return class id';
+  end if;
+
+  if not exists (
+    select 1
+    from public.gym_classes gc
+    where gc.id = v_lifecycle_class
+      and gc.status = 'cancelled'
+  ) or (
+    select count(*)
+    from public.class_bookings cb
+    where cb.id in (v_lifecycle_booking_one, v_lifecycle_booking_two)
+      and cb.status = 'cancelled'
+  ) <> 2 or not exists (
+    select 1
+    from public.class_waitlist cw
+    where cw.id = v_lifecycle_waitlist
+      and cw.status = 'cancelled'
+  ) then
+    raise exception 'class cancellation invariant failed: child state was not cascaded';
+  end if;
+
+  if not exists (
+    select 1
+    from public.event_outbox eo
+    where eo.event_type = 'class.cancelled'
+      and eo.aggregate_id = v_lifecycle_class
+  ) or not exists (
+    select 1
+    from public.audit_logs al
+    where al.action = 'class.cancelled'
+      and al.target_id = v_lifecycle_class
+  ) then
+    raise exception 'class cancellation invariant failed: lifecycle event or audit was not emitted';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', v_member_one::text, true);
+  v_rejected := false;
+  begin
+    perform public.cancel_gym_class_booking(v_lifecycle_booking_one);
+  exception when others then
+    if position('Class is not scheduled' in sqlerrm) = 0 then
+      raise;
+    end if;
+    v_rejected := true;
+  end;
+  if not v_rejected then
+    raise exception 'class cancellation invariant failed: member cancellation accepted cancelled class';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', v_member_three::text, true);
+  v_rejected := false;
+  begin
+    perform public.leave_class_waitlist(v_lifecycle_waitlist);
+  exception when others then
+    if position('Class is not scheduled' in sqlerrm) = 0 then
+      raise;
+    end if;
+    v_rejected := true;
+  end;
+  if not v_rejected then
+    raise exception 'class cancellation invariant failed: waitlist exit accepted cancelled class';
+  end if;
+
   if not has_function_privilege('authenticated', 'public.book_gym_class(uuid)', 'execute')
     or has_function_privilege('anon', 'public.book_gym_class(uuid)', 'execute')
     or has_function_privilege('service_role', 'public.book_gym_class(uuid)', 'execute') then
@@ -437,8 +669,20 @@ begin
     raise exception 'leave_class_waitlist privilege invariant failed';
   end if;
 
+  if not has_function_privilege('authenticated', 'public.cancel_gym_class(uuid)', 'execute')
+    or has_function_privilege('anon', 'public.cancel_gym_class(uuid)', 'execute')
+    or has_function_privilege('service_role', 'public.cancel_gym_class(uuid)', 'execute') then
+    raise exception 'cancel_gym_class privilege invariant failed';
+  end if;
+
   if has_function_privilege('authenticated', 'public.enforce_class_booking_capacity()', 'execute') then
     raise exception 'capacity trigger privilege invariant failed';
+  end if;
+
+  if has_function_privilege('authenticated', 'public.enforce_gym_class_lifecycle()', 'execute')
+    or has_function_privilege('authenticated', 'public.cascade_cancelled_class_state()', 'execute')
+    or has_function_privilege('authenticated', 'public.expire_ineligible_class_waitlist(uuid,uuid)', 'execute') then
+    raise exception 'class lifecycle trigger privilege invariant failed';
   end if;
 
   if not exists (
@@ -449,6 +693,20 @@ begin
       and indexdef ilike '%unique%where (status = ''pending''%'
   ) then
     raise exception 'pending waitlist unique index invariant failed';
+  end if;
+
+  if (
+    select count(*)
+    from pg_trigger
+    where not tgisinternal
+      and tgname in ('trg_gym_classes_enforce_lifecycle', 'trg_gym_classes_cascade_cancellation')
+  ) <> 2 or not exists (
+    select 1
+    from pg_constraint
+    where conname = 'gym_classes_scheduled_booking_window_check'
+      and convalidated
+  ) then
+    raise exception 'class lifecycle schema invariant failed';
   end if;
 
   if exists (

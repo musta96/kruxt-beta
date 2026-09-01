@@ -294,24 +294,32 @@ export default function ClassesPage() {
     const bookingOpensAt = parseLocalDateTime(form.bookingOpensAt);
     const bookingClosesAt = parseLocalDateTime(form.bookingClosesAt);
 
-    if (!form.title.trim() || !startsAt || !endsAt || !form.capacity || !form.coachUserId) {
-      setCreateError("Title, coach, start time, end time, and capacity are required.");
+    if (
+      !form.title.trim() ||
+      !startsAt ||
+      !endsAt ||
+      !form.capacity ||
+      !form.coachUserId ||
+      !bookingOpensAt ||
+      !bookingClosesAt
+    ) {
+      setCreateError("Title, coach, schedule, capacity, and booking window are required.");
       return;
     }
     if (endsAt <= startsAt) {
       setCreateError("End time must be after start time.");
       return;
     }
-    if ((form.bookingOpensAt && !bookingOpensAt) || (form.bookingClosesAt && !bookingClosesAt)) {
-      setCreateError("Booking window dates must be valid.");
-      return;
-    }
-    if (bookingOpensAt && bookingClosesAt && bookingClosesAt < bookingOpensAt) {
+    if (bookingClosesAt < bookingOpensAt) {
       setCreateError("Booking close time must be after booking open time.");
       return;
     }
-    if (bookingClosesAt && bookingClosesAt > startsAt) {
+    if (bookingClosesAt > startsAt) {
       setCreateError("Booking should close no later than the class start time.");
+      return;
+    }
+    if (bookingClosesAt <= new Date()) {
+      setCreateError("Booking close time must be in the future.");
       return;
     }
 
@@ -331,8 +339,8 @@ export default function ClassesPage() {
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
         coachUserId: form.coachUserId.trim() || undefined,
-        bookingOpensAt: bookingOpensAt?.toISOString(),
-        bookingClosesAt: bookingClosesAt?.toISOString()
+        bookingOpensAt: bookingOpensAt.toISOString(),
+        bookingClosesAt: bookingClosesAt.toISOString()
       });
       setShowCreate(false);
       resetCreateForm();

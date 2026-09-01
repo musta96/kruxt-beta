@@ -8851,6 +8851,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      cancel_gym_class: { Args: { p_class_id: string }; Returns: string }
       cancel_gym_class_booking: {
         Args: { p_booking_id: string }
         Returns: string
