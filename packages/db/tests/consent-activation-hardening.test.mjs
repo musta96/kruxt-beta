@@ -29,6 +29,10 @@ test("workout creation is guarded at the table boundary", () => {
 
 test("consent and activation writes are restricted to hardened contracts", () => {
   assert.match(migration, /revoke insert on table public\.consents from authenticated/i);
+  assert.match(migration, /create or replace function public\.accept_required_consents/i);
+  assert.match(migration, /grant execute on function public\.accept_required_consents\(uuid\[\], text, text\) to authenticated/i);
+  assert.match(consentService, /client\.rpc\("accept_required_consents"/);
+  assert.doesNotMatch(consentService, /for \(const policy of currentPolicies\)/);
   assert.match(migration, /create trigger trg_profiles_protect_security_fields\s+before insert or update/i);
   assert.match(migration, /Profile activation fields are system-managed/i);
   assert.match(migration, /create or replace function public\.ensure_self_profile/i);

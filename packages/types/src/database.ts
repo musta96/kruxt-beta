@@ -8648,6 +8648,14 @@ export type Database = {
       }
     }
     Functions: {
+      accept_required_consents: {
+        Args: {
+          p_locale?: string
+          p_policy_version_ids: string[]
+          p_source?: string
+        }
+        Returns: string[]
+      }
       admin_get_gym_ops_summary: {
         Args: { p_gym_id: string }
         Returns: {

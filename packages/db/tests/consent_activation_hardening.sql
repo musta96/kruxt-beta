@@ -152,6 +152,27 @@ begin
     when insufficient_privilege then null;
   end;
 
+  begin
+    perform public.accept_required_consents(
+      array[v_terms, v_privacy, v_terms],
+      'web',
+      'en-GB'
+    );
+    raise exception 'atomic consent acceptance unexpectedly accepted mismatched policy IDs';
+  exception
+    when invalid_parameter_value then null;
+  end;
+
+  if exists (select 1 from public.consents where user_id = v_user) then
+    raise exception 'failed atomic consent acceptance left partial consent records';
+  end if;
+
+  perform public.accept_required_consents(
+    array[v_terms, v_privacy, v_health],
+    'web',
+    'en-GB'
+  );
+
   perform public.record_user_consent(
     p_consent_type => 'terms',
     p_granted => true,
@@ -167,8 +188,6 @@ begin
       'client_context', 'behavioral-test'
     )
   );
-  perform public.record_user_consent('privacy', true, v_privacy, 'web', 'en-GB', v_user);
-  perform public.record_user_consent('health_data_processing', true, v_health, 'web', 'en-GB', v_user);
 
   if not public.user_has_required_consents(v_user) then
     raise exception 'valid current required consents were not recognized';

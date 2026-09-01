@@ -543,6 +543,91 @@ begin
 end;
 $$;
 
+create or replace function public.accept_required_consents(
+  p_policy_version_ids uuid[],
+  p_source text default 'web',
+  p_locale text default null
+)
+returns uuid[]
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor uuid := auth.uid();
+  v_required_policy_ids uuid[];
+  v_required_consent_types public.consent_type[];
+  v_consent_ids uuid[] := array[]::uuid[];
+  v_consent_id uuid;
+  v_index integer;
+begin
+  if v_actor is null or public.is_service_role() then
+    raise exception using errcode = '42501', message = 'Authenticated user context is required';
+  end if;
+
+  select
+    array_agg(m.required_policy_version_id order by m.consent_type::text),
+    array_agg(m.consent_type order by m.consent_type::text)
+  into v_required_policy_ids, v_required_consent_types
+  from public.list_missing_required_consents(v_actor) m;
+
+  v_required_policy_ids := coalesce(v_required_policy_ids, array[]::uuid[]);
+  v_required_consent_types := coalesce(v_required_consent_types, array[]::public.consent_type[]);
+  p_policy_version_ids := coalesce(p_policy_version_ids, array[]::uuid[]);
+
+  if cardinality(v_required_policy_ids) = 0 then
+    if cardinality(p_policy_version_ids) <> 0 then
+      raise exception using errcode = '22023', message = 'No required consent policies are awaiting acceptance';
+    end if;
+    return v_consent_ids;
+  end if;
+
+  if array_position(v_required_policy_ids, null) is not null then
+    raise exception using errcode = '55000', message = 'A required consent policy is not ready for acceptance';
+  end if;
+
+  if array_position(p_policy_version_ids, null) is not null
+    or cardinality(p_policy_version_ids) <> (
+      select count(distinct policy_id)
+      from unnest(p_policy_version_ids) submitted(policy_id)
+    )
+  then
+    raise exception using errcode = '22023', message = 'Submitted policy version IDs must be non-null and unique';
+  end if;
+
+  if cardinality(p_policy_version_ids) <> cardinality(v_required_policy_ids)
+    or not (p_policy_version_ids @> v_required_policy_ids)
+    or not (v_required_policy_ids @> p_policy_version_ids)
+  then
+    raise exception using
+      errcode = '22023',
+      message = 'Required policies changed while they were being reviewed';
+  end if;
+
+  for v_index in 1..cardinality(v_required_policy_ids)
+  loop
+    v_consent_id := public.record_user_consent(
+      p_consent_type => v_required_consent_types[v_index],
+      p_granted => true,
+      p_policy_version_id => v_required_policy_ids[v_index],
+      p_source => p_source,
+      p_locale => p_locale,
+      p_user_id => v_actor
+    );
+    v_consent_ids := array_append(v_consent_ids, v_consent_id);
+  end loop;
+
+  if exists (select 1 from public.list_missing_required_consents(v_actor)) then
+    raise exception using errcode = '55000', message = 'Required consent verification did not complete';
+  end if;
+
+  return v_consent_ids;
+end;
+$$;
+
+revoke all on function public.accept_required_consents(uuid[], text, text) from public;
+grant execute on function public.accept_required_consents(uuid[], text, text) to authenticated;
+
 create or replace function public.protect_profile_security_fields()
 returns trigger
 language plpgsql

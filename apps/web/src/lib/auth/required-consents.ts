@@ -167,17 +167,13 @@ export async function acceptRequiredConsentPolicies(
   }
 
   const locale = typeof navigator === "undefined" ? null : navigator.language;
-  for (const policy of currentPolicies) {
-    const { error } = await client.rpc("record_user_consent", {
-      p_consent_type: policy.consentType,
-      p_granted: true,
-      p_policy_version_id: policy.id,
-      p_source: "web",
-      p_locale: locale
-    });
+  const { error } = await client.rpc("accept_required_consents", {
+    p_policy_version_ids: currentPolicies.map((policy) => policy.id),
+    p_source: "web",
+    p_locale: locale
+  });
 
-    if (error) throw new Error(error.message || `Unable to record acceptance for ${policy.label}.`);
-  }
+  if (error) throw new Error(error.message || "Unable to record the required policy acceptances.");
 
   const remainingPolicies = await loadRequiredConsentPolicies(client, userId);
   if (remainingPolicies.length > 0) {
