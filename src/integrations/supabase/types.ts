@@ -5643,6 +5643,7 @@ export type Database = {
           last_workout_at: string | null
           level: number
           locale: string | null
+          mobile_onboarding_completed_at: string | null
           preferred_units: string
           rank_tier: Database["public"]["Enums"]["rank_tier"]
           updated_at: string
@@ -5661,6 +5662,7 @@ export type Database = {
           last_workout_at?: string | null
           level?: number
           locale?: string | null
+          mobile_onboarding_completed_at?: string | null
           preferred_units?: string
           rank_tier?: Database["public"]["Enums"]["rank_tier"]
           updated_at?: string
@@ -5679,6 +5681,7 @@ export type Database = {
           last_workout_at?: string | null
           level?: number
           locale?: string | null
+          mobile_onboarding_completed_at?: string | null
           preferred_units?: string
           rank_tier?: Database["public"]["Enums"]["rank_tier"]
           updated_at?: string
@@ -7239,6 +7242,22 @@ export type Database = {
         }
         Returns: string
       }
+      capture_mobile_onboarding_consents: {
+        Args: {
+          p_accept_health_data: boolean
+          p_accept_privacy: boolean
+          p_accept_terms: boolean
+          p_health_data_policy_version_id: string
+          p_locale?: string
+          p_marketing_email_opt_in?: boolean
+          p_privacy_policy_version_id: string
+          p_push_notifications_opt_in?: boolean
+          p_source?: string
+          p_terms_policy_version_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       apply_user_anonymization: {
         Args: { p_privacy_request_id?: string; p_user_id: string }
         Returns: Json
@@ -7438,6 +7457,10 @@ export type Database = {
         Args: { p_job_id: string; p_response_payload?: Json }
         Returns: string
       }
+      complete_mobile_onboarding: {
+        Args: { p_user_id?: string }
+        Returns: Json
+      }
       complete_privacy_delete_job: {
         Args: { p_anonymization_summary?: Json; p_job_id: string }
         Returns: string
@@ -7525,6 +7548,10 @@ export type Database = {
           p_max_retries?: number
           p_retry_delay_seconds?: number
         }
+        Returns: Json
+      }
+      get_mobile_onboarding_state: {
+        Args: { p_user_id?: string }
         Returns: Json
       }
       get_platform_admin_overview: { Args: never; Returns: Json }

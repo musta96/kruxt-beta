@@ -10,10 +10,7 @@ import type {
 import { translateLegalText } from "@kruxt/types";
 
 import { KruxtAppError, throwIfError } from "./errors";
-import {
-  isExplicitOptIn,
-  reviewedBaselinePoliciesAreCurrent
-} from "./onboarding-semantics";
+import { isExplicitOptIn } from "./onboarding-semantics";
 
 type PolicyRow = {
   id: string;
@@ -87,7 +84,7 @@ function mapConsentGap(row: RequiredConsentGapRow): RequiredConsentGap {
   };
 }
 
-type BaselinePolicyIds = {
+export type BaselinePolicyIds = {
   termsPolicyId: string;
   privacyPolicyId: string;
   healthDataPolicyId: string;
@@ -99,10 +96,10 @@ export interface BaselinePolicies {
   healthData: PolicyVersion;
 }
 
-export interface BaselineConsentInput extends Partial<BaselinePolicyIds> {
-  acceptTerms?: boolean;
-  acceptPrivacy?: boolean;
-  acceptHealthData?: boolean;
+export interface BaselineConsentInput extends BaselinePolicyIds {
+  acceptTerms: boolean;
+  acceptPrivacy: boolean;
+  acceptHealthData: boolean;
   marketingEmailOptIn?: boolean;
   pushNotificationsOptIn?: boolean;
   locale?: string;
@@ -388,42 +385,6 @@ export class PolicyService {
     return { terms, privacy, healthData } as BaselinePolicies;
   }
 
-  private policyIdsFromBaseline(policies: BaselinePolicies): BaselinePolicyIds {
-    return {
-      termsPolicyId: policies.terms.id,
-      privacyPolicyId: policies.privacy.id,
-      healthDataPolicyId: policies.healthData.id
-    };
-  }
-
-  private async assertBaselinePolicyIdsCurrent(policyIds: BaselinePolicyIds): Promise<void> {
-    const current = this.policyIdsFromBaseline(await this.getCurrentBaselinePolicies());
-    if (!reviewedBaselinePoliciesAreCurrent(policyIds, current)) {
-      throw new KruxtAppError(
-        "POLICY_BASELINE_CHANGED",
-        "A required policy changed while you were reviewing it. Review the current documents before continuing."
-      );
-    }
-  }
-
-  private async resolveBaselinePolicyIds(input: BaselineConsentInput): Promise<BaselinePolicyIds> {
-    const current = this.policyIdsFromBaseline(await this.getCurrentBaselinePolicies());
-    const reviewed = {
-      termsPolicyId: input.termsPolicyId ?? current.termsPolicyId,
-      privacyPolicyId: input.privacyPolicyId ?? current.privacyPolicyId,
-      healthDataPolicyId: input.healthDataPolicyId ?? current.healthDataPolicyId
-    };
-
-    if (!reviewedBaselinePoliciesAreCurrent(reviewed, current)) {
-      throw new KruxtAppError(
-        "POLICY_BASELINE_CHANGED",
-        "A required policy changed while you were reviewing it. Review the current documents before continuing."
-      );
-    }
-
-    return reviewed;
-  }
-
   async captureBaselineConsents(userId: string, input: BaselineConsentInput): Promise<ConsentRecord[]> {
     const acceptTerms = isExplicitOptIn(input.acceptTerms);
     const acceptPrivacy = isExplicitOptIn(input.acceptPrivacy);
@@ -436,54 +397,60 @@ export class PolicyService {
       );
     }
 
-    const policyIds = await this.resolveBaselinePolicyIds(input);
-    const source = input.source ?? "mobile";
+    const { data, error } = await this.supabase.rpc("capture_mobile_onboarding_consents", {
+      p_terms_policy_version_id: input.termsPolicyId,
+      p_privacy_policy_version_id: input.privacyPolicyId,
+      p_health_data_policy_version_id: input.healthDataPolicyId,
+      p_accept_terms: acceptTerms,
+      p_accept_privacy: acceptPrivacy,
+      p_accept_health_data: acceptHealthData,
+      p_marketing_email_opt_in: isExplicitOptIn(input.marketingEmailOptIn),
+      p_push_notifications_opt_in: isExplicitOptIn(input.pushNotificationsOptIn),
+      p_locale: input.locale ?? null,
+      p_source: input.source ?? "mobile",
+      p_user_id: userId
+    });
 
-    const writes: UpsertConsentInput[] = [
-      {
-        consentType: "terms",
-        granted: true,
-        policyVersionId: policyIds.termsPolicyId,
-        locale: input.locale,
-        source
-      },
-      {
-        consentType: "privacy",
-        granted: true,
-        policyVersionId: policyIds.privacyPolicyId,
-        locale: input.locale,
-        source
-      },
-      {
-        consentType: "health_data_processing",
-        granted: true,
-        policyVersionId: policyIds.healthDataPolicyId,
-        locale: input.locale,
-        source
-      },
-      {
-        consentType: "marketing_email",
-        granted: isExplicitOptIn(input.marketingEmailOptIn),
-        policyVersionId: policyIds.privacyPolicyId,
-        locale: input.locale,
-        source
-      },
-      {
-        consentType: "push_notifications",
-        granted: isExplicitOptIn(input.pushNotificationsOptIn),
-        policyVersionId: policyIds.privacyPolicyId,
-        locale: input.locale,
-        source
-      }
-    ];
-
-    const records: ConsentRecord[] = [];
-    for (const write of writes) {
-      records.push(await this.upsertConsent(userId, write));
+    if (error) {
+      const changed = error.message.toLowerCase().includes("no longer current");
+      throw new KruxtAppError(
+        changed ? "POLICY_BASELINE_CHANGED" : "BASELINE_CONSENT_CAPTURE_FAILED",
+        changed
+          ? "A required policy changed while you were reviewing it. Review the current documents before continuing."
+          : "Unable to save onboarding consent decisions.",
+        error
+      );
     }
 
-    await this.assertBaselinePolicyIdsCurrent(policyIds);
+    const records = ((data as ConsentRow[] | null) ?? []).map(mapConsent);
+    const byType = new Map(records.map((record) => [record.consentType, record]));
+    const validResponse =
+      records.length === 5 &&
+      new Set(records.map((record) => record.id)).size === 5 &&
+      records.every((record) => record.userId === userId) &&
+      byType.get("terms")?.granted === true &&
+      byType.get("terms")?.policyVersionId === input.termsPolicyId &&
+      byType.get("privacy")?.granted === true &&
+      byType.get("privacy")?.policyVersionId === input.privacyPolicyId &&
+      byType.get("health_data_processing")?.granted === true &&
+      byType.get("health_data_processing")?.policyVersionId === input.healthDataPolicyId &&
+      byType.get("marketing_email")?.granted === isExplicitOptIn(input.marketingEmailOptIn) &&
+      byType.get("push_notifications")?.granted === isExplicitOptIn(input.pushNotificationsOptIn);
 
-    return records;
+    if (!validResponse) {
+      throw new KruxtAppError(
+        "ONBOARDING_CONSENT_CAPTURE_INCOMPLETE",
+        "The server did not confirm every onboarding consent decision."
+      );
+    }
+
+    const order: ConsentRecord["consentType"][] = [
+      "terms",
+      "privacy",
+      "health_data_processing",
+      "marketing_email",
+      "push_notifications"
+    ];
+    return records.sort((left, right) => order.indexOf(left.consentType) - order.indexOf(right.consentType));
   }
 }

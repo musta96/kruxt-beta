@@ -40,7 +40,7 @@ export interface Phase2OnboardingInput {
   mode: "signup" | "signin";
   credentials: CredentialsInput;
   profile?: Partial<UpsertProfileInput>;
-  baselineConsents: BaselineConsentInput;
+  baselineConsents?: BaselineConsentInput;
   gymPreference?: OnboardingGymPreference;
 }
 
@@ -187,6 +187,13 @@ export class Phase2OnboardingService {
         consents,
         guildHall
       };
+    }
+
+    if (!input.baselineConsents) {
+      throw new KruxtAppError(
+        "POLICY_BASELINE_MISSING",
+        "Reviewed baseline policies are required to create an account."
+      );
     }
 
     const avatarUrl = await this.uploadAvatarIfNeeded(userId, input.profile?.avatarUrl);
