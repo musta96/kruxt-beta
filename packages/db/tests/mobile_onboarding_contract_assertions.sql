@@ -218,6 +218,35 @@ reset role;
 drop trigger trg_test_reject_push_consent on public.consents;
 drop function public.test_reject_push_consent();
 
+do $$
+begin
+  begin
+    insert into public.policy_version_tracking(
+      id, policy_type, version, label, document_url, checksum, effective_at, is_active
+    ) values (
+      '44444444-4444-4444-8444-444444444444', 'privacy', '2.0-unbound',
+      'Unbound Privacy', 'https://example.test/privacy-unbound', null, now(), true
+    );
+  exception when invalid_parameter_value then
+    return;
+  end;
+
+  begin
+    perform public.capture_mobile_onboarding_consents(
+      p_terms_policy_version_id => '11111111-1111-4111-8111-111111111111',
+      p_privacy_policy_version_id => '44444444-4444-4444-8444-444444444444',
+      p_health_data_policy_version_id => '33333333-3333-4333-8333-333333333333',
+      p_accept_terms => true,
+      p_accept_privacy => true,
+      p_accept_health_data => true
+    );
+    raise exception 'Unbound policy consent unexpectedly succeeded';
+  exception when object_not_in_prerequisite_state then
+    null;
+  end;
+end;
+$$;
+
 insert into public.policy_version_tracking(
   id,
   policy_type,
@@ -231,10 +260,10 @@ insert into public.policy_version_tracking(
 values (
   '55555555-5555-4555-8555-555555555555',
   'privacy',
-  '2.0-unbound',
+  '3.0',
   'Privacy',
   'https://example.test/privacy-v2',
-  null,
+  repeat('d', 64),
   now(),
   true
 );
@@ -249,26 +278,26 @@ declare
 begin
   select public.get_mobile_onboarding_state() into v_state;
   if v_state->>'status' <> 'incomplete' then
-    raise exception 'An unbound current policy must invalidate completion';
+    raise exception 'A changed current policy must invalidate completion';
   end if;
 
   begin
     perform public.capture_mobile_onboarding_consents(
       p_terms_policy_version_id => '11111111-1111-4111-8111-111111111111',
-      p_privacy_policy_version_id => '55555555-5555-4555-8555-555555555555',
+      p_privacy_policy_version_id => '22222222-2222-4222-8222-222222222222',
       p_health_data_policy_version_id => '33333333-3333-4333-8333-333333333333',
       p_accept_terms => true,
       p_accept_privacy => true,
       p_accept_health_data => true
     );
-    raise exception 'Unbound policy consent unexpectedly succeeded';
-  exception when object_not_in_prerequisite_state then
+    raise exception 'Stale reviewed policy consent unexpectedly succeeded';
+  exception when serialization_failure then
     null;
   end;
 
   begin
     perform public.complete_mobile_onboarding();
-    raise exception 'Completion unexpectedly ignored unbound current policy';
+    raise exception 'Completion unexpectedly ignored changed current policy';
   exception when check_violation then
     null;
   end;
