@@ -39,7 +39,7 @@ export function MarketingHome({ authPanel, gymAdminUrl }: MarketingHomeProps) {
     <MarketingChrome gymAdminUrl={gymAdminUrl}>
       <section className="marketing-hero">
         <div className="marketing-hero-copy">
-          <h1>Your training has a place now.</h1>
+          <h1>Your training has a place now</h1>
           <p>
             Plan every session, prove the work, train with your people, and stay connected to the gym or coach behind
             your progress.

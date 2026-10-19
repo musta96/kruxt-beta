@@ -627,7 +627,11 @@
   background: rgba(97, 217, 248, 0.12);
 }
 
-.journey-screen button {
+.journey-start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
   width: 100%;
   min-height: 2.8rem;
   margin-top: 1rem;
@@ -829,7 +833,8 @@
   line-height: 1.08;
 }
 
-.gym-dashboard-head button {
+.gym-preview-access {
+  text-decoration: none;
   min-height: 2.6rem;
   border: 1px solid rgba(97, 217, 248, 0.55);
   border-radius: var(--marketing-radius);

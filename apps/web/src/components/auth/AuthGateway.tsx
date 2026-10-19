@@ -65,7 +65,7 @@ export function AuthGateway() {
     const checkSession = async () => {
       const { data, error: userError } = await supabase.auth.getUser();
       if (!active) return;
-      if (userError) {
+      if (userError && userError.name !== "AuthSessionMissingError") {
         setError(userError.message || "Unable to validate your session.");
         setCheckingSession(false);
         return;
