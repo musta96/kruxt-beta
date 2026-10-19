@@ -143,6 +143,7 @@ export class PolicyService {
       p_policy_type: input.policyType,
       p_version: input.version,
       p_document_url: input.documentUrl,
+      p_checksum: input.checksum,
       p_effective_at: input.effectiveAt ?? null,
       p_label: input.label ?? null,
       p_requires_reconsent: input.requiresReconsent ?? true,
