@@ -23,8 +23,9 @@ outstanding.
 | Demo-data purge safety | PR #116 open, mergeable, CI green; no live purge has run |
 | Four-account BZone UAT harness | PR #117 open, mergeable, CI green; strict credentialed run still pending |
 | Class scheduling and member booking | PR #118 review-ready through `1ee7269`; general CI, PostgreSQL workflow, and all three Vercel previews green |
-| Web signup, activation, and policy consent | Draft PR #131 through `36bdd67`; general CI and PostgreSQL workflow green; Vercel previews queued |
-| Native J1 onboarding gate | Draft PR #130 through `e945b77`; general CI and PostgreSQL workflow green; Vercel previews queued |
+| Web signup, activation, and policy consent | PR #131 review-ready through `36bdd67`; general CI, PostgreSQL workflow, and all three Vercel previews green |
+| Native J1 onboarding gate | PR #130 review-ready through `e945b77`; general CI, PostgreSQL workflow, and all three Vercel previews green |
+| Coordinated deployment guards | #132: local-only default, DEV confirmation, migration parity and Edge manifest tests pass; historical migration reconciliation remains blocked |
 | Fable onboarding checkpoint | Preserved unchanged as `7d6328a` on `claude/j1-hardening` |
 
 ## Integration evidence
@@ -64,7 +65,7 @@ workout -> attach proof -> feed/social -> guild/rank -> profile/GDPR.
 
 | Gate | Status |
 |------|--------|
-| Shipped native entrypoint enforces onboarding | Implemented locally; publish/merge pending |
+| Shipped native entrypoint enforces onboarding | Published in review-ready PR #130; merge/deploy pending |
 | Profile, policy review, consent, and completion are server-verified | Implemented locally; real PostgreSQL contract passes; disabled profiles fail closed |
 | Required policy acceptance is atomic | Implemented for web and mobile; approved policy documents still missing (#115) |
 | Rank recompute reports actionable failures | PR #114; successful hosted run blocked on Actions secrets (#103) |
@@ -78,7 +79,7 @@ waivers/billing/compliance/support.
 | Gate | Status |
 |------|--------|
 | Audited member operations | Built; strict four-account UAT pending (#96/#117) |
-| Class scheduling, staff mutations, waitlist, cancellation, and completion | Implemented locally; draft PR #118 must receive the reviewed repairs |
+| Class scheduling, staff mutations, waitlist, cancellation, and completion | Reviewed repairs published in review-ready PR #118; hosted rollout pending |
 | Admin controls show truthful states | PRs #112 and #113 ready for review |
 | Demo controls and identities absent from tester view | Guardrails in PR #116; operator purge and hosted env verification pending |
 
@@ -113,14 +114,17 @@ waivers/billing/compliance/support.
 1. Review PRs #130, #131, #118, and #114; require general CI, the PostgreSQL
    workflows, and Vercel previews to pass. The four branches were published with
    Edoardo's explicit authorization on 2026-10-19.
-2. Review and merge the CI-green readiness PRs plus the three product branches.
-3. Hold the Supabase deployment until migrations `202608030001` through
-   `202608030006` are present together, then use the guarded bootstrap
-   (`supabase db push --include-all`) against the canonical DEV project.
-   If an older revision was already applied, ship a forward repair migration;
-   editing an applied migration does not update the hosted database. Validate
-   the new class-window constraint separately as documented in
-   `packages/db/tests/README.class-postgres.md`.
+2. Prepare one integrated release revision. Hold automatic promotion of the
+   product PRs until an authorized maintenance window or compatibility release
+   is ready: new clients need new RPCs, while migration 006 breaks old direct
+   staff writes. Do not merge and auto-promote these independently.
+3. Follow `docs/ops/readiness-release.md`. Reconcile divergent local migration
+   histories against the real DEV history before applying anything. The guarded
+   scripts default to local-only checks and refuse incomplete/mismatched trees.
+   During the authorized window, deploy the complete reviewed migration plan
+   including `202608030001` through `202608030006`, then the updated activation
+   Edge function, then matching clients. Previously applied older SQL requires
+   forward repair migrations. Validate the class-window constraint separately.
 4. Configure Actions/Vercel/mobile environment values and publish the approved
    checksummed legal documents.
 5. Run the #116 purge dry-run, review it, apply only with the exact confirmation,
