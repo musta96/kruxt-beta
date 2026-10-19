@@ -1,7 +1,12 @@
 -- Serialize class booking and waitlist mutations around the class row.
 -- Member inserts must use these RPCs; direct member updates remain cancellation-only.
 
-with ranked_pending as (
+set lock_timeout = '5s';
+
+with duplicate_classes as (
+  select class_id from public.class_waitlist where status = 'pending'
+  group by class_id having count(*) <> count(distinct position)
+), ranked_pending as (
   select
     id,
     row_number() over (
@@ -9,7 +14,7 @@ with ranked_pending as (
       order by position, created_at, id
     )::integer as normalized_position
   from public.class_waitlist
-  where status = 'pending'
+  where status = 'pending' and class_id in (select class_id from duplicate_classes)
 )
 update public.class_waitlist cw
 set position = ranked_pending.normalized_position,
@@ -18,9 +23,51 @@ from ranked_pending
 where cw.id = ranked_pending.id
   and cw.position is distinct from ranked_pending.normalized_position;
 
-create unique index if not exists uq_class_waitlist_pending_position
-on public.class_waitlist(class_id, position)
-where status = 'pending';
+create or replace function public.enforce_class_waitlist_position()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if new.status <> 'pending' then
+    return new;
+  end if;
+
+  -- All application writers lock this same class row before assigning a
+  -- position. The trigger protects privileged/manual writes without building
+  -- a blocking partial unique index on a live waitlist table.
+  perform 1
+  from public.gym_classes gc
+  where gc.id = new.class_id
+  for update;
+
+  if not found then
+    raise exception 'Class not found';
+  end if;
+
+  if exists (
+    select 1
+    from public.class_waitlist cw
+    where cw.class_id = new.class_id
+      and cw.status = 'pending'
+      and cw.position = new.position
+      and cw.id <> new.id
+  ) then
+    raise exception 'Pending waitlist position is already occupied';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.enforce_class_waitlist_position()
+from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_class_waitlist_enforce_position on public.class_waitlist;
+create trigger trg_class_waitlist_enforce_position
+before insert or update of class_id, position, status on public.class_waitlist
+for each row execute function public.enforce_class_waitlist_position();
 
 create or replace function public.enforce_class_booking_capacity()
 returns trigger
@@ -513,3 +560,5 @@ grant execute on function public.join_waitlist(uuid) to authenticated;
 
 revoke all on function public.promote_waitlist_member(uuid) from public, anon, service_role;
 grant execute on function public.promote_waitlist_member(uuid) to authenticated;
+
+reset lock_timeout;

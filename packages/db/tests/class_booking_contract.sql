@@ -2,6 +2,8 @@
 -- The transaction rolls back every fixture and mutation.
 
 begin;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claim.sub', '', true);
 
 do $$
 declare
@@ -680,31 +682,28 @@ begin
   end if;
 
   if has_function_privilege('authenticated', 'public.enforce_gym_class_lifecycle()', 'execute')
-    or has_function_privilege('authenticated', 'public.cascade_cancelled_class_state()', 'execute')
+    or has_function_privilege('authenticated', 'public.cascade_terminal_class_state()', 'execute')
     or has_function_privilege('authenticated', 'public.expire_ineligible_class_waitlist(uuid,uuid)', 'execute') then
     raise exception 'class lifecycle trigger privilege invariant failed';
   end if;
 
   if not exists (
     select 1
-    from pg_indexes
-    where schemaname = 'public'
-      and indexname = 'uq_class_waitlist_pending_position'
-      and indexdef ilike '%unique%where (status = ''pending''%'
+    from pg_trigger
+    where not tgisinternal and tgname = 'trg_class_waitlist_enforce_position'
   ) then
-    raise exception 'pending waitlist unique index invariant failed';
+    raise exception 'pending waitlist position trigger invariant failed';
   end if;
 
   if (
     select count(*)
     from pg_trigger
     where not tgisinternal
-      and tgname in ('trg_gym_classes_enforce_lifecycle', 'trg_gym_classes_cascade_cancellation')
+      and tgname in ('trg_gym_classes_enforce_lifecycle', 'trg_gym_classes_cascade_terminal_state')
   ) <> 2 or not exists (
     select 1
     from pg_constraint
     where conname = 'gym_classes_scheduled_booking_window_check'
-      and convalidated
   ) then
     raise exception 'class lifecycle schema invariant failed';
   end if;
@@ -817,25 +816,24 @@ begin
     raise exception 'staff update invariant failed: booking row is not visible';
   end if;
 
-  update public.class_bookings
-  set source_channel = 'staff_contract_test'
-  where class_id = '7a000000-0000-0000-0000-000000000020'
-    and user_id = '7a000000-0000-0000-0000-000000000002';
-  get diagnostics v_rows = row_count;
+  begin
+    update public.class_bookings set source_channel = 'staff_contract_test'
+    where class_id = '7a000000-0000-0000-0000-000000000020';
+    raise exception 'Staff direct booking writes must be denied';
+  exception when insufficient_privilege then null;
+  end;
+  perform public.upsert_class_booking_by_staff(
+    '7a000000-0000-0000-0000-000000000020',
+    '7a000000-0000-0000-0000-000000000002',
+    '{"status":"cancelled","source_channel":"staff_contract_test"}'
+  );
 
-  if v_rows <> 1 then
-    raise exception 'staff update invariant failed: booking update was blocked';
-  end if;
-
-  update public.class_waitlist
-  set position = 10
-  where class_id = '7a000000-0000-0000-0000-000000000020'
-    and user_id = '7a000000-0000-0000-0000-000000000002';
-  get diagnostics v_rows = row_count;
-
-  if v_rows <> 1 then
-    raise exception 'staff update invariant failed: waitlist update was blocked';
-  end if;
+  begin
+    update public.class_waitlist set position = 10
+    where class_id = '7a000000-0000-0000-0000-000000000020';
+    raise exception 'Staff direct waitlist writes must be denied';
+  exception when insufficient_privilege then null;
+  end;
 end;
 $$;
 

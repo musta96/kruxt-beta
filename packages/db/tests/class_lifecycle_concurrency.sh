@@ -25,6 +25,8 @@ ADMIN_CLASS="7d000000-0000-0000-0000-000000000026"
 
 cleanup() {
   "${PSQL[@]}" -c "
+    select set_config('request.jwt.claim.role', 'service_role', false);
+    select set_config('request.jwt.claim.sub', '', false);
     delete from public.class_bookings where class_id::text like '7d000000-0000-0000-0000-00000000002%';
     delete from public.class_waitlist where class_id::text like '7d000000-0000-0000-0000-00000000002%';
     delete from public.event_outbox where aggregate_id::text like '7d000000-0000-0000-0000-00000000002%';
@@ -40,6 +42,8 @@ trap cleanup EXIT
 cleanup
 
 "${PSQL[@]}" -c "
+  select set_config('request.jwt.claim.role', 'service_role', false);
+  select set_config('request.jwt.claim.sub', '', false);
   insert into auth.users(id, instance_id, aud, role, email, created_at, updated_at)
   select id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', email, now(), now()
   from (values
@@ -157,6 +161,7 @@ echo "[ok] fairness race preserved queue ownership"
 # materialized when it already owns the membership row lock.
 "${PSQL[@]}" -c "
   begin;
+  select set_config('request.jwt.claim.role', 'service_role', true);
   update public.gym_memberships set membership_status = 'paused'
   where gym_id = '$GYM_ID' and user_id = '$MEMBER_THREE';
   select pg_sleep(1);
@@ -180,10 +185,11 @@ if [[ "$SUSPENDED_BOOK_STATUS" -eq 0 ]]; then
   exit 1
 fi
 
-"${PSQL[@]}" -c "update public.gym_memberships set membership_status = 'active' where gym_id = '$GYM_ID' and user_id = '$MEMBER_THREE';" >/dev/null
+"${PSQL[@]}" -c "select set_config('request.jwt.claim.role', 'service_role', false); update public.gym_memberships set membership_status = 'active' where gym_id = '$GYM_ID' and user_id = '$MEMBER_THREE';" >/dev/null
 
 "${PSQL[@]}" -c "
   begin;
+  select set_config('request.jwt.claim.role', 'service_role', true);
   update public.gym_memberships set membership_status = 'paused'
   where gym_id = '$GYM_ID' and user_id = '$MEMBER_FOUR';
   select pg_sleep(1);
@@ -364,3 +370,153 @@ if [[ "$ADMIN_BOOKINGS" != "2" ]]; then
   exit 1
 fi
 echo "[ok] admin schedule defaults remained bookable under parallel booking"
+
+# Wait for a holder to enter pg_sleep after acquiring its locks. This creates
+# deliberate overlap instead of relying on process launch order.
+wait_for_holder() {
+  local app_name="$1"
+  for attempt in {1..100}; do
+    if [[ "$("${PSQL[@]}" -Atc "select count(*) from pg_stat_activity where application_name = '$app_name' and wait_event = 'PgSleep'")" == "1" ]]; then
+      return
+    fi
+    sleep 0.02
+  done
+  echo "Lock holder did not become ready: $app_name" >&2
+  exit 1
+}
+
+STAFF_CANCEL_CLASS="7d000000-0000-0000-0000-000000000027"
+STAFF_COMPLETE_CLASS="7d000000-0000-0000-0000-000000000028"
+STAFF_MEMBER_CLASS="7d000000-0000-0000-0000-000000000029"
+STAFF_QUEUE_CLASS="7d000000-0000-0000-0000-00000000002a"
+"${PSQL[@]}" -c "
+  select set_config('request.jwt.claim.role', 'service_role', false);
+  select set_config('request.jwt.claim.sub', '', false);
+  update public.gym_memberships set membership_status = 'active' where gym_id = '$GYM_ID';
+  insert into public.gym_classes(id,gym_id,title,capacity,starts_at,ends_at) values
+    ('$STAFF_CANCEL_CLASS','$GYM_ID','Staff cancel race',2,now()+interval '2 hours',now()+interval '3 hours'),
+    ('$STAFF_COMPLETE_CLASS','$GYM_ID','Staff completion race',2,now()-interval '2 hours',now()-interval '1 hour'),
+    ('$STAFF_MEMBER_CLASS','$GYM_ID','Staff membership race',2,now()+interval '2 hours',now()+interval '3 hours'),
+    ('$STAFF_QUEUE_CLASS','$GYM_ID','Staff queue race',2,now()+interval '2 hours',now()+interval '3 hours');
+  insert into public.class_bookings(class_id,user_id) values ('$STAFF_COMPLETE_CLASS','$MEMBER_ONE');
+  insert into public.class_waitlist(class_id,user_id,position) values
+    ('$STAFF_COMPLETE_CLASS','$MEMBER_TWO',1), ('$STAFF_MEMBER_CLASS','$MEMBER_THREE',1),
+    ('$STAFF_QUEUE_CLASS','$MEMBER_ONE',1), ('$STAFF_QUEUE_CLASS','$MEMBER_FOUR',2);
+" >/dev/null
+
+# A staff request blocked behind cancellation must observe the committed status.
+PGAPPNAME=kruxt_staff_cancel_holder "${PSQL[@]}" -c "
+  begin;
+  set local role authenticated;
+  select set_config('request.jwt.claim.sub','$OWNER',true);
+  select public.update_gym_class_by_staff('$STAFF_CANCEL_CLASS','{\"status\":\"cancelled\",\"title\":\"Atomic cancellation\"}');
+  select pg_sleep(2);
+  commit;
+" >/tmp/kruxt-staff-cancel-holder.log 2>&1 &
+HOLDER_PID=$!
+wait_for_holder kruxt_staff_cancel_holder
+if "${PSQL[@]}" -c "
+  set role authenticated;
+  select set_config('request.jwt.claim.sub','$OWNER',false);
+  select public.upsert_class_booking_by_staff('$STAFF_CANCEL_CLASS','$MEMBER_TWO');
+" >/tmp/kruxt-staff-after-cancel.log 2>&1; then
+  echo "Staff booked a class after waiting behind cancellation" >&2
+  exit 1
+fi
+wait "$HOLDER_PID"
+if ! grep -q "Class is not scheduled before start" /tmp/kruxt-staff-after-cancel.log; then
+  cat /tmp/kruxt-staff-after-cancel.log
+  exit 1
+fi
+echo "[ok] staff booking waited for cancellation and rejected terminal class"
+
+# Both staff booking and pending-waitlist edits wait for membership suspension.
+PGAPPNAME=kruxt_staff_member_holder "${PSQL[@]}" -c "
+  begin;
+  select set_config('request.jwt.claim.role', 'service_role', true);
+  update public.gym_memberships set membership_status = 'paused'
+    where gym_id = '$GYM_ID' and user_id = '$MEMBER_THREE';
+  select pg_sleep(2);
+  commit;
+" >/tmp/kruxt-staff-member-holder.log 2>&1 &
+HOLDER_PID=$!
+wait_for_holder kruxt_staff_member_holder
+"${PSQL[@]}" -c "
+  set role authenticated;
+  select set_config('request.jwt.claim.sub','$OWNER',false);
+  select public.upsert_class_booking_by_staff('$STAFF_MEMBER_CLASS','$MEMBER_THREE');
+" >/tmp/kruxt-staff-member-book.log 2>&1 &
+STAFF_BOOK_PID=$!
+"${PSQL[@]}" -c "
+  set role authenticated;
+  select set_config('request.jwt.claim.sub','$OWNER',false);
+  select public.update_class_waitlist_by_staff(
+    (select id from public.class_waitlist where class_id='$STAFF_MEMBER_CLASS'),
+    '{\"notified_at\":\"2026-01-01T00:00:00Z\"}');
+" >/tmp/kruxt-staff-member-wait.log 2>&1 &
+STAFF_WAIT_PID=$!
+wait "$HOLDER_PID"
+if wait "$STAFF_BOOK_PID"; then echo "Staff booked suspended member" >&2; exit 1; fi
+if wait "$STAFF_WAIT_PID"; then echo "Staff updated suspended pending member" >&2; exit 1; fi
+grep -q "Active or trial gym membership required" /tmp/kruxt-staff-member-book.log
+grep -q "Active or trial gym membership required" /tmp/kruxt-staff-member-wait.log
+echo "[ok] staff booking and waitlist edits respected membership suspension"
+
+# Fresh staff bookings cannot consume capacity reserved by an existing queue,
+# including while a staff promotion holds the parent lock.
+PGAPPNAME=kruxt_staff_queue_holder "${PSQL[@]}" -c "
+  begin;
+  set local role authenticated;
+  select set_config('request.jwt.claim.sub','$OWNER',true);
+  select public.update_gym_class_by_staff('$STAFF_QUEUE_CLASS','{}');
+  select pg_sleep(2);
+  select public.promote_waitlist_member('$STAFF_QUEUE_CLASS');
+  commit;
+" >/tmp/kruxt-staff-queue-holder.log 2>&1 &
+HOLDER_PID=$!
+wait_for_holder kruxt_staff_queue_holder
+# A second queued member still owns the remaining seat after first promotion.
+"${PSQL[@]}" -c "
+  set role authenticated;
+  select set_config('request.jwt.claim.sub','$OWNER',false);
+  select public.upsert_class_booking_by_staff('$STAFF_QUEUE_CLASS','$MEMBER_TWO');
+" >/tmp/kruxt-staff-queue-book.log 2>&1 &
+STAFF_BOOK_PID=$!
+wait "$HOLDER_PID"
+if wait "$STAFF_BOOK_PID"; then echo "Staff booking bypassed remaining queue" >&2; exit 1; fi
+grep -q "pending waitlist" /tmp/kruxt-staff-queue-book.log
+if [[ "$("${PSQL[@]}" -Atc "select count(*) from public.class_bookings where class_id='$STAFF_QUEUE_CLASS' and status='booked' and user_id='$MEMBER_ONE'")" != "1" ]]; then
+  echo "Staff promotion/booking serialization failed" >&2; exit 1
+fi
+echo "[ok] staff promotion race reserved remaining capacity for queued members"
+
+# Completion terminalizes booked/pending rows before blocked staff edits resume.
+PGAPPNAME=kruxt_staff_complete_holder "${PSQL[@]}" -c "
+  begin;
+  set local role authenticated;
+  select set_config('request.jwt.claim.sub','$OWNER',true);
+  select public.update_gym_class_by_staff('$STAFF_COMPLETE_CLASS','{\"status\":\"completed\"}');
+  select pg_sleep(2);
+  commit;
+" >/tmp/kruxt-staff-complete-holder.log 2>&1 &
+HOLDER_PID=$!
+wait_for_holder kruxt_staff_complete_holder
+if "${PSQL[@]}" -c "
+  set role authenticated;
+  select set_config('request.jwt.claim.sub','$OWNER',false);
+  select public.update_class_waitlist_by_staff(
+    (select id from public.class_waitlist where class_id='$STAFF_COMPLETE_CLASS'),
+    '{\"status\":\"pending\"}');
+" >/tmp/kruxt-staff-after-complete.log 2>&1; then
+  echo "Staff reactivated a completed waitlist" >&2; exit 1
+fi
+wait "$HOLDER_PID"
+grep -q "Class is not scheduled before start" /tmp/kruxt-staff-after-complete.log
+if [[ "$("${PSQL[@]}" -Atc "select
+  (select status from public.class_bookings where class_id='$STAFF_COMPLETE_CLASS') || ',' ||
+  (select status from public.class_waitlist where class_id='$STAFF_COMPLETE_CLASS') || ',' ||
+  (select count(*) from public.event_outbox where aggregate_id='$STAFF_COMPLETE_CLASS' and event_type='class.completed') || ',' ||
+  (select count(*) from public.audit_logs where target_id='$STAFF_COMPLETE_CLASS' and action='class.completed')")" != "no_show,expired,1,1" ]]; then
+  echo "Staff completion race stranded children or duplicated events" >&2; exit 1
+fi
+echo "[ok] completion race cleaned children and emitted one audit/event"

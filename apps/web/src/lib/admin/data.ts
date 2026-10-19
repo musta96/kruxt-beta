@@ -802,7 +802,10 @@ export async function updateGymClass(
 
   if (Object.keys(updatePayload).length === 0) return;
 
-  const { error } = await client.from("gym_classes").update(updatePayload).eq("id", classId);
+  const { error } = await client.rpc("update_gym_class_by_staff", {
+    p_class_id: classId,
+    p_patch: updatePayload
+  });
   if (error) {
     throw new Error(error.message || "Unable to update class.");
   }
@@ -813,15 +816,10 @@ export async function setGymClassStatus(
   classId: string,
   status: ClassStatus
 ): Promise<void> {
-  if (status === "cancelled") {
-    const { error } = await client.rpc("cancel_gym_class", { p_class_id: classId });
-    if (error) {
-      throw new Error(error.message || "Unable to cancel class.");
-    }
-    return;
-  }
-
-  const { error } = await client.from("gym_classes").update({ status }).eq("id", classId);
+  const { error } = await client.rpc("update_gym_class_by_staff", {
+    p_class_id: classId,
+    p_patch: { status }
+  });
   if (error) {
     throw new Error(error.message || "Unable to update class status.");
   }

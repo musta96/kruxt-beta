@@ -8852,6 +8852,18 @@ export type Database = {
         }[]
       }
       cancel_gym_class: { Args: { p_class_id: string }; Returns: string }
+      update_gym_class_by_staff: {
+        Args: { p_class_id: string; p_patch: Json }
+        Returns: Database["public"]["Tables"]["gym_classes"]["Row"][]
+      }
+      upsert_class_booking_by_staff: {
+        Args: { p_class_id: string; p_user_id: string; p_patch?: Json }
+        Returns: Database["public"]["Tables"]["class_bookings"]["Row"][]
+      }
+      update_class_waitlist_by_staff: {
+        Args: { p_waitlist_id: string; p_patch: Json }
+        Returns: Database["public"]["Tables"]["class_waitlist"]["Row"][]
+      }
       cancel_gym_class_booking: {
         Args: { p_booking_id: string }
         Returns: string
