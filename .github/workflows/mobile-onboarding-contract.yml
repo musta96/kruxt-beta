@@ -1,0 +1,21 @@
+name: mobile-onboarding-contract
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  postgres-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-contrib
+          pg_config --bindir >> "$GITHUB_PATH"
+      - name: Run real migration and onboarding contract
+        env:
+          KRUXT_REQUIRE_POSTGRES: "1"
+        run: bash packages/db/tests/run_mobile_onboarding_contract_ephemeral.sh

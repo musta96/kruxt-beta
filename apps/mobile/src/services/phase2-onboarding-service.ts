@@ -14,6 +14,7 @@ import { KruxtAppError } from "./errors";
 import { GymService } from "./gym-service";
 import { PolicyService, type BaselineConsentInput } from "./policy-service";
 import { ProfileService } from "./profile-service";
+import { homeGymIdForEligibleMembership } from "./onboarding-semantics";
 
 const AVATAR_BUCKET =
   (import.meta as { env?: Record<string, string | undefined> }).env?.EXPO_PUBLIC_AVATAR_BUCKET ||
@@ -39,7 +40,7 @@ export interface Phase2OnboardingInput {
   mode: "signup" | "signin";
   credentials: CredentialsInput;
   profile?: Partial<UpsertProfileInput>;
-  baselineConsents: BaselineConsentInput;
+  baselineConsents?: BaselineConsentInput;
   gymPreference?: OnboardingGymPreference;
 }
 
@@ -188,6 +189,13 @@ export class Phase2OnboardingService {
       };
     }
 
+    if (!input.baselineConsents) {
+      throw new KruxtAppError(
+        "POLICY_BASELINE_MISSING",
+        "Reviewed baseline policies are required to create an account."
+      );
+    }
+
     const avatarUrl = await this.uploadAvatarIfNeeded(userId, input.profile?.avatarUrl);
     const profile = await this.profiles.ensureProfile(userId, userEmail, {
       ...(input.profile ?? {}),
@@ -239,7 +247,9 @@ export class Phase2OnboardingService {
       Boolean(input.gymPreference?.createGym);
 
     if (shouldSetHomeGym) {
-      const homeGymId = gym?.id ?? membership?.gymId;
+      const homeGymId =
+        gym?.id ??
+        homeGymIdForEligibleMembership(membership);
       if (homeGymId) {
         profileAfterHomeGymUpdate = await this.profiles.setHomeGym(userId, homeGymId);
       }
@@ -249,7 +259,11 @@ export class Phase2OnboardingService {
       (await this.profiles.getProfileById(userId)) ??
       profileAfterHomeGymUpdate ??
       profile;
-    const expectedHomeGymId = shouldSetHomeGym ? gym?.id ?? membership?.gymId ?? null : null;
+    const expectedHomeGymId = shouldSetHomeGym
+      ? gym?.id ??
+        homeGymIdForEligibleMembership(membership) ??
+        null
+      : null;
 
     if (expectedHomeGymId && finalProfile.homeGymId !== expectedHomeGymId) {
       throw new KruxtAppError(

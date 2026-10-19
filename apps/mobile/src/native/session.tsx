@@ -1,7 +1,7 @@
 import type { PropsWithChildren } from "react";
 import type { AuthChangeEvent, Session, SupabaseClient, User } from "@supabase/supabase-js";
 import { AppState } from "react-native";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { createNativeSupabaseClient, getPublicWebAppUrl } from "./supabase";
 
@@ -55,10 +55,22 @@ export interface NativeAccessState {
   staffGymIds: string[];
 }
 
+export interface NativeOnboardingState {
+  status: "incomplete" | "complete" | "error";
+  completedAt: string | null;
+  profileComplete: boolean;
+  requiredConsentsComplete: boolean;
+  marketingEmailOptIn: boolean;
+  pushNotificationsOptIn: boolean;
+  errorMessage: string | null;
+}
+
 interface SessionState {
-  status: "loading" | "ready";
+  status: "loading" | "ready" | "error";
   access: NativeAccessState;
   profile: NativeProfile | null;
+  onboarding: NativeOnboardingState;
+  errorMessage: string | null;
 }
 
 interface SessionContextValue {
@@ -71,6 +83,7 @@ interface SessionContextValue {
   saveProfile: (input: { displayName: string; username: string; bio: string; isPublic: boolean }) => Promise<void>;
   uploadAvatar: (input: { uri: string; mimeType?: string | null; fileName?: string | null }) => Promise<void>;
   removeAvatar: () => Promise<void>;
+  completeOnboarding: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -108,6 +121,16 @@ const EMPTY_ACCESS: NativeAccessState = {
   user: null,
   platformRole: null,
   staffGymIds: []
+};
+
+const INCOMPLETE_ONBOARDING: NativeOnboardingState = {
+  status: "incomplete",
+  completedAt: null,
+  profileComplete: false,
+  requiredConsentsComplete: false,
+  marketingEmailOptIn: false,
+  pushNotificationsOptIn: false,
+  errorMessage: null
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -154,7 +177,14 @@ function extractPlanNotes(value: Record<string, unknown> | null): string | null 
 async function resolveNativeAccess(client: SupabaseClient): Promise<NativeAccessState> {
   const { data: authData, error: authError } = await client.auth.getUser();
 
-  if (authError || !authData.user) {
+  if (authError) {
+    if (authError.name === "AuthSessionMissingError") {
+      return EMPTY_ACCESS;
+    }
+    throw new Error(authError.message || "Unable to validate the current session.");
+  }
+
+  if (!authData.user) {
     return EMPTY_ACCESS;
   }
 
@@ -179,6 +209,50 @@ async function resolveNativeAccess(client: SupabaseClient): Promise<NativeAccess
     user,
     platformRole: (founderData?.role as PlatformOperatorRole | null | undefined) ?? null,
     staffGymIds: (membershipsData ?? []).map((row) => row.gym_id)
+  };
+}
+
+async function loadNativeOnboardingState(
+  client: SupabaseClient,
+  userId: string
+): Promise<NativeOnboardingState> {
+  const { data, error } = await client.rpc("get_mobile_onboarding_state", {
+    p_user_id: userId
+  });
+
+  if (error) {
+    throw new Error(error.message || "Unable to load onboarding status.");
+  }
+
+  const payload = data as {
+    status?: unknown;
+    completedAt?: unknown;
+    profileComplete?: unknown;
+    requiredConsentsComplete?: unknown;
+    marketingEmailOptIn?: unknown;
+    pushNotificationsOptIn?: unknown;
+  } | null;
+
+  if (
+    !payload ||
+    (payload.status !== "complete" && payload.status !== "incomplete") ||
+    typeof payload.profileComplete !== "boolean" ||
+    typeof payload.requiredConsentsComplete !== "boolean" ||
+    typeof payload.marketingEmailOptIn !== "boolean" ||
+    typeof payload.pushNotificationsOptIn !== "boolean" ||
+    (payload.completedAt !== null && typeof payload.completedAt !== "string")
+  ) {
+    throw new Error("The onboarding status response was invalid.");
+  }
+
+  return {
+    status: payload.status,
+    completedAt: payload.completedAt,
+    profileComplete: payload.profileComplete,
+    requiredConsentsComplete: payload.requiredConsentsComplete,
+    marketingEmailOptIn: payload.marketingEmailOptIn,
+    pushNotificationsOptIn: payload.pushNotificationsOptIn,
+    errorMessage: null
   };
 }
 
@@ -298,42 +372,100 @@ async function loadProfile(client: SupabaseClient, user: User): Promise<NativePr
 export function NativeSessionProvider({ children }: PropsWithChildren) {
   const supabase = useMemo(() => createNativeSupabaseClient(), []);
   const webAppUrl = useMemo(() => getPublicWebAppUrl(), []);
+  const refreshSequence = useRef(0);
   const [state, setState] = useState<SessionState>({
     status: "loading",
     access: EMPTY_ACCESS,
-    profile: null
+    profile: null,
+    onboarding: INCOMPLETE_ONBOARDING,
+    errorMessage: null
   });
 
-  async function refresh() {
-    setState((current) => ({ ...current, status: "loading" }));
-    const access = await resolveNativeAccess(supabase);
+  async function refresh(background = false) {
+    const requestId = ++refreshSequence.current;
+    setState((current) => ({
+      ...current,
+      status: background && current.status === "ready" ? "ready" : "loading",
+      errorMessage: null
+    }));
 
-    if (!access.user) {
+    let access: NativeAccessState;
+    try {
+      access = await resolveNativeAccess(supabase);
+    } catch (error) {
+      if (requestId !== refreshSequence.current) return;
       setState({
-        status: "ready",
-        access,
-        profile: null
+        status: "error",
+        access: EMPTY_ACCESS,
+        profile: null,
+        onboarding: {
+          ...INCOMPLETE_ONBOARDING,
+          status: "error",
+          errorMessage: error instanceof Error ? error.message : "Unable to validate the current session."
+        },
+        errorMessage: error instanceof Error ? error.message : "Unable to validate the current session."
       });
       return;
     }
 
-    const profile = await loadProfile(supabase, access.user);
-    setState({
-      status: "ready",
-      access,
-      profile
-    });
+    if (!access.user) {
+      if (requestId !== refreshSequence.current) return;
+      setState({
+        status: "ready",
+        access,
+        profile: null,
+        onboarding: INCOMPLETE_ONBOARDING,
+        errorMessage: null
+      });
+      return;
+    }
+
+    try {
+      const profile = await loadProfile(supabase, access.user);
+
+      try {
+        const onboarding = await loadNativeOnboardingState(supabase, access.user.id);
+        if (requestId !== refreshSequence.current) return;
+        setState({ status: "ready", access, profile, onboarding, errorMessage: null });
+      } catch (error) {
+        if (requestId !== refreshSequence.current) return;
+        setState({
+          status: "ready",
+          access,
+          profile,
+          onboarding: {
+            ...INCOMPLETE_ONBOARDING,
+            status: "error",
+            errorMessage: error instanceof Error ? error.message : "Unable to load onboarding status."
+          },
+          errorMessage: null
+        });
+      }
+    } catch (error) {
+      if (requestId !== refreshSequence.current) return;
+      setState({
+        status: "ready",
+        access,
+        profile: null,
+        onboarding: {
+          ...INCOMPLETE_ONBOARDING,
+          status: "error",
+          errorMessage: error instanceof Error ? error.message : "Unable to load your profile."
+        },
+        errorMessage: null
+      });
+    }
   }
 
   useEffect(() => {
-    const authSubscription = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, _session: Session | null) => {
-      void refresh();
+    const authSubscription = supabase.auth.onAuthStateChange((event: AuthChangeEvent, _session: Session | null) => {
+      void refresh(event === "TOKEN_REFRESHED");
     });
 
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") {
         void supabase.auth.startAutoRefresh();
-        void refresh();
+        void refresh(true);
         return;
       }
 
@@ -365,14 +497,20 @@ export function NativeSessionProvider({ children }: PropsWithChildren) {
     const email = input.email.trim().toLowerCase();
     const { data, error } = await supabase.auth.signUp({
       email,
-      password: input.password
+      password: input.password,
+      options: {
+        data: {
+          display_name: input.displayName.trim(),
+          username: input.username.trim().toLowerCase()
+        }
+      }
     });
 
     if (error) {
       throw new Error(error.message || "Unable to create account.");
     }
 
-    if (data.user) {
+    if (data.user && data.session) {
       await ensureProfileForUser(supabase, {
         userId: data.user.id,
         email,
@@ -498,6 +636,27 @@ export function NativeSessionProvider({ children }: PropsWithChildren) {
     await refresh();
   }
 
+  async function completeOnboarding() {
+    const user = state.access.user;
+    if (!user) {
+      throw new Error("Authentication required.");
+    }
+
+    const { data, error } = await supabase.rpc("complete_mobile_onboarding", {
+      p_user_id: user.id
+    });
+    if (error) {
+      throw new Error(error.message || "Unable to complete onboarding.");
+    }
+
+    const payload = data as { status?: unknown } | null;
+    if (payload?.status !== "complete") {
+      throw new Error("The server did not confirm onboarding completion.");
+    }
+
+    await refresh();
+  }
+
   const value: SessionContextValue = {
     supabase,
     webAppUrl,
@@ -508,6 +667,7 @@ export function NativeSessionProvider({ children }: PropsWithChildren) {
     saveProfile,
     uploadAvatar,
     removeAvatar,
+    completeOnboarding,
     refresh
   };
 
