@@ -22,9 +22,9 @@ outstanding.
 | Rank diagnostics + cross-app handoffs | PR #114 open, mergeable, CI green; hosted secrets/URLs still required |
 | Demo-data purge safety | PR #116 open, mergeable, CI green; no live purge has run |
 | Four-account BZone UAT harness | PR #117 open, mergeable, CI green; strict credentialed run still pending |
-| Class scheduling and member booking | Draft PR #118 published through `e92aa84`; local repairs through `1ee7269` pass real migration-upgrade, staff authorization, and concurrency contracts; not pushed |
-| Web signup, activation, and policy consent | Local `codex/web-marketing-consent` through `36bdd67`; atomic activation, membership guards, verified document review, and public browser fixes; not pushed |
-| Native J1 onboarding gate | Local `codex/111-j1-onboarding` through `e945b77`; legacy cutover, resume, optional-choice preservation, sign-out recovery, and policy-change recovery; not pushed |
+| Class scheduling and member booking | Draft PR #118 published through `1ee7269`; general CI and real PostgreSQL workflow green |
+| Web signup, activation, and policy consent | Draft PR #131 published through `36bdd67`; atomic activation, membership guards, verified document review, and public browser fixes; PostgreSQL workflow green |
+| Native J1 onboarding gate | Draft PR #130 published through `e945b77`; legacy cutover, resume, optional-choice preservation, sign-out recovery, and policy-change recovery; PostgreSQL workflow green |
 | Fable onboarding checkpoint | Preserved unchanged as `7d6328a` on `claude/j1-hardening` |
 
 ## Integration evidence
@@ -42,7 +42,7 @@ resolved by preserving each lane's behavior.
   mobile onboarding contract, both consent/activation contracts, class upgrade
   contract, staff lifecycle contract, and ten concurrency scenarios pass.
 - Dedicated workflows now execute mobile, consent, and class PostgreSQL checks.
-  The new workflow revisions still need a push and a successful hosted CI run.
+  All three dedicated PostgreSQL workflows passed on the published heads.
 - Production builds for web, admin, and platform pass. Admin/platform builds
   require network access for the existing Google Fonts configuration.
 - Playwright desktop and 390px mobile checks pass: no horizontal overflow,
@@ -93,26 +93,26 @@ waivers/billing/compliance/support.
 
 ## Required operator inputs
 
-1. Explicit authorization to push these local branches to
-   `https://github.com/musta96/kruxt-beta.git`:
-   `codex/class-scheduling-booking`, `codex/web-marketing-consent`, and
-   `codex/111-j1-onboarding`, and `codex/readiness-orchestration`.
-2. GitHub Actions secrets `SUPABASE_URL` and legacy JWT
+1. GitHub Actions secrets `SUPABASE_URL` and legacy JWT
    `SUPABASE_SERVICE_ROLE_KEY` for the current rank Edge Function contract.
-3. Hosted cross-app URL variables and the actual mobile env file pointing to
+2. Hosted cross-app URL variables and the actual mobile env file pointing to
    DEV project `hgomsmhsybrxjdxbgkjy`.
-4. Approved versioned HTTPS Terms, Privacy, and Health Data documents plus their
+3. Approved versioned HTTPS Terms, Privacy, and Health Data documents plus their
    SHA-256 checksums (#115). Web review requires PDF/plain-text responses with
    CORS access; it hashes the downloaded bytes and displays that verified copy.
    Native review still opens the published URL and requires immutable hosting
    plus physical-device verification.
-5. Four distinct disposable UAT accounts and exact disposable mutation targets.
-6. A physical Expo-compatible device for the final J1 smoke pass.
+4. Four distinct disposable UAT accounts and exact disposable mutation targets.
+   No configured account file was found locally. Use
+   `docs/bzone-uat.env.example` as the blank template; store populated values in
+   the ignored `.env.uat.local`, never in the tracked example.
+5. A physical Expo-compatible device for the final J1 smoke pass.
 
 ## Ordered path to testing
 
-1. Publish the repaired local branches and update/create their PRs; require the
-   new PostgreSQL CI workflows and Vercel previews to pass.
+1. Review PRs #130, #131, #118, and #114; require general CI, the PostgreSQL
+   workflows, and Vercel previews to pass. The four branches were published with
+   Edoardo's explicit authorization on 2026-10-19.
 2. Review and merge the CI-green readiness PRs plus the three product branches.
 3. Hold the Supabase deployment until migrations `202608030001` through
    `202608030006` are present together, then use the guarded bootstrap
