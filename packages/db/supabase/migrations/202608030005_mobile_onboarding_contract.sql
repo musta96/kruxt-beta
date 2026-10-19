@@ -6,6 +6,67 @@ alter table public.profiles
 comment on column public.profiles.mobile_onboarding_completed_at is
   'Server-controlled completion marker for the shipped NativeApp onboarding flow.';
 
+create or replace function public.policy_version_has_content_binding(
+  p_policy_version_id uuid,
+  p_as_of timestamptz default now()
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.policy_version_tracking p
+    where p.id = p_policy_version_id
+      and p.is_active = true
+      and p.effective_at <= coalesce(p_as_of, now())
+      and p.document_url ~* '^https://[^[:space:]]+$'
+      and btrim(coalesce(p.checksum, '')) ~* '^(sha256:)?[0-9a-f]{64}$'
+  );
+$$;
+
+revoke all on function public.policy_version_has_content_binding(uuid, timestamptz) from public;
+grant execute on function public.policy_version_has_content_binding(uuid, timestamptz) to authenticated, service_role;
+
+create or replace function public.mobile_user_has_bound_required_consents(
+  p_user_id uuid,
+  p_as_of timestamptz default now()
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*) = 3
+  from (
+    values
+      ('terms'::public.consent_type, 'terms'::public.policy_type),
+      ('privacy'::public.consent_type, 'privacy'::public.policy_type),
+      ('health_data_processing'::public.consent_type, 'health_data'::public.policy_type)
+  ) required(consent_type, policy_type)
+  join lateral (
+    select p.id
+    from public.policy_version_tracking p
+    where p.id = public.current_policy_version_id(required.policy_type, p_as_of)
+      and public.policy_version_has_content_binding(p.id, p_as_of)
+    limit 1
+  ) policy on true
+  join lateral (
+    select c.granted, c.policy_version_id
+    from public.consents c
+    where c.user_id = p_user_id
+      and c.consent_type = required.consent_type
+    order by c.granted_at desc, c.created_at desc
+    limit 1
+  ) latest on latest.granted = true and latest.policy_version_id = policy.id;
+$$;
+
+revoke all on function public.mobile_user_has_bound_required_consents(uuid, timestamptz) from public;
+grant execute on function public.mobile_user_has_bound_required_consents(uuid, timestamptz) to service_role;
+
 create or replace function public.protect_mobile_onboarding_completion()
 returns trigger
 language plpgsql
@@ -102,6 +163,13 @@ begin
     or v_privacy_policy_id is null
     or v_health_data_policy_id is null then
     raise exception 'Current baseline policy documents are unavailable'
+      using errcode = '55000';
+  end if;
+
+  if not public.policy_version_has_content_binding(v_terms_policy_id, v_now)
+    or not public.policy_version_has_content_binding(v_privacy_policy_id, v_now)
+    or not public.policy_version_has_content_binding(v_health_data_policy_id, v_now) then
+    raise exception 'Current baseline policy documents are not content-bound'
       using errcode = '55000';
   end if;
 
@@ -212,6 +280,8 @@ declare
   v_profile public.profiles%rowtype;
   v_profile_complete boolean := false;
   v_required_consents_complete boolean := false;
+  v_marketing_email_opt_in boolean := false;
+  v_push_notifications_opt_in boolean := false;
 begin
   if v_target_user is null then
     raise exception 'Authentication required' using errcode = '28000';
@@ -227,9 +297,26 @@ begin
   where p.id = v_target_user;
 
   v_profile_complete := v_profile.id is not null
+    and v_profile.activation_status = 'active'
     and char_length(btrim(v_profile.display_name)) between 2 and 80
     and v_profile.username ~ '^[a-z0-9_]{3,24}$';
-  v_required_consents_complete := public.user_has_required_consents(v_target_user);
+  v_required_consents_complete := public.mobile_user_has_bound_required_consents(v_target_user);
+
+  select coalesce(c.granted, false)
+  into v_marketing_email_opt_in
+  from public.consents c
+  where c.user_id = v_target_user
+    and c.consent_type = 'marketing_email'::public.consent_type
+  order by c.granted_at desc, c.created_at desc
+  limit 1;
+
+  select coalesce(c.granted, false)
+  into v_push_notifications_opt_in
+  from public.consents c
+  where c.user_id = v_target_user
+    and c.consent_type = 'push_notifications'::public.consent_type
+  order by c.granted_at desc, c.created_at desc
+  limit 1;
 
   return jsonb_build_object(
     'status', case
@@ -240,7 +327,9 @@ begin
     end,
     'completedAt', v_profile.mobile_onboarding_completed_at,
     'profileComplete', v_profile_complete,
-    'requiredConsentsComplete', v_required_consents_complete
+    'requiredConsentsComplete', v_required_consents_complete,
+    'marketingEmailOptIn', coalesce(v_marketing_email_opt_in, false),
+    'pushNotificationsOptIn', coalesce(v_push_notifications_opt_in, false)
   );
 end;
 $$;
@@ -282,13 +371,14 @@ begin
       using errcode = '23503';
   end if;
 
-  v_profile_complete := char_length(btrim(v_profile.display_name)) between 2 and 80
+  v_profile_complete := v_profile.activation_status = 'active'
+    and char_length(btrim(v_profile.display_name)) between 2 and 80
     and v_profile.username ~ '^[a-z0-9_]{3,24}$';
   if not v_profile_complete then
     raise exception 'Profile is incomplete' using errcode = '23514';
   end if;
 
-  v_required_consents_complete := public.user_has_required_consents(v_target_user);
+  v_required_consents_complete := public.mobile_user_has_bound_required_consents(v_target_user);
   if not v_required_consents_complete then
     raise exception 'Current required consents are incomplete'
       using errcode = '23514';
@@ -305,6 +395,22 @@ begin
     'profileComplete', true,
     'requiredConsentsComplete', true
   );
+end;
+$$;
+
+do $$
+declare
+  v_previous_claims text := current_setting('request.jwt.claims', true);
+begin
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  update public.profiles p
+  set mobile_onboarding_completed_at = now()
+  where p.mobile_onboarding_completed_at is null
+    and p.activation_status = 'active'
+    and char_length(btrim(p.display_name)) between 2 and 80
+    and p.username ~ '^[a-z0-9_]{3,24}$'
+    and public.mobile_user_has_bound_required_consents(p.id);
+  perform set_config('request.jwt.claims', coalesce(v_previous_claims, ''), true);
 end;
 $$;
 

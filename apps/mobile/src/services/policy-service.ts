@@ -18,6 +18,7 @@ type PolicyRow = {
   version: string;
   label: string | null;
   document_url: string;
+  checksum: string | null;
   effective_at: string;
   is_active: boolean;
   published_at: string;
@@ -52,6 +53,7 @@ function mapPolicy(row: PolicyRow): PolicyVersion {
     version: row.version,
     label: row.label,
     documentUrl: row.document_url,
+    checksum: row.checksum,
     effectiveAt: row.effective_at,
     isActive: row.is_active,
     publishedAt: row.published_at,
@@ -365,6 +367,7 @@ export class PolicyService {
           !policy.label?.trim() ||
           !policy.version.trim() ||
           !/^https:\/\//i.test(policy.documentUrl.trim()) ||
+          !/^(sha256:)?[0-9a-f]{64}$/i.test(policy.checksum?.trim() ?? "") ||
           new Date(policy.effectiveAt).getTime() > new Date(asOf).getTime()
       )
     ) {

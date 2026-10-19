@@ -18,6 +18,7 @@ test("the shipped entrypoint reaches the gated NativeApp runtime", () => {
   assert.match(nativeAppSource, /resolveNativeRootSurface/);
   assert.match(nativeAppSource, /surface === "onboarding"/);
   assert.match(nativeAppSource, /<OnboardingScreen \/>/);
+  assert.match(nativeAppSource, /await signOut\(\)/);
 });
 test("the gated NativeApp preserves invite handling and all established tabs", () => {
   assert.match(nativeAppSource, /surface === "invite"/);

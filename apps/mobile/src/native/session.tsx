@@ -60,6 +60,8 @@ export interface NativeOnboardingState {
   completedAt: string | null;
   profileComplete: boolean;
   requiredConsentsComplete: boolean;
+  marketingEmailOptIn: boolean;
+  pushNotificationsOptIn: boolean;
   errorMessage: string | null;
 }
 
@@ -126,6 +128,8 @@ const INCOMPLETE_ONBOARDING: NativeOnboardingState = {
   completedAt: null,
   profileComplete: false,
   requiredConsentsComplete: false,
+  marketingEmailOptIn: false,
+  pushNotificationsOptIn: false,
   errorMessage: null
 };
 
@@ -225,6 +229,8 @@ async function loadNativeOnboardingState(
     completedAt?: unknown;
     profileComplete?: unknown;
     requiredConsentsComplete?: unknown;
+    marketingEmailOptIn?: unknown;
+    pushNotificationsOptIn?: unknown;
   } | null;
 
   if (
@@ -232,6 +238,8 @@ async function loadNativeOnboardingState(
     (payload.status !== "complete" && payload.status !== "incomplete") ||
     typeof payload.profileComplete !== "boolean" ||
     typeof payload.requiredConsentsComplete !== "boolean" ||
+    typeof payload.marketingEmailOptIn !== "boolean" ||
+    typeof payload.pushNotificationsOptIn !== "boolean" ||
     (payload.completedAt !== null && typeof payload.completedAt !== "string")
   ) {
     throw new Error("The onboarding status response was invalid.");
@@ -242,6 +250,8 @@ async function loadNativeOnboardingState(
     completedAt: payload.completedAt,
     profileComplete: payload.profileComplete,
     requiredConsentsComplete: payload.requiredConsentsComplete,
+    marketingEmailOptIn: payload.marketingEmailOptIn,
+    pushNotificationsOptIn: payload.pushNotificationsOptIn,
     errorMessage: null
   };
 }
@@ -371,9 +381,13 @@ export function NativeSessionProvider({ children }: PropsWithChildren) {
     errorMessage: null
   });
 
-  async function refresh() {
+  async function refresh(background = false) {
     const requestId = ++refreshSequence.current;
-    setState((current) => ({ ...current, status: "loading", errorMessage: null }));
+    setState((current) => ({
+      ...current,
+      status: background && current.status === "ready" ? "ready" : "loading",
+      errorMessage: null
+    }));
 
     let access: NativeAccessState;
     try {
@@ -444,14 +458,14 @@ export function NativeSessionProvider({ children }: PropsWithChildren) {
   }
 
   useEffect(() => {
-    const authSubscription = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, _session: Session | null) => {
-      void refresh();
+    const authSubscription = supabase.auth.onAuthStateChange((event: AuthChangeEvent, _session: Session | null) => {
+      void refresh(event === "TOKEN_REFRESHED");
     });
 
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") {
         void supabase.auth.startAutoRefresh();
-        void refresh();
+        void refresh(true);
         return;
       }
 
@@ -483,14 +497,20 @@ export function NativeSessionProvider({ children }: PropsWithChildren) {
     const email = input.email.trim().toLowerCase();
     const { data, error } = await supabase.auth.signUp({
       email,
-      password: input.password
+      password: input.password,
+      options: {
+        data: {
+          display_name: input.displayName.trim(),
+          username: input.username.trim().toLowerCase()
+        }
+      }
     });
 
     if (error) {
       throw new Error(error.message || "Unable to create account.");
     }
 
-    if (data.user) {
+    if (data.user && data.session) {
       await ensureProfileForUser(supabase, {
         userId: data.user.id,
         email,

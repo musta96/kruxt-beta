@@ -5,6 +5,7 @@ import {
   homeGymIdForEligibleMembership,
   isExplicitOptIn,
   isHomeGymEligibleMembershipStatus,
+  onboardingResumeStep,
   reviewedBaselinePoliciesAreCurrent,
 } from "../src/services/onboarding-semantics.ts";
 
@@ -13,6 +14,21 @@ test("notification consent requires an explicit true opt-in", () => {
   for (const value of [undefined, null, false, 1, "true", {}]) {
     assert.equal(isExplicitOptIn(value), false);
   }
+});
+
+test("onboarding resumes at the first incomplete server-verified step", () => {
+  assert.equal(
+    onboardingResumeStep({ profileComplete: false, requiredConsentsComplete: false }),
+    "profile",
+  );
+  assert.equal(
+    onboardingResumeStep({ profileComplete: true, requiredConsentsComplete: false }),
+    "consents",
+  );
+  assert.equal(
+    onboardingResumeStep({ profileComplete: true, requiredConsentsComplete: true }),
+    "gym",
+  );
 });
 
 test("only active and trial memberships are eligible to become home gym", () => {

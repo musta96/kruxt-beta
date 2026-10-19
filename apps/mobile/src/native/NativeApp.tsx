@@ -109,9 +109,19 @@ function AuthenticatedTabs() {
 }
 
 function NativeRoot() {
-  const { state, refresh } = useNativeSession();
+  const { state, refresh, signOut } = useNativeSession();
   const url = ExpoLinking.useURL();
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+
+  async function leaveSession() {
+    setRecoveryError(null);
+    try {
+      await signOut();
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : "Unable to sign out.");
+    }
+  }
 
   useEffect(() => {
     const token = readInviteToken(url);
@@ -151,6 +161,7 @@ function NativeRoot() {
         />
         <Banner
           message={
+            recoveryError ??
             state.errorMessage ??
             state.onboarding.errorMessage ??
             "Unable to verify onboarding status."
@@ -158,6 +169,7 @@ function NativeRoot() {
           tone="danger"
         />
         <Button onPress={() => void refresh()}>Retry</Button>
+        <Button tone="secondary" onPress={() => void leaveSession()}>Sign out</Button>
       </ScreenScroll>
     );
   }

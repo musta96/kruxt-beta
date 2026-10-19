@@ -3,7 +3,10 @@ import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useState } from "react";
 
 import { GymService } from "../../services/gym-service";
-import { homeGymIdForEligibleMembership } from "../../services/onboarding-semantics";
+import {
+  homeGymIdForEligibleMembership,
+  onboardingResumeStep
+} from "../../services/onboarding-semantics";
 import { PolicyService, type BaselinePolicies } from "../../services/policy-service";
 import { ProfileService } from "../../services/profile-service";
 import { useNativeSession } from "../session";
@@ -33,9 +36,9 @@ function policyItems(policies: BaselinePolicies): Array<{
 }
 
 export function OnboardingScreen() {
-  const { supabase, state, completeOnboarding } = useNativeSession();
+  const { supabase, state, completeOnboarding, signOut } = useNativeSession();
   const user = state.access.user;
-  const [step, setStep] = useState<OnboardingStep>("profile");
+  const [step, setStep] = useState<OnboardingStep>(() => onboardingResumeStep(state.onboarding));
   const [displayName, setDisplayName] = useState(state.profile?.displayName ?? "");
   const [username, setUsername] = useState(state.profile?.username ?? "");
   const [policies, setPolicies] = useState<BaselinePolicies | null>(null);
@@ -49,8 +52,8 @@ export function OnboardingScreen() {
     privacy: false,
     healthData: false
   });
-  const [marketingOptIn, setMarketingOptIn] = useState(false);
-  const [pushOptIn, setPushOptIn] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(state.onboarding.marketingEmailOptIn);
+  const [pushOptIn, setPushOptIn] = useState(state.onboarding.pushNotificationsOptIn);
   const [gymQuery, setGymQuery] = useState("");
   const [gyms, setGyms] = useState<Gym[]>([]);
   const [gymPage, setGymPage] = useState(0);
@@ -143,7 +146,7 @@ export function OnboardingScreen() {
       });
       setDisplayName(normalizedDisplayName);
       setUsername(normalizedUsername);
-      setStep("consents");
+      setStep(state.onboarding.requiredConsentsComplete ? "gym" : "consents");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save your profile.");
     } finally {
@@ -247,6 +250,15 @@ export function OnboardingScreen() {
       setError(completeError instanceof Error ? completeError.message : "Unable to complete onboarding.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function leaveOnboarding() {
+    setError(null);
+    try {
+      await signOut();
+    } catch (signOutError) {
+      setError(signOutError instanceof Error ? signOutError.message : "Unable to sign out.");
     }
   }
 
@@ -385,6 +397,9 @@ export function OnboardingScreen() {
           </Button>
         </>
       ) : null}
+      <Button tone="secondary" onPress={() => void leaveOnboarding()} disabled={saving}>
+        Sign out
+      </Button>
     </ScreenScroll>
   );
 }

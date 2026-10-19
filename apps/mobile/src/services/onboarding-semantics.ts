@@ -6,6 +6,17 @@ export interface BaselinePolicyIdsLike {
   healthDataPolicyId: string;
 }
 
+export type OnboardingResumeStep = "profile" | "consents" | "gym";
+
+export function onboardingResumeStep(input: {
+  profileComplete: boolean;
+  requiredConsentsComplete: boolean;
+}): OnboardingResumeStep {
+  if (!input.profileComplete) return "profile";
+  if (!input.requiredConsentsComplete) return "consents";
+  return "gym";
+}
+
 export function isExplicitOptIn(value: unknown): boolean {
   return value === true;
 }

@@ -7644,6 +7644,10 @@ export type Database = {
         Args: { p_exercises: Json; p_workout: Json }
         Returns: string
       }
+      mobile_user_has_bound_required_consents: {
+        Args: { p_as_of?: string; p_user_id: string }
+        Returns: boolean
+      }
       normalize_legal_locale: { Args: { p_locale?: string }; Returns: string }
       platform_has_approved_gym_support_grant: {
         Args: {
