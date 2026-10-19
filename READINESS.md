@@ -22,9 +22,9 @@ outstanding.
 | Rank diagnostics + cross-app handoffs | PR #114 open, mergeable, CI green; hosted secrets/URLs still required |
 | Demo-data purge safety | PR #116 open, mergeable, CI green; no live purge has run |
 | Four-account BZone UAT harness | PR #117 open, mergeable, CI green; strict credentialed run still pending |
-| Class scheduling and member booking | Draft PR #118 published through `1ee7269`; general CI and real PostgreSQL workflow green |
-| Web signup, activation, and policy consent | Draft PR #131 published through `36bdd67`; atomic activation, membership guards, verified document review, and public browser fixes; PostgreSQL workflow green |
-| Native J1 onboarding gate | Draft PR #130 published through `e945b77`; legacy cutover, resume, optional-choice preservation, sign-out recovery, and policy-change recovery; PostgreSQL workflow green |
+| Class scheduling and member booking | PR #118 review-ready through `1ee7269`; general CI, PostgreSQL workflow, and all three Vercel previews green |
+| Web signup, activation, and policy consent | Draft PR #131 through `36bdd67`; general CI and PostgreSQL workflow green; Vercel previews queued |
+| Native J1 onboarding gate | Draft PR #130 through `e945b77`; general CI and PostgreSQL workflow green; Vercel previews queued |
 | Fable onboarding checkpoint | Preserved unchanged as `7d6328a` on `claude/j1-hardening` |
 
 ## Integration evidence
