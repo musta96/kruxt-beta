@@ -89,7 +89,7 @@ export function AthleteJourneyPreview() {
             <em>{index === 0 ? "Complete" : "Open"}</em>
           </div>
         ))}
-        <button type="button">Start workout</button>
+        <a className="journey-start" href="/#member-login">Start workout</a>
       </div>
 
       <div className="journey-screen journey-screen-proof">
@@ -137,7 +137,7 @@ export function GymDashboardPreview() {
             <span>Members</span>
             <h3>Know who needs attention.</h3>
           </div>
-          <button type="button">Invite member</button>
+          <a className="gym-preview-access" href="/contact#gyms">Gym walkthrough</a>
         </div>
         <div className="gym-dashboard-tabs">
           <strong>All members</strong>
