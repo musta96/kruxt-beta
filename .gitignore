@@ -11,6 +11,7 @@ dist
 build
 coverage
 demo-data-purge-report.json
+output/playwright/
 supabase/.temp
 packages/db/supabase/migrations_archive/
 
