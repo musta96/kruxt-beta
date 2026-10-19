@@ -8648,6 +8648,14 @@ export type Database = {
       }
     }
     Functions: {
+      accept_required_consents: {
+        Args: {
+          p_locale?: string
+          p_policy_version_ids: string[]
+          p_source?: string
+        }
+        Returns: string[]
+      }
       admin_get_gym_ops_summary: {
         Args: { p_gym_id: string }
         Returns: {
@@ -9208,6 +9216,15 @@ export type Database = {
         }
         Returns: string
       }
+      ensure_self_profile: {
+        Args: { p_display_name?: string; p_preferred_username?: string }
+        Returns: {
+          activation_status: string
+          display_name: string
+          id: string
+          username: string
+        }[]
+      }
       ensure_user_security_settings: {
         Args: { _user_id: string }
         Returns: undefined
@@ -9464,10 +9481,15 @@ export type Database = {
         Args: { p_overdue_limit?: number; p_triage_limit?: number }
         Returns: Json
       }
+      policy_version_has_content_binding: {
+        Args: { p_as_of?: string; p_policy_version_id: string }
+        Returns: boolean
+      }
       promote_waitlist_member: { Args: { p_class_id: string }; Returns: string }
       publish_policy_version: {
         Args: {
           p_change_summary?: string
+          p_checksum: string
           p_document_url: string
           p_effective_at?: string
           p_is_active?: boolean

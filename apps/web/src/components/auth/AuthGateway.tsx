@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 
-import { ensureProfileForUser, resolveAdminAccess } from "@/lib/auth/access";
+import { RequiredConsentReview } from "@/components/consent/RequiredConsentReview";
+import { MarketingHome } from "@/components/marketing/MarketingHome";
+import { ensureProfileExistsForUser, resolveAdminAccess } from "@/lib/auth/access";
 import { resolvePostAuthPath } from "@/components/public/usePublicSession";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -12,8 +14,6 @@ type AuthMode = "signin" | "signup";
 
 const DEFAULT_GYM_ADMIN_URL =
   process.env.NODE_ENV === "production" ? "https://kruxt-admin.vercel.app" : "http://localhost:3000";
-const DEFAULT_PLATFORM_URL =
-  process.env.NODE_ENV === "production" ? "https://kruxt-platform.vercel.app" : "http://localhost:3100";
 
 export function AuthGateway() {
   const router = useRouter();
@@ -24,31 +24,60 @@ export function AuthGateway() {
       process.env.NEXT_PUBLIC_ADMIN_APP_URL ??
       DEFAULT_GYM_ADMIN_URL
   );
-  const platformUrl = normalizeLoginUrl(process.env.NEXT_PUBLIC_KRUXT_PLATFORM_URL ?? DEFAULT_PLATFORM_URL);
   const [mode, setMode] = useState<AuthMode>("signin");
   const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [consentUserId, setConsentUserId] = useState<string | null>(null);
+  const authOperationActive = useRef(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
 
-  const resolveNextPath = useCallback(async (): Promise<string> => {
+  const continueAuthenticatedUser = useCallback(async (user: User): Promise<void> => {
+    await ensureProfileExistsForUser(supabase, {
+      userId: user.id,
+      email: user.email ?? "member@kruxt.app",
+      username: typeof user.user_metadata.username === "string" ? user.user_metadata.username : undefined,
+      displayName: typeof user.user_metadata.display_name === "string" ? user.user_metadata.display_name : undefined
+    });
+
     const access = await resolveAdminAccess(supabase);
-    return resolvePostAuthPath(access);
-  }, [supabase]);
+    if (access.status === "error") {
+      throw new Error(access.error || "Unable to validate account access.");
+    }
+
+    if (access.status === "consent_required") {
+      setConsentUserId(user.id);
+      setCheckingSession(false);
+      return;
+    }
+
+    setConsentUserId(null);
+    router.replace(resolvePostAuthPath(access));
+  }, [router, supabase]);
 
   useEffect(() => {
     let active = true;
 
     const checkSession = async () => {
-      const { data } = await supabase.auth.getUser();
+      const { data, error: userError } = await supabase.auth.getUser();
       if (!active) return;
+      if (userError && userError.name !== "AuthSessionMissingError") {
+        setError(userError.message || "Unable to validate your session.");
+        setCheckingSession(false);
+        return;
+      }
       if (data.user) {
-        const nextPath = await resolveNextPath();
-        router.replace(nextPath);
+        try {
+          await continueAuthenticatedUser(data.user);
+        } catch (sessionError) {
+          if (!active) return;
+          setError(sessionError instanceof Error ? sessionError.message : "Unable to validate account access.");
+          setCheckingSession(false);
+        }
         return;
       }
 
@@ -57,11 +86,15 @@ export function AuthGateway() {
 
     const listener = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (!active) return;
-      if (event === "SIGNED_IN" && session?.user) {
-        void resolveNextPath().then((nextPath) => {
+      if (event === "SIGNED_IN" && session?.user && !authOperationActive.current) {
+        window.setTimeout(() => {
           if (!active) return;
-          router.replace(nextPath);
-        });
+          void continueAuthenticatedUser(session.user).catch((sessionError) => {
+            if (!active) return;
+            setError(sessionError instanceof Error ? sessionError.message : "Unable to validate account access.");
+            setCheckingSession(false);
+          });
+        }, 0);
       }
     });
 
@@ -71,12 +104,13 @@ export function AuthGateway() {
       active = false;
       listener.data.subscription.unsubscribe();
     };
-  }, [resolveNextPath, router, supabase]);
+  }, [continueAuthenticatedUser, supabase]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    authOperationActive.current = true;
 
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -88,25 +122,24 @@ export function AuthGateway() {
         });
         if (signInError) throw signInError;
 
-        const nextPath = await resolveNextPath();
-        router.replace(nextPath);
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError) throw userError;
+        if (!userData.user) throw new Error("Sign-in completed without an authenticated user.");
+        await continueAuthenticatedUser(userData.user);
         return;
       }
 
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
-        password
+        password,
+        options: {
+          data: {
+            display_name: displayName.trim(),
+            username: username.trim()
+          }
+        }
       });
       if (signUpError) throw signUpError;
-
-      if (signUpData.user) {
-        await ensureProfileForUser(supabase, {
-          userId: signUpData.user.id,
-          email: normalizedEmail,
-          username,
-          displayName
-        });
-      }
 
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
@@ -121,229 +154,145 @@ export function AuthGateway() {
         return;
       }
 
-      const nextPath = await resolveNextPath();
-      router.replace(nextPath);
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!userData.user) throw new Error("Account created without an authenticated session.");
+      await continueAuthenticatedUser(userData.user);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Authentication failed.");
     } finally {
+      authOperationActive.current = false;
       setLoading(false);
     }
   }
 
   if (checkingSession) {
     return (
-      <main className="container">
-        <div className="panel">
-          <h1 className="heading">KRUXT</h1>
-          <p className="subheading">Checking your session...</p>
+      <main className="marketing-session-check">
+        <div>
+          <img src="/icon.svg" alt="" />
+          <strong>KRUXT</strong>
+          <span>Loading your workspace...</span>
         </div>
       </main>
     );
   }
 
-  return (
-    <main className="landing-site">
-      <header className="landing-nav">
-        <a className="landing-logo" href="/">
-          <img src="/icon.svg" alt="" className="landing-logo-mark" />
-          <span>KRUXT</span>
-        </a>
-        <nav className="landing-nav-links" aria-label="KRUXT entry points">
-          <a href="/gyms">Gyms</a>
-          <a href="/plan">Plan</a>
-          <a href="/rank">Rank</a>
-          <a href={gymAdminUrl}>Gym admin</a>
-          <a href={platformUrl}>Platform</a>
-        </nav>
-      </header>
+  const handleConsentComplete = async () => {
+    const { data, error: userError } = await supabase.auth.getUser();
+    if (userError) throw userError;
+    if (!data.user) throw new Error("Your session ended before consent verification completed.");
+    await continueAuthenticatedUser(data.user);
+  };
 
-      <section className="landing-hero">
-        <section className="landing-copy">
-          <h1 className="landing-title">KRUXT</h1>
-          <p className="landing-subtitle">
-            The training app where proof, plans, rank, coaching, and gym operations finally move together.
-          </p>
+  const handleConsentSignOut = async () => {
+    await supabase.auth.signOut();
+    setConsentUserId(null);
+    setCheckingSession(false);
+  };
 
-          <div className="landing-actions" aria-label="Primary login actions">
-            <a className="primary-cta" href="#member-login">Member login</a>
-            <a className="secondary-cta" href={gymAdminUrl}>Gym admin login</a>
-            <a className="secondary-cta" href={platformUrl}>Platform login</a>
-          </div>
-
-          <div className="landing-promo">
-            <a className="promo-panel" href="/feed">
-              <span className="promo-label">Members</span>
-              <strong>Plan, log, post proof, rank up, and join gyms.</strong>
-            </a>
-            <a className="promo-panel" href={gymAdminUrl}>
-              <span className="promo-label">Gyms</span>
-              <strong>Members, staff, classes, coaching, waivers, billing, and public pages.</strong>
-            </a>
-            <a className="promo-panel" href={platformUrl}>
-              <span className="promo-label">Platform</span>
-              <strong>Tenant control, entitlements, support access, governance, and audits.</strong>
-            </a>
-          </div>
-        </section>
-
-        <section className="auth-panel" id="member-login">
-        <div className="auth-shell-card">
-          <p className="eyebrow">{mode === "signin" ? "WELCOME BACK" : "CREATE ACCOUNT"}</p>
-          <h2 className="section-title">{mode === "signin" ? "Sign in to KRUXT" : "Claim your KRUXT account"}</h2>
-          <p className="section-copy">
-            Members continue into the app. Gym staff and platform operators can use the dedicated login buttons.
-          </p>
-
-          <div className="mode-toggle">
+  const authPanel = (
+    <div className="marketing-auth-card">
+      {consentUserId ? (
+        <RequiredConsentReview
+          client={supabase}
+          userId={consentUserId}
+          onComplete={handleConsentComplete}
+          onSignOut={() => void handleConsentSignOut()}
+        />
+      ) : (
+        <>
+          <div className="marketing-auth-toggle">
             <button
               type="button"
-              className={`toggle-pill ${mode === "signin" ? "is-active" : ""}`}
+              className={mode === "signin" ? "is-active" : ""}
               onClick={() => setMode("signin")}
             >
               Sign in
             </button>
             <button
               type="button"
-              className={`toggle-pill ${mode === "signup" ? "is-active" : ""}`}
+              className={mode === "signup" ? "is-active" : ""}
               onClick={() => setMode("signup")}
             >
-              Sign up
+              Create account
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="auth-form-grid">
-            {mode === "signup" && (
-              <>
-                <div>
-                  <label className="label" htmlFor="displayName">Display name</label>
+          <form onSubmit={handleSubmit} className="marketing-auth-form">
+            {mode === "signup" ? (
+              <div className="marketing-auth-name-grid">
+                <label>
+                  <span>Name</span>
                   <input
-                    id="displayName"
-                    className="input"
                     autoComplete="name"
+                    maxLength={80}
                     value={displayName}
                     onChange={(event) => setDisplayName(event.target.value)}
-                    placeholder="Edoardo Mustarelli"
+                    placeholder="Your name"
                   />
-                </div>
-                <div>
-                  <label className="label" htmlFor="username">Username</label>
+                </label>
+                <label>
+                  <span>Username</span>
                   <input
-                    id="username"
-                    className="input"
                     autoComplete="username"
+                    minLength={3}
+                    maxLength={24}
+                    pattern="[A-Za-z0-9_]{3,24}"
+                    title="Use 3 to 24 letters, numbers, or underscores."
                     value={username}
                     onChange={(event) => setUsername(event.target.value)}
-                    placeholder="musta96"
+                    placeholder="yourname"
                   />
-                </div>
-              </>
-            )}
+                </label>
+              </div>
+            ) : null}
 
-            <div>
-              <label className="label" htmlFor="email">Email</label>
+            <label>
+              <span>Email</span>
               <input
-                id="email"
-                className="input"
                 type="email"
                 required
                 autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="mustarelli.edoardo@gmail.com"
+                placeholder="you@example.com"
               />
-            </div>
-
-            <div>
-              <label className="label" htmlFor="password">Password</label>
+            </label>
+            <label>
+              <span>Password</span>
               <input
-                id="password"
-                className="input"
                 type="password"
                 required
                 minLength={mode === "signup" ? 8 : 1}
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder={mode === "signup" ? "Minimum 8 characters" : "Your password"}
+                placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
               />
-            </div>
+            </label>
 
-            {error && (
-              <div className="status-banner status-danger" role="alert">
+            {error ? (
+              <div className="marketing-auth-error" role="alert">
                 {error}
               </div>
-            )}
+            ) : null}
 
-            <button type="submit" className="primary-cta" disabled={loading}>
-              {loading ? "Please wait..." : mode === "signin" ? "Sign in" : "Create account"}
+            <button type="submit" className="marketing-button marketing-button-primary" disabled={loading}>
+              {loading ? "Please wait..." : mode === "signin" ? "Sign in to KRUXT" : "Create my account"}
             </button>
+            <p>
+              {mode === "signup"
+                ? "Creating an account does not accept a policy. After authentication, you must review and explicitly accept the active required versions before entering KRUXT."
+                : "Signing in does not create a consent record. KRUXT requests review whenever a required policy version changes."}
+            </p>
           </form>
-        </div>
-      </section>
-
-        <aside className="landing-product-panel" aria-label="KRUXT product preview">
-          <div className="mock-phone">
-            <div className="mock-phone-bar">
-              <span>Today</span>
-              <strong>Plan 72%</strong>
-            </div>
-            <div className="mock-session">
-              <span className="promo-label">BZone Hybrid</span>
-              <strong>Strength + Engine</strong>
-              <p>4 blocks · Coach note · Proof required</p>
-            </div>
-            <div className="mock-proof-row">
-              <span>Proof feed</span>
-              <strong>+180 XP</strong>
-            </div>
-            <div className="mock-proof-row">
-              <span>Rank trial</span>
-              <strong>#12</strong>
-            </div>
-          </div>
-        </aside>
-      </section>
-
-      <section className="landing-section">
-        <div>
-          <h2 className="section-title">One product, three doors.</h2>
-          <p className="section-copy">
-            KRUXT keeps the consumer app, gym back office, and founder control plane connected without forcing every
-            person into the same workspace.
-          </p>
-        </div>
-        <div className="landing-door-grid">
-          <a className="door-card" href="/gyms">
-            <span className="promo-label">User app</span>
-            <strong>Discover gyms, follow a plan, log workouts, and compete with proof.</strong>
-          </a>
-          <a className="door-card" href={gymAdminUrl}>
-            <span className="promo-label">Gym workspace</span>
-            <strong>Run B2B operations: members, staff roles, coaching, classes, payments, and compliance.</strong>
-          </a>
-          <a className="door-card" href={platformUrl}>
-            <span className="promo-label">KRUXT platform</span>
-            <strong>Manage tenant access, feature entitlements, support sessions, marketplace, and audit trails.</strong>
-          </a>
-        </div>
-      </section>
-
-      <section className="landing-section landing-section-split">
-        <div>
-          <h2 className="section-title">Built for BZone testing, ready for the network.</h2>
-          <p className="section-copy">
-            Invite links, public gym discovery, private member approvals, coach workspaces, custom roles, and audit logs
-            all point at the same operational spine.
-          </p>
-        </div>
-        <div className="landing-utility-actions">
-          <a className="primary-cta" href="/join">Join with invite</a>
-          <a className="secondary-cta" href="/gyms">Explore gyms</a>
-          <a className="secondary-cta" href="/support">Member support</a>
-        </div>
-      </section>
-    </main>
+        </>
+      )}
+    </div>
   );
+
+  return <MarketingHome authPanel={authPanel} gymAdminUrl={gymAdminUrl} />;
 }
 
 function normalizeLoginUrl(url: string): string {

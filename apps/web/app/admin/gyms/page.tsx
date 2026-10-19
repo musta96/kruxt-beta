@@ -107,7 +107,8 @@ export default function AdminGymsPage() {
   const [addressLookupSuggestions, setAddressLookupSuggestions] = useState<PlaceSuggestion[]>([]);
   const [placesHint, setPlacesHint] = useState<string | null>(null);
 
-  const canLoad = access.isAuthenticated && access.platformRole === "founder";
+  const canLoad =
+    access.status === "ready" && access.isAuthenticated && access.platformRole === "founder";
 
   const selectedGym = useMemo(
     () => gyms.find((gym) => gym.id === selectedGymId) ?? null,
