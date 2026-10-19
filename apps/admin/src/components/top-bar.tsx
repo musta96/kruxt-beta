@@ -15,6 +15,9 @@ interface TopBarProps {
   onMenuToggle: () => void;
 }
 
+const DEFAULT_PLATFORM_URL =
+  process.env.NODE_ENV === "production" ? "https://kruxt-platform.vercel.app" : "http://localhost:3100";
+
 function avatarInitials(email: string | null | undefined): string {
   if (!email) return "?";
   const namePart = email.split("@")[0];
@@ -84,7 +87,10 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
 
   const initials = avatarInitials(user?.email);
   const shortGymId = gymId ? gymId.slice(0, 8) : "—";
-  const platformUrl = process.env.NEXT_PUBLIC_PLATFORM_APP_URL ?? "http://localhost:3100";
+  const platformUrl =
+    process.env.NEXT_PUBLIC_KRUXT_PLATFORM_URL ??
+    process.env.NEXT_PUBLIC_PLATFORM_APP_URL ??
+    DEFAULT_PLATFORM_URL;
   const manageHref = gymId ? `/?gymId=${encodeURIComponent(gymId)}` : "/";
   const previewHref = gymId ? `/preview?gymId=${encodeURIComponent(gymId)}` : "/preview";
   const isPreview = pathname.startsWith("/preview");
