@@ -514,11 +514,17 @@ export function ClassesConsole({ scope }: { scope: "founder" | "org" }) {
       setError("No class occurrences generated. Check date and recurrence settings.");
       return;
     }
+    const bookingOpensAtDate = new Date();
+    if (occurrences.some((occurrence) => new Date(occurrence.startsAt) <= bookingOpensAtDate)) {
+      setError("Every class start time must be in the future.");
+      return;
+    }
 
     setSavingSchedule(true);
     setError(null);
     setSuccess(null);
     try {
+      const bookingOpensAt = bookingOpensAtDate.toISOString();
       const payload: CreateGymClassInput[] = occurrences.map((occurrence) => ({
         gymId: selectedGymId,
         title: title.trim(),
@@ -527,7 +533,9 @@ export function ClassesConsole({ scope }: { scope: "founder" | "org" }) {
         coachUserId,
         capacity,
         startsAt: occurrence.startsAt,
-        endsAt: occurrence.endsAt
+        endsAt: occurrence.endsAt,
+        bookingOpensAt,
+        bookingClosesAt: occurrence.startsAt
       }));
       await createGymClasses(supabase, payload);
       setSuccess(

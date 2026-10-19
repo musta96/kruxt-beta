@@ -8854,6 +8854,7 @@ export type Database = {
         Args: { p_user_id?: string }
         Returns: Json
       }
+      book_gym_class: { Args: { p_class_id: string }; Returns: string }
       bulk_update_gym_memberships: {
         Args: {
           p_gym_id: string
@@ -8876,6 +8877,23 @@ export type Database = {
           success: boolean
           user_id: string
         }[]
+      }
+      cancel_gym_class: { Args: { p_class_id: string }; Returns: string }
+      update_gym_class_by_staff: {
+        Args: { p_class_id: string; p_patch: Json }
+        Returns: Database["public"]["Tables"]["gym_classes"]["Row"][]
+      }
+      upsert_class_booking_by_staff: {
+        Args: { p_class_id: string; p_user_id: string; p_patch?: Json }
+        Returns: Database["public"]["Tables"]["class_bookings"]["Row"][]
+      }
+      update_class_waitlist_by_staff: {
+        Args: { p_waitlist_id: string; p_patch: Json }
+        Returns: Database["public"]["Tables"]["class_waitlist"]["Row"][]
+      }
+      cancel_gym_class_booking: {
+        Args: { p_booking_id: string }
+        Returns: string
       }
       calculate_level_from_xp: { Args: { _xp: number }; Returns: number }
       can_manage_discount_campaign: {
@@ -9352,6 +9370,10 @@ export type Database = {
       join_challenge: { Args: { p_challenge_id: string }; Returns: string }
       join_waitlist: { Args: { p_class_id: string }; Returns: string }
       leave_challenge: { Args: { p_challenge_id: string }; Returns: boolean }
+      leave_class_waitlist: {
+        Args: { p_waitlist_id: string }
+        Returns: string
+      }
       legal_locale_fallback_chain: {
         Args: { p_locale?: string }
         Returns: string[]

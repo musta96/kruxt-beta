@@ -316,17 +316,22 @@ export async function seedBzoneDemoData(
   } else {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const bookingOpensAt = new Date();
     const classRows: Record<string, unknown>[] = [];
     for (let weekOffset = 0; weekOffset < NUM_WEEKS; weekOffset++) {
       for (const c of BZONE_CLASSES) {
+        const startsAt = buildClassTime(c.weekday, c.start, weekOffset, today);
+        if (new Date(startsAt) <= bookingOpensAt) continue;
         classRows.push({
           gym_id: gymId,
           title: c.title,
           description: c.description,
           capacity: c.capacity,
           status: "scheduled",
-          starts_at: buildClassTime(c.weekday, c.start, weekOffset, today),
+          starts_at: startsAt,
           ends_at: buildClassTime(c.weekday, c.end, weekOffset, today),
+          booking_opens_at: bookingOpensAt.toISOString(),
+          booking_closes_at: startsAt,
         });
       }
     }
