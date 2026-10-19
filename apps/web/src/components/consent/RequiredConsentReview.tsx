@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   acceptRequiredConsentPolicies,
   loadRequiredConsentPolicies,
+  verifyRequiredConsentPolicyDocument,
   type RequiredConsentPolicy
 } from "@/lib/auth/required-consents";
 
@@ -36,39 +37,72 @@ export function RequiredConsentReview({
 }: RequiredConsentReviewProps) {
   const [policies, setPolicies] = useState<RequiredConsentPolicy[] | null>(null);
   const [acceptedPolicyIds, setAcceptedPolicyIds] = useState<Set<string>>(() => new Set());
+  const [verifiedDocumentUrls, setVerifiedDocumentUrls] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("Loading current policy versions.");
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const verifiedDocumentUrlsRef = useRef<string[]>([]);
+  const loadGeneration = useRef(0);
+  const invalidatePolicyLoad = useCallback(() => { loadGeneration.current++; }, []);
+
+  const replaceVerifiedDocumentUrls = useCallback((nextUrls: Record<string, string>) => {
+    for (const url of verifiedDocumentUrlsRef.current) URL.revokeObjectURL(url);
+    verifiedDocumentUrlsRef.current = Object.values(nextUrls);
+    setVerifiedDocumentUrls(nextUrls);
+  }, []);
 
   const loadPolicies = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     setError(null);
     setPolicies(null);
     setAcceptedPolicyIds(new Set());
+    replaceVerifiedDocumentUrls({});
     setAnnouncement("Loading current policy versions.");
 
     try {
       const requiredPolicies = await loadRequiredConsentPolicies(client, userId);
+      if (generation !== loadGeneration.current) return;
       if (requiredPolicies.length === 0) {
         setAnnouncement("Required policy review is complete.");
         await onComplete();
         return;
       }
+
+      setAnnouncement("Verifying published policy documents.");
+      const verifiedDocuments = await Promise.all(
+        requiredPolicies.map((policy) => verifyRequiredConsentPolicyDocument(policy))
+      );
+      if (generation !== loadGeneration.current) return;
+      replaceVerifiedDocumentUrls(
+        Object.fromEntries(
+          verifiedDocuments.map((document) => [document.policyId, URL.createObjectURL(document.blob)])
+        )
+      );
       setPolicies(requiredPolicies);
       setAnnouncement(
-        `${requiredPolicies.length} required ${requiredPolicies.length === 1 ? "policy is" : "policies are"} ready for review.`
+        `${requiredPolicies.length} required ${requiredPolicies.length === 1 ? "policy is" : "policies are"} verified and ready for review.`
       );
     } catch (loadError) {
+      if (generation !== loadGeneration.current) return;
       const message = loadError instanceof Error ? loadError.message : "Unable to load required policies.";
       setError(message);
       setPolicies([]);
       setAnnouncement(`Policy review unavailable. ${message}`);
     }
-  }, [client, onComplete, userId]);
+  }, [client, onComplete, replaceVerifiedDocumentUrls, userId]);
 
   useEffect(() => {
     void loadPolicies();
-  }, [loadPolicies]);
+    return invalidatePolicyLoad;
+  }, [invalidatePolicyLoad, loadPolicies]);
+
+  useEffect(() => {
+    return () => {
+      for (const url of verifiedDocumentUrlsRef.current) URL.revokeObjectURL(url);
+      verifiedDocumentUrlsRef.current = [];
+    };
+  }, []);
 
   useEffect(() => {
     if (variant !== "standalone" || (policies === null && !error)) return;
@@ -76,8 +110,12 @@ export function RequiredConsentReview({
   }, [error, policies, variant]);
 
   const allAccepted = useMemo(
-    () => Boolean(policies?.length) && policies!.every((policy) => acceptedPolicyIds.has(policy.id)),
-    [acceptedPolicyIds, policies]
+    () =>
+      Boolean(policies?.length) &&
+      policies!.every(
+        (policy) => acceptedPolicyIds.has(policy.id) && Boolean(verifiedDocumentUrls[policy.id])
+      ),
+    [acceptedPolicyIds, policies, verifiedDocumentUrls]
   );
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -117,8 +155,8 @@ export function RequiredConsentReview({
       </div>
 
       <p className={styles.notice}>
-        The public beta legal summaries are informational. Only the exact published documents linked below are
-        recorded with your acceptance.
+        The public beta legal summaries are informational. Each review copy below is downloaded without credentials
+        and verified against its published SHA-256 checksum before acceptance is enabled.
       </p>
 
       {policies === null && !error ? <p className={styles.notice}>Loading current policy versions...</p> : null}
@@ -134,8 +172,13 @@ export function RequiredConsentReview({
                 </div>
                 <p>Effective {formatEffectiveDate(policy.effectiveAt)}</p>
                 {policy.changeSummary ? <p>{policy.changeSummary}</p> : null}
-                <a className={styles.documentLink} href={policy.documentUrl} target="_blank" rel="noreferrer">
-                  Open and review this published document
+                <a
+                  className={styles.documentLink}
+                  href={verifiedDocumentUrls[policy.id]}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open the verified review copy
                 </a>
                 <label className={styles.acceptance}>
                   <input

@@ -665,6 +665,8 @@ create trigger trg_profiles_protect_security_fields
 before insert or update on public.profiles
 for each row execute function public.protect_profile_security_fields();
 
+drop policy if exists profiles_delete_self on public.profiles;
+revoke delete on table public.profiles from authenticated;
 revoke insert, update on table public.profiles from authenticated;
 grant insert (
   id,
@@ -678,6 +680,7 @@ grant insert (
   preferred_units
 ) on table public.profiles to authenticated;
 grant update (
+  id,
   username,
   display_name,
   avatar_url,
@@ -784,6 +787,299 @@ $$;
 
 revoke all on function public.ensure_self_profile(text, text) from public;
 grant execute on function public.ensure_self_profile(text, text) to authenticated;
+
+create or replace function public.enforce_self_membership_access_prerequisites()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor uuid := auth.uid();
+  v_activation_status text;
+begin
+  if public.is_service_role() or v_actor is null or new.user_id is distinct from v_actor then
+    return new;
+  end if;
+
+  select p.activation_status
+  into v_activation_status
+  from public.profiles p
+  where p.id = v_actor
+  for share;
+
+  if v_activation_status is distinct from 'active' then
+    raise exception using
+      errcode = '42501',
+      message = 'An active profile is required before joining a gym';
+  end if;
+
+  if not public.user_has_required_consents(v_actor) then
+    raise exception using
+      errcode = '42501',
+      message = 'Current required policy consent is required before joining a gym';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_gym_memberships_require_active_consented_self on public.gym_memberships;
+revoke all on function public.enforce_self_membership_access_prerequisites() from public;
+create trigger trg_gym_memberships_require_active_consented_self
+before insert or update on public.gym_memberships
+for each row execute function public.enforce_self_membership_access_prerequisites();
+
+create or replace function public.complete_profile_activation_atomic(
+  p_invite_id uuid,
+  p_user_id uuid,
+  p_attempt integer,
+  p_accepted_owner_terms boolean default false,
+  p_ip_address text default null,
+  p_user_agent text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invite public.gym_profile_invitations%rowtype;
+  v_auth_email text;
+  v_now timestamptz := clock_timestamp();
+  v_membership_id uuid;
+  v_activation_metadata jsonb;
+  v_profile_status text;
+begin
+  if not public.is_service_role() then
+    raise exception using errcode = '42501', message = 'Service role required';
+  end if;
+
+  if p_invite_id is null or p_user_id is null or p_attempt is null or p_attempt <= 0 then
+    raise exception using errcode = '22023', message = 'Invite, user, and positive attempt are required';
+  end if;
+
+  select invitation.*
+  into v_invite
+  from public.gym_profile_invitations invitation
+  where invitation.id = p_invite_id
+  for update;
+
+  if v_invite.id is null then
+    return jsonb_build_object('ok', false, 'status', 'not_found', 'error', 'Invite not found.');
+  end if;
+
+  if v_invite.invited_user_id is distinct from p_user_id then
+    return jsonb_build_object(
+      'ok', false,
+      'status', 'forbidden',
+      'error', 'Invite does not belong to this account.'
+    );
+  end if;
+
+  if v_invite.status = 'disabled' then
+    return jsonb_build_object('ok', false, 'status', 'disabled', 'error', 'Invite has been disabled.');
+  end if;
+
+  select activation_status into v_profile_status
+  from public.profiles where id = p_user_id for update;
+  if not found then
+    raise exception using errcode = '55000', message = 'Invited profile is unavailable';
+  end if;
+  if v_profile_status = 'disabled' then
+    return jsonb_build_object('ok', false, 'status', 'disabled', 'error', 'Profile has been disabled.');
+  end if;
+
+  if v_invite.status = 'active' then
+    return jsonb_build_object(
+      'ok', true,
+      'status', 'active',
+      'gymId', v_invite.gym_id,
+      'role', v_invite.gym_role,
+      'requestedRole', v_invite.requested_role
+    );
+  end if;
+
+  if v_invite.invite_attempt <> p_attempt then
+    return jsonb_build_object(
+      'ok', false,
+      'status', 'stale_attempt',
+      'error', 'This activation link has been replaced. Use the latest invite email.'
+    );
+  end if;
+
+  if v_invite.expires_at is null or v_invite.expires_at < v_now then
+    v_activation_metadata := coalesce(v_invite.metadata, '{}'::jsonb)
+      || jsonb_build_object('expired_at', v_now);
+
+    update public.gym_profile_invitations
+    set status = 'invite_expired', metadata = v_activation_metadata
+    where id = v_invite.id;
+
+    insert into public.audit_logs(
+      actor_user_id,
+      actor_role,
+      action,
+      target_table,
+      target_id,
+      ip_address,
+      user_agent,
+      metadata
+    )
+    values (
+      p_user_id,
+      'invited_profile',
+      'gym.profile_invite.expired',
+      'gym_profile_invitations',
+      v_invite.id,
+      nullif(btrim(split_part(coalesce(p_ip_address, ''), ',', 1)), ''),
+      nullif(btrim(p_user_agent), ''),
+      jsonb_build_object(
+        'gym_id', v_invite.gym_id,
+        'invited_user_id', p_user_id,
+        'invite_attempt', v_invite.invite_attempt
+      )
+    );
+
+    return jsonb_build_object('ok', false, 'status', 'expired', 'error', 'Invite has expired.');
+  end if;
+
+  select lower(btrim(u.email))
+  into v_auth_email
+  from auth.users u
+  where u.id = p_user_id;
+
+  if v_auth_email is null then
+    return jsonb_build_object(
+      'ok', false,
+      'status', 'invalid_account',
+      'error', 'Unable to validate activated account email.'
+    );
+  end if;
+
+  if v_auth_email <> lower(btrim(v_invite.email)) then
+    return jsonb_build_object(
+      'ok', false,
+      'status', 'forbidden',
+      'error', 'Invite email does not match this account.'
+    );
+  end if;
+
+  if v_invite.requested_role = 'owner' and not coalesce(p_accepted_owner_terms, false) then
+    return jsonb_build_object(
+      'ok', false,
+      'status', 'owner_consent_required',
+      'error', 'Owner terms and DPA acceptance is required before activation.'
+    );
+  end if;
+
+  update public.profiles
+  set
+    activation_status = 'active',
+    activation_status_updated_at = v_now,
+    activated_at = v_now
+  where id = p_user_id;
+
+  if not found then
+    raise exception using errcode = '55000', message = 'Invited profile is unavailable';
+  end if;
+
+  insert into public.gym_memberships(
+    gym_id,
+    user_id,
+    role,
+    membership_status,
+    membership_plan_id,
+    coach_user_id,
+    started_at
+  )
+  values (
+    v_invite.gym_id,
+    p_user_id,
+    v_invite.gym_role,
+    'active',
+    v_invite.membership_plan_id,
+    v_invite.coach_user_id,
+    v_now
+  )
+  on conflict (gym_id, user_id) do update
+  set
+    role = excluded.role,
+    membership_status = 'active',
+    membership_plan_id = excluded.membership_plan_id,
+    coach_user_id = excluded.coach_user_id,
+    started_at = coalesce(public.gym_memberships.started_at, excluded.started_at)
+  returning id into v_membership_id;
+
+  if v_invite.requested_role = 'owner' then
+    update public.gyms
+    set owner_user_id = p_user_id
+    where id = v_invite.gym_id;
+
+    if not found then
+      raise exception using errcode = '55000', message = 'Invited gym is unavailable';
+    end if;
+  end if;
+
+  v_activation_metadata := coalesce(v_invite.metadata, '{}'::jsonb)
+    || jsonb_strip_nulls(jsonb_build_object(
+      'activated_by', p_user_id,
+      'owner_terms_accepted_at', case when v_invite.requested_role = 'owner' then v_now else null end,
+      'owner_dpa_accepted_at', case when v_invite.requested_role = 'owner' then v_now else null end
+    ));
+
+  update public.gym_profile_invitations
+  set
+    status = 'active',
+    activated_at = v_now,
+    metadata = v_activation_metadata
+  where id = v_invite.id;
+
+  if not found then
+    raise exception using errcode = '55000', message = 'Invite activation could not be finalized';
+  end if;
+
+  insert into public.audit_logs(
+    actor_user_id,
+    actor_role,
+    action,
+    target_table,
+    target_id,
+    ip_address,
+    user_agent,
+    metadata
+  )
+  values (
+    p_user_id,
+    'invited_profile',
+    'gym.profile_invite.activated',
+    'gym_profile_invitations',
+    v_invite.id,
+    nullif(btrim(split_part(coalesce(p_ip_address, ''), ',', 1)), ''),
+    nullif(btrim(p_user_agent), ''),
+    jsonb_build_object(
+      'gym_id', v_invite.gym_id,
+      'invited_user_id', p_user_id,
+      'requested_role', v_invite.requested_role,
+      'gym_role', v_invite.gym_role,
+      'membership_id', v_membership_id,
+      'owner_terms_accepted', case when v_invite.requested_role = 'owner' then true else false end
+    )
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'status', 'active',
+    'gymId', v_invite.gym_id,
+    'role', v_invite.gym_role,
+    'requestedRole', v_invite.requested_role,
+    'membershipId', v_membership_id
+  );
+end;
+$$;
+
+revoke all on function public.complete_profile_activation_atomic(uuid, uuid, integer, boolean, text, text) from public;
+grant execute on function public.complete_profile_activation_atomic(uuid, uuid, integer, boolean, text, text) to service_role;
 
 create or replace function public.enforce_workout_required_consents()
 returns trigger

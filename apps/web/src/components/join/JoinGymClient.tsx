@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { ensureProfileForUser } from "@/lib/auth/access";
+import { hasRequiredConsents } from "@/lib/auth/required-consents";
+import { RequiredConsentReview } from "@/components/consent/RequiredConsentReview";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type AuthMode = "signin" | "signup";
@@ -26,6 +28,11 @@ export function JoinGymClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [consentUserId, setConsentUserId] = useState<string | null>(null);
+  const finishConsentReview = useCallback(async () => {
+    setConsentUserId(null);
+    setSuccess("Policies accepted. You can now redeem your gym code.");
+  }, []);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -45,6 +52,7 @@ export function JoinGymClient() {
     const listener = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
       setSessionUserEmail(session?.user.email ?? null);
+      setConsentUserId((current) => current === session?.user.id ? current : null);
     });
 
     return () => {
@@ -65,6 +73,25 @@ export function JoinGymClient() {
     setSuccess(null);
 
     try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!auth.user) throw new Error("Sign in before redeeming a gym code.");
+      await ensureProfileForUser(supabase, {
+        userId: auth.user.id,
+        email: auth.user.email ?? "",
+        username: typeof auth.user.user_metadata.username === "string" ? auth.user.user_metadata.username : undefined,
+        displayName: typeof auth.user.user_metadata.display_name === "string" ? auth.user.user_metadata.display_name : undefined
+      });
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles").select("activation_status").eq("id", auth.user.id).single();
+      if (profileError) throw profileError;
+      if (profile.activation_status !== "active") {
+        throw new Error("Your account must be active before joining a gym. Complete your activation or contact gym staff.");
+      }
+      if (!(await hasRequiredConsents(supabase, auth.user.id))) {
+        setConsentUserId(auth.user.id);
+        return;
+      }
       const { data: membershipId, error: redeemError } = await supabase.rpc("redeem_gym_invite_code", {
         p_code: normalizedCode,
         p_note: null
@@ -106,8 +133,8 @@ export function JoinGymClient() {
       await ensureProfileForUser(supabase, {
         userId: data.user.id,
         email: data.user.email ?? normalizedEmail,
-        username: mode === "signup" ? username : undefined,
-        displayName: mode === "signup" ? displayName : undefined
+        username: mode === "signup" ? username : typeof data.user.user_metadata.username === "string" ? data.user.user_metadata.username : undefined,
+        displayName: mode === "signup" ? displayName : typeof data.user.user_metadata.display_name === "string" ? data.user.user_metadata.display_name : undefined
       });
     };
 
@@ -126,7 +153,13 @@ export function JoinGymClient() {
 
       const { error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
-        password
+        password,
+        options: {
+          data: {
+            display_name: displayName.trim(),
+            username: username.trim()
+          }
+        }
       });
       if (signUpError) throw signUpError;
 
@@ -184,7 +217,14 @@ export function JoinGymClient() {
           />
         </div>
 
-        {sessionUserEmail ? (
+        {consentUserId ? (
+          <RequiredConsentReview
+            client={supabase}
+            userId={consentUserId}
+            onComplete={finishConsentReview}
+            onSignOut={() => void supabase.auth.signOut()}
+          />
+        ) : sessionUserEmail ? (
           <div className="panel" style={{ marginTop: 12 }}>
             <p className="subheading" style={{ marginTop: 0 }}>
               Signed in as <strong>{sessionUserEmail}</strong>

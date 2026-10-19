@@ -36,6 +36,19 @@ export type RequiredConsentPolicy = {
   reason: string;
 };
 
+export type VerifiedPolicyDocument = {
+  policyId: string;
+  blob: Blob;
+  byteLength: number;
+  contentType: string;
+};
+
+const MAX_POLICY_DOCUMENT_BYTES = 10 * 1024 * 1024;
+const REVIEWABLE_CONTENT_TYPES = new Set([
+  "application/pdf",
+  "text/plain"
+]);
+
 const REQUIRED_CONSENT_ORDER: RequiredConsentType[] = ["terms", "privacy", "health_data_processing"];
 
 const POLICY_TYPE_BY_CONSENT: Record<RequiredConsentType, RequiredPolicyType> = {
@@ -65,6 +78,82 @@ function isReviewableDocumentUrl(value: string): boolean {
 
 function isSha256Binding(value: string | null): value is string {
   return Boolean(value && /^(sha256:)?[0-9a-f]{64}$/i.test(value.trim()));
+}
+
+function normalizeSha256(value: string): string {
+  return value.trim().toLowerCase().replace(/^sha256:/, "");
+}
+
+function bytesToHex(bytes: ArrayBuffer): string {
+  return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export async function verifyRequiredConsentPolicyDocument(
+  policy: RequiredConsentPolicy
+): Promise<VerifiedPolicyDocument> {
+  if (!isReviewableDocumentUrl(policy.documentUrl) || !isSha256Binding(policy.checksum)) {
+    throw new Error(`${policy.label} has no valid HTTPS document binding.`);
+  }
+  const response = await fetch(policy.documentUrl, {
+    cache: "no-store",
+    credentials: "omit",
+    redirect: "error",
+    signal: AbortSignal.timeout(30000)
+  });
+
+  if (!response.ok) {
+    throw new Error(`${policy.label} could not be downloaded for checksum verification.`);
+  }
+
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  if (!REVIEWABLE_CONTENT_TYPES.has(contentType)) {
+    throw new Error(`${policy.label} was published with an unsupported document format.`);
+  }
+
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_POLICY_DOCUMENT_BYTES) {
+    throw new Error(`${policy.label} exceeds the verified review size limit.`);
+  }
+
+  if (!response.body) throw new Error(`${policy.label} has no reviewable document body.`);
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      byteLength += value.byteLength;
+      if (byteLength > MAX_POLICY_DOCUMENT_BYTES) {
+        await reader.cancel();
+        throw new Error(`${policy.label} exceeds the verified review size limit.`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const documentBytes = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    documentBytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  if (documentBytes.byteLength === 0 || documentBytes.byteLength > MAX_POLICY_DOCUMENT_BYTES) {
+    throw new Error(`${policy.label} is empty or exceeds the verified review size limit.`);
+  }
+
+  const digest = bytesToHex(await crypto.subtle.digest("SHA-256", documentBytes));
+  if (digest !== normalizeSha256(policy.checksum)) {
+    throw new Error(`${policy.label} does not match its published SHA-256 checksum.`);
+  }
+
+  return {
+    policyId: policy.id,
+    blob: new Blob([documentBytes], { type: contentType }),
+    byteLength: documentBytes.byteLength,
+    contentType
+  };
 }
 
 export async function hasRequiredConsents(client: SupabaseClient, userId: string): Promise<boolean> {
