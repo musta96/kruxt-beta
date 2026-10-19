@@ -36,7 +36,7 @@ function policyItems(policies: BaselinePolicies): Array<{
 }
 
 export function OnboardingScreen() {
-  const { supabase, state, completeOnboarding, signOut } = useNativeSession();
+  const { supabase, state, completeOnboarding, signOut, refresh } = useNativeSession();
   const user = state.access.user;
   const [step, setStep] = useState<OnboardingStep>(() => onboardingResumeStep(state.onboarding));
   const [displayName, setDisplayName] = useState(state.profile?.displayName ?? "");
@@ -69,6 +69,18 @@ export function OnboardingScreen() {
   const policyService = useMemo(() => new PolicyService(supabase), [supabase]);
   const profileService = useMemo(() => new ProfileService(supabase), [supabase]);
   const gymService = useMemo(() => new GymService(supabase), [supabase]);
+
+  useEffect(() => {
+    if (!state.onboarding.profileComplete) {
+      setStep("profile");
+    } else if (!state.onboarding.requiredConsentsComplete) {
+      setStep((current) => current === "gym" ? "consents" : current);
+      setPolicies(null);
+      setPolicyLoadAttempted(false);
+      setReviewed({ terms: false, privacy: false, healthData: false });
+      setAccepted({ terms: false, privacy: false, healthData: false });
+    }
+  }, [state.onboarding.profileComplete, state.onboarding.requiredConsentsComplete]);
 
   async function loadPolicies() {
     setPolicyLoadAttempted(true);
@@ -187,7 +199,7 @@ export function OnboardingScreen() {
         pushNotificationsOptIn: pushOptIn,
         source: "mobile"
       });
-      setStep("gym");
+      await refresh();
     } catch (saveError) {
       const code = (saveError as { code?: string }).code;
       if (code === "POLICY_BASELINE_CHANGED") {
