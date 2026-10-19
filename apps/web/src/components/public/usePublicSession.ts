@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 
-import { resolveAdminAccess, type AdminAccessState } from "@/lib/auth/access";
+import { ensureProfileExistsForUser, resolveAdminAccess, type AdminAccessState } from "@/lib/auth/access";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface ProfileSummary {
@@ -14,10 +14,11 @@ interface ProfileSummary {
 }
 
 interface PublicSessionState {
-  status: "loading" | "ready";
+  status: "loading" | "access_blocked" | "consent_required" | "error" | "ready";
   user: User | null;
   access: AdminAccessState | null;
   profile: ProfileSummary | null;
+  error: string | null;
 }
 
 function mapProfileLabel(profile: ProfileSummary | null, email: string | undefined): string {
@@ -48,47 +49,116 @@ export function usePublicSession() {
     status: "loading",
     user: null,
     access: null,
-    profile: null
+    profile: null,
+    error: null
   });
 
   useEffect(() => {
     let active = true;
 
     async function loadSession() {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        if (!active) return;
+        setState({
+          status: "error",
+          user: authData.user ?? null,
+          access: null,
+          profile: null,
+          error: authError.message || "Unable to validate your session."
+        });
+        return;
+      }
+
+      if (authData.user) {
+        try {
+          await ensureProfileExistsForUser(supabase, {
+            userId: authData.user.id,
+            email: authData.user.email ?? "member@kruxt.app",
+            username:
+              typeof authData.user.user_metadata.username === "string"
+                ? authData.user.user_metadata.username
+                : undefined,
+            displayName:
+              typeof authData.user.user_metadata.display_name === "string"
+                ? authData.user.user_metadata.display_name
+                : undefined
+          });
+        } catch (profileError) {
+          if (!active) return;
+          setState({
+            status: "error",
+            user: authData.user,
+            access: null,
+            profile: null,
+            error: profileError instanceof Error ? profileError.message : "Unable to prepare your profile."
+          });
+          return;
+        }
+      }
+
       const access = await resolveAdminAccess(supabase);
       if (!active) return;
 
       if (!access.user) {
         setState({
-          status: "ready",
+          status: access.status === "error" ? "error" : "ready",
           user: null,
           access,
-          profile: null
+          profile: null,
+          error: access.error
         });
         return;
       }
 
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("id,display_name,username,avatar_url")
-        .eq("id", access.user.id)
-        .maybeSingle();
+      if (access.status === "error") {
+        setState({
+          status: "error",
+          user: access.user,
+          access,
+          profile: null,
+          error: access.error || "Unable to validate account access."
+        });
+        return;
+      }
 
-      if (!active) return;
+      try {
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("id,display_name,username,avatar_url")
+          .eq("id", access.user.id)
+          .maybeSingle();
 
-      setState({
-        status: "ready",
-        user: access.user,
-        access,
-        profile: profileData
-          ? {
-              id: profileData.id as string,
-              displayName: (profileData.display_name as string | null | undefined) ?? null,
-              username: (profileData.username as string | null | undefined) ?? null,
-              avatarUrl: (profileData.avatar_url as string | null | undefined) ?? null
-            }
-          : null
-      });
+        if (profileError) throw profileError;
+
+        setState({
+          status: access.status === "activation_required" || access.status === "disabled"
+            ? "access_blocked"
+            : access.status === "consent_required"
+              ? "consent_required"
+              : "ready",
+          user: access.user,
+          access,
+          profile: profileData
+            ? {
+                id: profileData.id as string,
+                displayName: (profileData.display_name as string | null | undefined) ?? null,
+                username: (profileData.username as string | null | undefined) ?? null,
+                avatarUrl: (profileData.avatar_url as string | null | undefined) ?? null
+              }
+            : null,
+          error: null
+        });
+      } catch (profileError) {
+        if (!active) return;
+        setState({
+          status: "error",
+          user: access.user,
+          access,
+          profile: null,
+          error: profileError instanceof Error ? profileError.message : "Unable to prepare your profile."
+        });
+      }
     }
 
     const listener = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, _session: Session | null) => {

@@ -435,6 +435,7 @@ export interface RequiredConsentGap {
   requiredPolicyVersion?: string | null;
   reason:
     | "missing_active_policy"
+    | "missing_consent_ready_policy"
     | "missing_consent_record"
     | "latest_record_revoked"
     | "missing_policy_binding"
