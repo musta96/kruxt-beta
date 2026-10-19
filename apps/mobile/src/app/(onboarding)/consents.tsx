@@ -1,5 +1,7 @@
-import React, { useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Linking,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -10,118 +12,248 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { darkTheme, Button } from "@kruxt/ui";
+import type { PolicyVersion } from "@kruxt/types";
+import { useSupabase } from "../../contexts/supabase-context";
+import { useAuth } from "../../contexts/auth-context";
+import { PolicyService, type BaselinePolicies } from "../../services";
 
 const theme = darkTheme;
 
-interface ConsentItem {
-  id: string;
-  title: string;
-  summary: string;
-  required: boolean;
-}
+type RequiredConsentId = "terms" | "privacy" | "health_data";
+type ConsentState = Record<RequiredConsentId | "marketing", boolean>;
 
-const CONSENT_ITEMS: ConsentItem[] = [
-  {
-    id: "terms",
-    title: "Terms of Service",
-    summary:
-      "You agree to the KRUXT Terms of Service governing your use of the platform, including account responsibilities and acceptable use policies.",
-    required: true,
-  },
-  {
-    id: "privacy",
-    title: "Privacy Policy",
-    summary:
-      "We collect and process your personal data as described in our Privacy Policy, including workout logs, profile information, and usage analytics.",
-    required: true,
-  },
-  {
-    id: "health_data",
-    title: "Health Data Processing",
-    summary:
-      "KRUXT processes fitness and health-related data (workout logs, body metrics) to provide personalized tracking and insights. This data is stored securely and never sold to third parties.",
-    required: true,
-  },
-  {
-    id: "marketing",
-    title: "Marketing Communications",
-    summary:
-      "Receive occasional emails about new features, challenges, and community events. You can unsubscribe at any time.",
-    required: false,
-  },
-];
+const INITIAL_CONSENTS: ConsentState = {
+  terms: false,
+  privacy: false,
+  health_data: false,
+  marketing: false,
+};
+
+const INITIAL_REVIEWED: Record<RequiredConsentId, boolean> = {
+  terms: false,
+  privacy: false,
+  health_data: false,
+};
+
+interface RequiredConsentItem {
+  id: RequiredConsentId;
+  policy: PolicyVersion;
+  summary: string;
+}
 
 export default function ConsentsScreen() {
   const router = useRouter();
+  const supabase = useSupabase();
+  const { user, loading: authLoading } = useAuth();
 
-  const [consents, setConsents] = useState<Record<string, boolean>>(
-    Object.fromEntries(CONSENT_ITEMS.map((c) => [c.id, false])),
+  const [policies, setPolicies] = useState<BaselinePolicies | null>(null);
+  const [consents, setConsents] = useState<ConsentState>(INITIAL_CONSENTS);
+  const [reviewed, setReviewed] = useState(INITIAL_REVIEWED);
+  const [loadingPolicies, setLoadingPolicies] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadPolicies = useCallback(async () => {
+    if (authLoading) return;
+    if (!user) {
+      setLoadingPolicies(false);
+      setLoadError("You need to be signed in to review and accept policies.");
+      return;
+    }
+
+    setLoadingPolicies(true);
+    setLoadError(null);
+    setPolicies(null);
+    setConsents(INITIAL_CONSENTS);
+    setReviewed(INITIAL_REVIEWED);
+    try {
+      setPolicies(await new PolicyService(supabase).getCurrentBaselinePolicies());
+    } catch (loadFailure: unknown) {
+      setLoadError(
+        loadFailure instanceof Error
+          ? loadFailure.message
+          : "Unable to load the required policy documents.",
+      );
+    } finally {
+      setLoadingPolicies(false);
+    }
+  }, [authLoading, supabase, user]);
+
+  useEffect(() => {
+    void loadPolicies();
+  }, [loadPolicies]);
+
+  const requiredItems = useMemo<RequiredConsentItem[]>(() => {
+    if (!policies) return [];
+    return [
+      {
+        id: "terms",
+        policy: policies.terms,
+        summary: "The terms that govern your KRUXT account and use of the service.",
+      },
+      {
+        id: "privacy",
+        policy: policies.privacy,
+        summary: "How KRUXT collects, uses, stores, and protects your personal data.",
+      },
+      {
+        id: "health_data",
+        policy: policies.healthData,
+        summary: "Your explicit consent for processing workout and health-related data.",
+      },
+    ];
+  }, [policies]);
+
+  const allRequiredAccepted = requiredItems.every(
+    (item) => reviewed[item.id] && consents[item.id],
   );
 
-  const allRequiredAccepted = CONSENT_ITEMS.filter((c) => c.required).every(
-    (c) => consents[c.id],
+  const handleReviewDocument = useCallback(
+    async (id: RequiredConsentId, policy: PolicyVersion) => {
+      setError(null);
+      try {
+        await Linking.openURL(policy.documentUrl);
+        setReviewed((current) => ({ ...current, [id]: true }));
+      } catch {
+        setError(`Unable to open ${policy.label}. Please try again.`);
+      }
+    },
+    [],
   );
 
-  const toggleConsent = useCallback((id: string) => {
-    setConsents((prev) => ({ ...prev, [id]: !prev[id] }));
-  }, []);
+  const handleContinue = useCallback(async () => {
+    if (!user || !policies || !allRequiredAccepted || saving) return;
 
-  const acceptAll = useCallback(() => {
-    setConsents(Object.fromEntries(CONSENT_ITEMS.map((c) => [c.id, true])));
-  }, []);
-
-  const handleContinue = useCallback(() => {
-    if (!allRequiredAccepted) return;
-    router.push("/(onboarding)/gym-select");
-  }, [allRequiredAccepted, router]);
+    setSaving(true);
+    setError(null);
+    try {
+      await new PolicyService(supabase).captureBaselineConsents(user.id, {
+        acceptTerms: consents.terms,
+        acceptPrivacy: consents.privacy,
+        acceptHealthData: consents.health_data,
+        marketingEmailOptIn: consents.marketing,
+        pushNotificationsOptIn: false,
+        termsPolicyId: policies.terms.id,
+        privacyPolicyId: policies.privacy.id,
+        healthDataPolicyId: policies.healthData.id,
+        source: "mobile",
+      });
+      router.push("/(onboarding)/gym-select");
+    } catch (saveFailure: unknown) {
+      const code = (saveFailure as { code?: string })?.code;
+      if (code === "POLICY_BASELINE_CHANGED") {
+        await loadPolicies();
+      }
+      setError(
+        saveFailure instanceof Error
+          ? saveFailure.message
+          : "Unable to save your consents. Try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [allRequiredAccepted, consents, loadPolicies, policies, router, saving, supabase, user]);
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.heading} accessibilityRole="header">
-          Consents & Agreements
+          Privacy & Consents
         </Text>
         <Text style={styles.subtitle}>
-          Review and accept the required agreements to continue.
+          Review the current documents and accept each required policy to continue.
         </Text>
 
-        {CONSENT_ITEMS.map((item) => (
+        {(error || loadError) && (
+          <View style={styles.errorBanner} accessibilityRole="alert">
+            <Text style={styles.errorText}>{error ?? loadError}</Text>
+            {loadError && user && !authLoading ? (
+              <Pressable
+                onPress={() => void loadPolicies()}
+                accessibilityLabel="Retry loading policies"
+                accessibilityRole="button"
+              >
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        )}
+
+        {loadingPolicies || authLoading ? (
+          <View style={styles.loadingContainer} accessibilityLabel="Loading policy documents">
+            <ActivityIndicator color="#35D0FF" />
+          </View>
+        ) : null}
+
+        {requiredItems.map((item) => (
           <View key={item.id} style={styles.consentCard}>
             <View style={styles.consentHeader}>
               <View style={styles.consentTitleRow}>
-                <Text style={styles.consentTitle}>{item.title}</Text>
-                {item.required && (
-                  <Text style={styles.requiredBadge}>Required</Text>
-                )}
+                <Text style={styles.consentTitle}>{item.policy.label}</Text>
+                <Text style={styles.requiredBadge}>Required</Text>
               </View>
               <Switch
                 value={consents[item.id]}
-                onValueChange={() => toggleConsent(item.id)}
-                trackColor={{
-                  false: "rgba(141, 153, 174, 0.3)",
-                  true: "rgba(53, 208, 255, 0.4)",
-                }}
+                onValueChange={(value) =>
+                  setConsents((current) => ({ ...current, [item.id]: value }))
+                }
+                disabled={!reviewed[item.id] || saving}
+                trackColor={{ false: "#2A303B", true: "rgba(53, 208, 255, 0.4)" }}
                 thumbColor={consents[item.id] ? "#35D0FF" : "#8D99AE"}
-                accessibilityLabel={`${item.title} consent toggle`}
+                accessibilityLabel={`Accept ${item.policy.label} ${item.policy.version}`}
                 accessibilityRole="switch"
-                accessibilityState={{ checked: consents[item.id] }}
+                accessibilityState={{ checked: consents[item.id], disabled: !reviewed[item.id] }}
               />
             </View>
+            <Text style={styles.versionText}>
+              Version {item.policy.version} | Effective {item.policy.effectiveAt.slice(0, 10)}
+            </Text>
             <Text style={styles.consentSummary}>{item.summary}</Text>
+            <Pressable
+              onPress={() => void handleReviewDocument(item.id, item.policy)}
+              style={styles.documentLink}
+              accessibilityLabel={`Review ${item.policy.label} version ${item.policy.version}`}
+              accessibilityRole="link"
+            >
+              <Text style={styles.linkText}>
+                {reviewed[item.id] ? "Review document again" : "Review document"}
+              </Text>
+              <Text style={styles.documentUrl} numberOfLines={1}>
+                {item.policy.documentUrl}
+              </Text>
+            </Pressable>
           </View>
         ))}
 
-        <Pressable
-          onPress={acceptAll}
-          style={styles.acceptAllLink}
-          accessibilityLabel="Accept all consents"
-          accessibilityRole="button"
-        >
-          <Text style={styles.linkText}>Accept All</Text>
-        </Pressable>
+        {policies ? (
+          <View style={styles.consentCard}>
+            <View style={styles.consentHeader}>
+              <View style={styles.consentTitleRow}>
+                <Text style={styles.consentTitle}>Marketing emails</Text>
+                <Text style={styles.optionalBadge}>Optional</Text>
+              </View>
+              <Switch
+                value={consents.marketing}
+                onValueChange={(value) =>
+                  setConsents((current) => ({ ...current, marketing: value }))
+                }
+                disabled={!reviewed.privacy || saving}
+                trackColor={{ false: "#2A303B", true: "rgba(53, 208, 255, 0.4)" }}
+                thumbColor={consents.marketing ? "#35D0FF" : "#8D99AE"}
+                accessibilityLabel="Opt in to marketing emails"
+                accessibilityRole="switch"
+                accessibilityState={{ checked: consents.marketing, disabled: !reviewed.privacy }}
+              />
+            </View>
+            <Text style={styles.versionText}>
+              Governed by {policies.privacy.label} {policies.privacy.version}
+            </Text>
+            <Text style={styles.consentSummary}>
+              Receive product news and training updates. You can change this later.
+            </Text>
+          </View>
+        ) : null}
 
         <Button
           theme={theme}
@@ -129,8 +261,16 @@ export default function ConsentsScreen() {
           size="lg"
           label="Accept & Continue"
           onPress={handleContinue}
-          disabled={!allRequiredAccepted}
-          accessibilityLabel="Accept required consents and continue"
+          loading={saving}
+          disabled={
+            !user ||
+            authLoading ||
+            loadingPolicies ||
+            Boolean(loadError) ||
+            !allRequiredAccepted ||
+            saving
+          }
+          accessibilityLabel="Accept reviewed required policies and continue"
           style={styles.continueButton}
         />
       </ScrollView>
@@ -162,9 +302,35 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     lineHeight: 22,
   },
+  errorBanner: {
+    backgroundColor: "rgba(255, 107, 107, 0.12)",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255, 107, 107, 0.4)",
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontFamily: "Sora",
+    fontSize: 13,
+    color: "#FF6B6B",
+    lineHeight: 18,
+  },
+  retryText: {
+    fontFamily: "Sora",
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#35D0FF",
+    marginTop: 10,
+  },
+  loadingContainer: {
+    minHeight: 120,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   consentCard: {
     backgroundColor: "#171C24",
-    borderRadius: 14,
+    borderRadius: 8,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -188,6 +354,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     color: "#F4F6F8",
+    flexShrink: 1,
   },
   requiredBadge: {
     fontFamily: "Sora",
@@ -195,7 +362,19 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#35D0FF",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+  },
+  optionalBadge: {
+    fontFamily: "Sora",
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#A7B1C2",
+    textTransform: "uppercase",
+  },
+  versionText: {
+    fontFamily: "Roboto Mono",
+    fontSize: 11,
+    color: "#8D99AE",
+    marginBottom: 8,
   },
   consentSummary: {
     fontFamily: "Sora",
@@ -203,9 +382,8 @@ const styles = StyleSheet.create({
     color: "#A7B1C2",
     lineHeight: 19,
   },
-  acceptAllLink: {
-    alignSelf: "center",
-    marginVertical: 16,
+  documentLink: {
+    marginTop: 12,
   },
   linkText: {
     fontFamily: "Sora",
@@ -213,7 +391,14 @@ const styles = StyleSheet.create({
     color: "#35D0FF",
     fontWeight: "600",
   },
+  documentUrl: {
+    fontFamily: "Roboto Mono",
+    fontSize: 10,
+    color: "#8D99AE",
+    marginTop: 4,
+  },
   continueButton: {
     width: "100%",
+    marginTop: 12,
   },
 });

@@ -408,6 +408,7 @@ export interface PolicyVersion {
   version: string;
   label?: string | null;
   documentUrl: string;
+  checksum?: string | null;
   effectiveAt: string;
   isActive: boolean;
   publishedAt: string;

@@ -77,6 +77,36 @@ export class ProfileService {
     return mapProfile(data as ProfileRow);
   }
 
+  async updateProfile(userId: string, input: Partial<UpsertProfileInput>): Promise<Profile> {
+    const payload: Record<string, string> = {};
+
+    if (input.username !== undefined) payload.username = input.username;
+    if (input.displayName !== undefined) payload.display_name = input.displayName;
+    if (input.avatarUrl !== undefined) payload.avatar_url = input.avatarUrl;
+    if (input.bio !== undefined) payload.bio = input.bio;
+    if (input.locale !== undefined) payload.locale = input.locale;
+    if (input.preferredUnits !== undefined) payload.preferred_units = input.preferredUnits;
+
+    if (Object.keys(payload).length === 0) {
+      const existing = await this.getProfileById(userId);
+      if (!existing) {
+        throw new KruxtAppError("PROFILE_NOT_FOUND", "Profile was not found.");
+      }
+      return existing;
+    }
+
+    const { data, error } = await this.supabase
+      .from("profiles")
+      .update(payload)
+      .eq("id", userId)
+      .select("*")
+      .single();
+
+    throwIfError(error, "PROFILE_UPDATE_FAILED", "Unable to update profile.");
+
+    return mapProfile(data as ProfileRow);
+  }
+
   async setHomeGym(userId: string, gymId: string): Promise<Profile> {
     const { data, error } = await this.supabase
       .from("profiles")
@@ -146,7 +176,9 @@ export class ProfileService {
   ): Promise<Profile> {
     const existing = await this.getProfileById(userId);
     if (existing) {
-      return existing;
+      return Object.values(preferred).some((value) => value !== undefined)
+        ? this.updateProfile(userId, preferred)
+        : existing;
     }
 
     const seedUsername = (preferred.username ?? usernameFromEmail(userEmail)).slice(0, 24);
