@@ -13,6 +13,12 @@ fixes or guarded operator tooling, but several branches are unmerged and the
 hosted environment, legal documents, purge, UAT, and device checks are still
 outstanding.
 
+Security/GDPR release gate: the initial audit found unresolved authorization and
+privacy-workflow defects plus dependency advisories. See `SECURITY_READINESS.md`
+and #133. Local repairs and mocked regression tests are not yet deployed and
+are not a completed penetration test or compliance certification. Hosted DEV
+testing requires approval of `docs/security/hosted-dev-test-scope.md`.
+
 ## Engineering checkpoints
 
 | Area | Current status |
