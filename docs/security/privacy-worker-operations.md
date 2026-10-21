@@ -2,7 +2,8 @@
 
 Local repair state: 2026-10-21. Not deployed. Requires migrations
 `20261019140050_privacy_state_authorization` and
-`20261020233833_privacy_export_inventory_and_defaults`, after the full readiness
+`20261020233833_privacy_export_inventory_and_defaults` and
+`20261021154255_privacy_erasure_account_disablement`, after the full readiness
 migration set. Do not replay historical baseline SQL on a hosted database.
 
 ## Default State
@@ -51,10 +52,25 @@ are included, not attachment binaries; the full attachment/retention inventory i
 still pending. Legacy export projections for workout-set timestamps and check-in
 notes are repaired and executed by the SQL regression.
 
-The old anonymizer does not establish complete Auth/session disablement or
-support/billing/legal-retention coverage. **Keep erasure attestation unset** until
-those repairs and operator decisions are complete. Machine authorization and a
-successful function call alone do not establish complete lawful erasure.
+The worker now applies a 100-year Auth ban through the admin API before SQL
+anonymization, verifies the returned subject and future ban expiry, and stops on
+failure. The SQL wrapper disables the application profile in the anonymization
+transaction; the legacy implementation is no longer callable by service clients.
+Legal holds are checked before these steps. No Auth identity is cascade-deleted.
+If SQL anonymization or completion fails after the ban, the account remains banned;
+retries must not automatically unban it. Investigate partial failures manually.
+
+This is account containment, **not session revocation or complete Auth erasure**.
+The ban does not delete sessions; already-issued access tokens can survive until
+expiry. Immediate denial still needs server-side session/revocation enforcement
+across RLS, RPCs, Storage and Edge routes, followed by actual Auth integration tests.
+Auth identifiers and support/billing/legal retention remain unresolved. **Keep
+erasure attestation unset** until these repairs and operator decisions are complete.
+Machine authorization and a successful call do not establish lawful erasure.
+
+Sources: [Admin update API](https://supabase.com/docs/reference/javascript/auth-admin-updateuserbyid),
+[GoTrue v2.197.0 ban implementation](https://github.com/supabase/auth/blob/v2.197.0/internal/models/user.go),
+[Session revocation limits](https://supabase.com/docs/guides/auth/sessions).
 
 ## Checks
 

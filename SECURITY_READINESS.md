@@ -44,11 +44,11 @@ disclosure timing have been reviewed. Hosted deployment parity is unverified.
 | --- | --- | --- |
 | PRIV-01 | Contained locally | Transition RPC/client writes revoked, defense-in-depth trigger tested in real PostgreSQL. Worker-only completion remains trusted; complete-job consistency needs broader review. |
 | PRIV-02 | Repaired locally; hosted retest pending | Failed-upload cleanup, bounded expiry/subject cleanup and expiry-bound Storage policy implemented. Verify saved signed URLs/CDN behavior and concurrency on approved hosted DEV fixtures. |
-| PRIV-03 | P1 | Erasure omits support identifiers/correspondence and leaves the Auth identity/access state active. Define reviewed retention exceptions, redact unretained data, revoke sessions and enforce account disablement. Do not claim completed erasure first. |
+| PRIV-03 | P1; partial containment | Worker requires a confirmed long-lived Auth ban before anonymization; SQL atomically disables the profile. Existing JWT/session revocation, retained Auth identifiers and support/billing/legal retention are unresolved. Define retention exceptions, redact unretained data and verify immediate access denial. Automatic erasure remains off. |
 | PRIV-04 | Partial repair | Support tickets/customer-visible messages now exported; internal notes/metadata excluded. Legacy missing-column failures repaired. Attachment binaries and full-table completeness still require inventory review; automatic export remains gated. |
 | SEC-01 | Repaired locally | Owner/founder invitation boundaries, legacy issuer revalidation and no magic-link response disclosure pass 10 handler regressions; hosted retest pending. |
 | SEC-02 | P1 | Machine boundary containment needs deployed Deno/gateway tests and scheduler compatibility checks; local mocks do not establish hosted enforcement. |
-| DEP-01 | High | The 2026-10-19 production audit reported 4 critical, 99 high, 53 moderate, 7 low advisory entries. These are registry classifications, not confirmed reachable vulnerabilities. New CI rejects unresolved high/critical advisories. Framework/Expo dependency upgrades remain pending. |
+| DEP-01 | High | The 2026-10-21 production audit reported 4 critical, 100 high, 55 moderate, 7 low advisory entries. These are registry classifications, not confirmed reachable vulnerabilities. New CI rejects unresolved high/critical advisories. Framework/Expo dependency upgrades remain pending. |
 | SEC-03 | Review | Complete RLS/storage/tenant matrix, expired/revoked token behavior, admin MFA, rate limits, input limits, upload formats, headers/CSP, secret rotation and logging/redaction tests. These were not comprehensively verified in this pass. |
 
 No exploit details or secrets were posted to the public tracking issue. No live
@@ -102,7 +102,7 @@ database/tooling Node tests and configured package typechecks after integration.
 
 The full ordered PostgreSQL stack now passes privacy ACL/trigger, export
 projection/subject-isolation and Storage expiry regressions as well as the
-existing consent/activation contracts. `pnpm security:test` passes 43 Node checks
+existing consent/activation contracts. `pnpm security:test` passes 45 Node checks
 and 12 mobile tests. Login connection-error recovery was verified in the isolated
 local browser preview using disposable fixture inputs.
 Deno is not installed locally; hosted Edge runtime checks have not run.

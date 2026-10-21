@@ -27,6 +27,16 @@ function fixture(options = {}) {
   const expired = options.expired ?? [];
   const upstream = new Error("https://secret.invalid/?token=must-not-leak");
   const client = {
+    auth: { admin: { updateUserById: async (id, attributes) => {
+      calls.push(["disable_account", id, attributes]);
+      assert.equal(id, user);
+      assert.deepEqual(attributes, { ban_duration: "876000h" });
+      return {
+        data: { user: { id: options.wrongDisabledUser ? jobId : id,
+          banned_until: options.invalidBan ? "invalid" : options.expiredBan ? "2000-01-01T00:00:00Z" : "2126-01-01T00:00:00Z" } },
+        error: options.disableFailure ? upstream : null
+      };
+    } } },
     from: table => {
       let action = "select";
       const q = {};
@@ -48,7 +58,7 @@ function fixture(options = {}) {
       if (name === "complete_privacy_export_job") return { data: {}, error: options.completeFailure ? upstream : null };
       if (name === "apply_user_anonymization") {
         assert.equal([...files.keys()].some(path => path.startsWith(`${user}/`)), false);
-        return { data: { reviewed: true }, error: null };
+        return { data: { reviewed: true }, error: options.anonymizationFailure ? upstream : null };
       }
       if (name.startsWith("fail_")) return { data: { status: "retry_scheduled" }, error: null };
       return { data: 0, error: null };
@@ -144,7 +154,7 @@ test("legal holds and unknown hold state prevent storage/anonymization", async (
     const f = fixture({ env: attestation, hold, deleteJobs: [job], files: [packagePath] });
     const body = await (await f.run()).json();
     assert.equal(body.deleteSucceededCount, 0);
-    assert.equal(f.calls.some(([name]) => ["remove", "apply_user_anonymization", "complete_privacy_delete_job"].includes(name)), false);
+    assert.equal(f.calls.some(([name]) => ["remove", "disable_account", "apply_user_anonymization", "complete_privacy_delete_job"].includes(name)), false);
   }
 });
 
@@ -156,6 +166,28 @@ test("erasure cleans exact subject packages before anonymization and leaves othe
   assert.deepEqual([...f.files.keys()], [other]);
   const names = f.calls.map(([name]) => name);
   assert.ok(names.indexOf("remove") < names.indexOf("apply_user_anonymization"));
+  assert.ok(names.indexOf("remove") < names.indexOf("disable_account"));
+  assert.ok(names.indexOf("disable_account") < names.indexOf("apply_user_anonymization"));
+});
+
+test("unconfirmed account disablement blocks anonymization and erasure completion", async () => {
+  for (const option of ["disableFailure", "wrongDisabledUser", "invalidBan", "expiredBan"]) {
+    const f = fixture({ env: attestation, deleteJobs: [job], [option]: true });
+    const body = await (await f.run()).json();
+    assert.equal(body.deleteSucceededCount, 0);
+    assert.equal(body.deleteErrors[0].error, "account_disablement_failed");
+    assert.equal(f.calls.some(([name]) => ["apply_user_anonymization", "complete_privacy_delete_job"].includes(name)), false);
+    assert.doesNotMatch(JSON.stringify(body), /secret.invalid|must-not-leak/);
+  }
+});
+
+test("anonymization failure does not reverse account disablement or claim completion", async () => {
+  const f = fixture({ env: attestation, deleteJobs: [job], anonymizationFailure: true });
+  const body = await (await f.run()).json();
+  assert.equal(body.deleteSucceededCount, 0);
+  assert.equal(body.deleteErrors[0].error, "anonymization_failed");
+  assert.equal(f.calls.filter(([name]) => name === "disable_account").length, 1);
+  assert.equal(f.calls.some(([name]) => name === "complete_privacy_delete_job"), false);
 });
 
 test("failed/partial removal or suspicious paths cannot produce erasure completion", async () => {

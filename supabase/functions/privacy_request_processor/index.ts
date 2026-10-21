@@ -440,6 +440,17 @@ Deno.serve(async (request) => {
         failureCode = "export_package_cleanup_required";
         await deleteSubjectExports(supabase, job.user_id);
         await requireNoLegalHold(supabase, job.user_id);
+        failureCode = "account_disablement_failed";
+        // Keep the identity for reviewed retention; do not cascade-delete Auth rows.
+        const { data: disabledAccount, error: disableError } = await supabase.auth.admin.updateUserById(
+          job.user_id, { ban_duration: "876000h" }
+        );
+        const bannedUntil = Date.parse(disabledAccount?.user?.banned_until ?? "");
+        if (disableError || disabledAccount?.user?.id !== job.user_id
+          || !Number.isFinite(bannedUntil) || bannedUntil <= Date.now()) {
+          throw new Error("account_disablement_failed");
+        }
+        await requireNoLegalHold(supabase, job.user_id);
         failureCode = "anonymization_failed";
 
         const { data: anonymizationSummary, error: anonymizationError } = await supabase.rpc(
