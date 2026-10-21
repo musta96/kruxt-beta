@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { createAdminSupabaseClient } from "@/services";
+import { authenticationErrorMessage } from "@/services/auth-error";
+import { Eye, EyeOff } from "lucide-react";
 
 type Mode = "signin" | "signup";
 
@@ -14,6 +16,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -33,7 +36,7 @@ export default function LoginPage() {
       if (mode === "signin") {
         const result = await signIn(email, password);
         if (result.error) {
-          setError(result.error);
+          setError(authenticationErrorMessage({ message: result.error }));
         } else {
           router.replace(getLoginNextPath());
         }
@@ -44,7 +47,7 @@ export default function LoginPage() {
           password,
         });
         if (signUpError) {
-          setError(signUpError.message);
+          setError(authenticationErrorMessage(signUpError));
         } else if (data.session) {
           router.replace(getLoginNextPath());
         } else {
@@ -54,7 +57,7 @@ export default function LoginPage() {
         }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Authentication failed.");
+      setError(authenticationErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -76,6 +79,8 @@ export default function LoginPage() {
         <div className="flex items-center gap-1 rounded-lg border border-border bg-kruxt-panel p-1 text-xs">
           <button
             type="button"
+            disabled={loading}
+            aria-pressed={mode === "signin"}
             onClick={() => {
               setMode("signin");
               setError(null);
@@ -91,6 +96,8 @@ export default function LoginPage() {
           </button>
           <button
             type="button"
+            disabled={loading}
+            aria-pressed={mode === "signup"}
             onClick={() => {
               setMode("signup");
               setError(null);
@@ -116,12 +123,12 @@ export default function LoginPage() {
         </p>
 
         {error && (
-          <div className="mt-4 rounded-lg border border-kruxt-danger/30 bg-kruxt-danger/10 px-4 py-3 text-sm text-kruxt-danger">
+          <div role="alert" className="mt-4 rounded-lg border border-kruxt-danger/30 bg-kruxt-danger/10 px-4 py-3 text-sm text-kruxt-danger">
             {error}
           </div>
         )}
         {info && (
-          <div className="mt-4 rounded-lg border border-kruxt-accent/30 bg-kruxt-accent/10 px-4 py-3 text-sm text-kruxt-accent">
+          <div role="status" className="mt-4 rounded-lg border border-kruxt-accent/30 bg-kruxt-accent/10 px-4 py-3 text-sm text-kruxt-accent">
             {info}
           </div>
         )}
@@ -139,6 +146,7 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               required
+              disabled={loading}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1.5 w-full rounded-button border border-border bg-kruxt-panel px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent"
@@ -153,17 +161,26 @@ export default function LoginPage() {
             >
               Password
             </label>
+            <div className="relative">
             <input
               id="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete={mode === "signin" ? "current-password" : "new-password"}
               required
+              disabled={loading}
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 w-full rounded-button border border-border bg-kruxt-panel px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent"
+              className="mt-1.5 w-full rounded-button border border-border bg-kruxt-panel py-2 pl-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent"
               placeholder="••••••••"
             />
+            <button type="button" onClick={() => setShowPassword(value => !value)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? "Hide password" : "Show password"}
+              className="absolute bottom-0 right-0 flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground">
+              {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+            </button>
+            </div>
           </div>
 
           <button

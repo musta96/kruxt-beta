@@ -217,6 +217,9 @@ begin
   if v_workout is null then
     raise exception 'direct workout insert failed after valid consent';
   end if;
+  if (select visibility from public.workouts where id = v_workout) <> 'private' then
+    raise exception 'Direct workout insert did not default private';
+  end if;
 
   v_workout := public.log_workout_atomic(
     jsonb_build_object('title', 'Allowed RPC workout'),
@@ -225,6 +228,14 @@ begin
 
   if v_workout is null then
     raise exception 'log_workout_atomic failed after valid consent';
+  end if;
+  if (select visibility from public.workouts where id = v_workout) <> 'private' then
+    raise exception 'Workout RPC did not default private';
+  end if;
+  v_workout := public.log_workout_atomic(
+    jsonb_build_object('title', 'Explicit sharing choice', 'visibility', 'public'), '[]'::jsonb);
+  if (select visibility from public.workouts where id = v_workout) <> 'public' then
+    raise exception 'Explicit workout sharing choice was not preserved';
   end if;
 end;
 $$;

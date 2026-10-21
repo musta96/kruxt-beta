@@ -1,6 +1,6 @@
 # Security and Privacy Readiness
 
-Reviewed: 2026-10-19. Tracking: #133. **Release hold remains in place.**
+Reviewed: 2026-10-21. Tracking: #133. **Release hold remains in place.**
 
 This is an initial source audit and local regression pass, not a GDPR
 certification, completed independent penetration test, or guarantee against
@@ -27,22 +27,28 @@ disclosure timing have been reviewed. Hosted deployment parity is unverified.
 - Incident force-drill cannot consume the global queue. Undelivered live jobs
   follow the failure/retry path rather than being marked successful. The current
   notifier is still a stub; real incident delivery is not operationally proven.
-- New web/native workout forms and the mobile payload fallback default private.
-  Existing records and explicit sharing choices are unchanged. Database/profile
-  public defaults and historical clients require a separate forward migration
-  review; this client patch is not a complete privacy-default enforcement layer.
+- New web/native workout forms, mobile fallback, database profile/workout defaults
+  and omitted-visibility workout RPC calls now default private. Existing records
+  and explicit sharing choices are unchanged. Forward SQL regressions pass.
+- Invitation owner/issuer boundaries and recipient-only magic-link delivery are
+  repaired and covered by actual-handler mocked tests.
+- Privacy state RPC/table writes are worker-owned. Real PostgreSQL negative tests
+  pass, while authenticated intake/read remains functional.
+- Export/erasure fulfillment defaults off until a versioned inventory attestation.
+  Cleanup, expiry and legal-hold behavior is locally tested. See
+  `docs/security/privacy-worker-operations.md` for enablement limits.
 
 ## Open Security and Rights Findings
 
 | ID | Priority | Evidence / Remaining Work |
 | --- | --- | --- |
-| PRIV-01 | P1 | `transition_privacy_request` accepts shared-gym staff and can fulfill without a successful export/delete job. Add request-specific authorization and worker-only terminal completion, including direct-table paths. |
-| PRIV-02 | P1 | Export URL fields are cleared during anonymization, but issued Storage URLs/objects are not revoked or expired by this path. Delete export objects and verify saved URL denial; define retry-safe cleanup. |
+| PRIV-01 | Contained locally | Transition RPC/client writes revoked, defense-in-depth trigger tested in real PostgreSQL. Worker-only completion remains trusted; complete-job consistency needs broader review. |
+| PRIV-02 | Repaired locally; hosted retest pending | Failed-upload cleanup, bounded expiry/subject cleanup and expiry-bound Storage policy implemented. Verify saved signed URLs/CDN behavior and concurrency on approved hosted DEV fixtures. |
 | PRIV-03 | P1 | Erasure omits support identifiers/correspondence and leaves the Auth identity/access state active. Define reviewed retention exceptions, redact unretained data, revoke sessions and enforce account disablement. Do not claim completed erasure first. |
-| PRIV-04 | P2 | The fixed export inventory omits support tickets/messages. Add subject-scoped correspondence with internal/third-party redaction; verify completeness across all current tables. |
-| SEC-01 | P1 | Invitation privilege escalation and recipient magic-link disclosure require handler fixes and negative regressions. Verify previously issued tokens and email-delivery failure behavior. |
+| PRIV-04 | Partial repair | Support tickets/customer-visible messages now exported; internal notes/metadata excluded. Legacy missing-column failures repaired. Attachment binaries and full-table completeness still require inventory review; automatic export remains gated. |
+| SEC-01 | Repaired locally | Owner/founder invitation boundaries, legacy issuer revalidation and no magic-link response disclosure pass 10 handler regressions; hosted retest pending. |
 | SEC-02 | P1 | Machine boundary containment needs deployed Deno/gateway tests and scheduler compatibility checks; local mocks do not establish hosted enforcement. |
-| DEP-01 | High | Production dependency audit reports 4 critical, 99 high, 53 moderate, 7 low advisory entries. These are registry classifications, not confirmed reachable vulnerabilities. Triage Next.js 14.2.35 and Expo/build transitive dependencies and migrate to supported patched versions with full builds/device tests. |
+| DEP-01 | High | The 2026-10-19 production audit reported 4 critical, 99 high, 53 moderate, 7 low advisory entries. These are registry classifications, not confirmed reachable vulnerabilities. New CI rejects unresolved high/critical advisories. Framework/Expo dependency upgrades remain pending. |
 | SEC-03 | Review | Complete RLS/storage/tenant matrix, expired/revoked token behavior, admin MFA, rate limits, input limits, upload formats, headers/CSP, secret rotation and logging/redaction tests. These were not comprehensively verified in this pass. |
 
 No exploit details or secrets were posted to the public tracking issue. No live
@@ -83,8 +89,8 @@ These require owner/privacy-counsel decisions and evidence, not code-only claims
 6. Complete the independent scoped penetration test, remediate/retest findings
    and record signed residual-risk acceptance before inviting real testers.
 
-The backend was reported inactive at the previous availability check. Restoration
-alone will not deploy these repairs or satisfy any gate above.
+DEV was restored and verified `ACTIVE_HEALTHY` with Auth health/settings HTTP 200
+on 2026-10-21. Restoration did not deploy these repairs or satisfy release gates.
 
 ## Verification and Limits
 
@@ -94,11 +100,19 @@ with mocked transports/auth dependencies; it is not a real gateway or RLS test.
 The second includes a behavioral private-draft default regression. Run all
 database/tooling Node tests and configured package typechecks after integration.
 
-Full ordered PostgreSQL contracts from the readiness rehearsal remain useful
-baseline evidence, but must be extended for the new privacy authorization cases.
+The full ordered PostgreSQL stack now passes privacy ACL/trigger, export
+projection/subject-isolation and Storage expiry regressions as well as the
+existing consent/activation contracts. `pnpm security:test` passes 43 Node checks
+and 12 mobile tests. Login connection-error recovery was verified in the isolated
+local browser preview using disposable fixture inputs.
 Deno is not installed locally; hosted Edge runtime checks have not run.
 Dependency scan: `pnpm audit --prod --json`, exit 1 (advisories), current lockfile.
 No dependency upgrades have been applied by this initial pass.
+
+Automated CI is authored locally, not yet published or run on GitHub. The
+dependency-advisory gate is expected to remain red until upgrade/triage work is
+complete. A minimal redacted/manual health checker is available; no telemetry
+provider, recurring monitor or notification recipient has been configured.
 
 Hosted rules of engagement are in `docs/security/hosted-dev-test-scope.md` and
 are **not approved for execution**.

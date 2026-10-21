@@ -35,4 +35,5 @@ done
 psql "$CONSENT_DB" -X -v ON_ERROR_STOP=1 -f "$ROOT_DIR/tests/consent_activation_hardening.sql"
 psql "$CONSENT_DB" -X -v ON_ERROR_STOP=1 -f "$ROOT_DIR/tests/consent_activation_repairs.sql"
 psql "$CONSENT_DB" -X -v ON_ERROR_STOP=1 -f "$ROOT_DIR/tests/privacy_state_authorization.sql"
+psql "$CONSENT_DB" -X -v ON_ERROR_STOP=1 -f "$ROOT_DIR/tests/privacy_export_inventory.sql"
 echo '[ok] Full ordered migrations and consent/activation PostgreSQL contracts'

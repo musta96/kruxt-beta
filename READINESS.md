@@ -32,6 +32,7 @@ testing requires approval of `docs/security/hosted-dev-test-scope.md`.
 | Web signup, activation, and policy consent | PR #131 review-ready through `36bdd67`; general CI, PostgreSQL workflow, and all three Vercel previews green |
 | Native J1 onboarding gate | PR #130 review-ready through `e945b77`; general CI, PostgreSQL workflow, and all three Vercel previews green |
 | Coordinated deployment guards | #132: local-only default, DEV confirmation, migration parity and Edge manifest tests pass; historical migration reconciliation remains blocked |
+| Security/privacy and runtime checks | Local #133 branch: 88 Node tests, 12 mobile tests and PostgreSQL privacy contracts pass; admin build passes; proposed CI not published; dependency and erasure-policy gates remain open |
 | Fable onboarding checkpoint | Preserved unchanged as `7d6328a` on `claude/j1-hardening` |
 
 ## Integration evidence

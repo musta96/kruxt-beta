@@ -1,0 +1,53 @@
+name: security-privacy
+on:
+  pull_request:
+  push:
+    branches: [main, codex/security-gdpr-audit]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: security-privacy-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: security-fixture-only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Negative authorization and privacy lifecycle regressions
+        run: pnpm security:test
+      - name: Full migration and PostgreSQL privacy contracts
+        env:
+          KRUXT_CONSENT_TEST_DATABASE_URL: postgresql://postgres:security-fixture-only@localhost:5432/postgres
+        run: bash packages/db/tests/run_consent_contract.sh
+  dependency-advisories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Fail on unresolved high or critical production advisories
+        run: pnpm audit --prod --audit-level high
