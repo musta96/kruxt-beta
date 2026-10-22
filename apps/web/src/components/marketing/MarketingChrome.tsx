@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 type MarketingChromeProps = {
   children: ReactNode;
@@ -29,10 +30,10 @@ export function MarketingHeader({ gymAdminUrl }: MarketingHeaderProps) {
 
   return (
     <header className="marketing-header">
-      <a className="marketing-logo" href="/" aria-label="KRUXT home">
+      <Link className="marketing-logo" href="/" aria-label="KRUXT home">
         <img src="/icon.svg" alt="" />
         <span>KRUXT</span>
-      </a>
+      </Link>
 
       <nav className="marketing-desktop-nav" aria-label="Main navigation">
         {navigation.map((item) => (
@@ -43,13 +44,13 @@ export function MarketingHeader({ gymAdminUrl }: MarketingHeaderProps) {
       </nav>
 
       <div className="marketing-header-actions">
-        <a className="marketing-text-link" href="/#member-login">
+        <Link className="marketing-text-link" href="/#member-login">
           Sign in
-        </a>
-        <a className="marketing-button marketing-button-primary marketing-button-compact" href="/#member-login">
+        </Link>
+        <Link className="marketing-button marketing-button-primary marketing-button-compact" href="/#member-login">
           Get started
           <ArrowIcon />
-        </a>
+        </Link>
       </div>
 
       <details className="marketing-mobile-menu">
@@ -63,7 +64,7 @@ export function MarketingHeader({ gymAdminUrl }: MarketingHeaderProps) {
               {item.label}
             </a>
           ))}
-          <a href="/#member-login">Member sign in</a>
+          <Link href="/#member-login">Member sign in</Link>
           <a href={gymAdminUrl}>Gym admin sign in</a>
         </nav>
       </details>
@@ -75,10 +76,10 @@ export function MarketingFooter({ gymAdminUrl }: MarketingHeaderProps) {
   return (
     <footer className="marketing-footer">
       <div className="marketing-footer-brand">
-        <a className="marketing-logo" href="/" aria-label="KRUXT home">
+        <Link className="marketing-logo" href="/" aria-label="KRUXT home">
           <img src="/icon.svg" alt="" />
           <span>KRUXT</span>
-        </a>
+        </Link>
         <p>Training, community, coaching, and gym operations in one connected system.</p>
       </div>
 

@@ -1,6 +1,6 @@
 # Security and Privacy Readiness
 
-Reviewed: 2026-10-21. Tracking: #133. **Release hold remains in place.**
+Reviewed: 2026-10-22. Tracking: #133. **Release hold remains in place.**
 
 This is an initial source audit and local regression pass, not a GDPR
 certification, completed independent penetration test, or guarantee against
@@ -48,7 +48,7 @@ disclosure timing have been reviewed. Hosted deployment parity is unverified.
 | PRIV-04 | Partial repair | Support tickets/customer-visible messages now exported; internal notes/metadata excluded. Legacy missing-column failures repaired. Attachment binaries and full-table completeness still require inventory review; automatic export remains gated. |
 | SEC-01 | Repaired locally | Owner/founder invitation boundaries, legacy issuer revalidation and no magic-link response disclosure pass 10 handler regressions; hosted retest pending. |
 | SEC-02 | P1 | Machine boundary containment needs deployed Deno/gateway tests and scheduler compatibility checks; local mocks do not establish hosted enforcement. |
-| DEP-01 | High | The 2026-10-21 production audit reported 4 critical, 100 high, 55 moderate, 7 low advisory entries. These are registry classifications, not confirmed reachable vulnerabilities. New CI rejects unresolved high/critical advisories. Framework/Expo dependency upgrades remain pending. |
+| DEP-01 | High; partial repair | Local Next.js 15.5.28 upgrade removes Next advisories. Audit now reports 2 critical, 92 high, 45 moderate, 6 low registry entries, not proven reachable exploits. Dependency CI remains blocked. Remaining framework/native/toolchain findings need remediation; see `docs/security/dependency-upgrade-checkpoint.md`. |
 | SEC-03 | Review | Complete RLS/storage/tenant matrix, expired/revoked token behavior, admin MFA, rate limits, input limits, upload formats, headers/CSP, secret rotation and logging/redaction tests. These were not comprehensively verified in this pass. |
 
 No exploit details or secrets were posted to the public tracking issue. No live
@@ -107,7 +107,9 @@ and 12 mobile tests. Login connection-error recovery was verified in the isolate
 local browser preview using disposable fixture inputs.
 Deno is not installed locally; hosted Edge runtime checks have not run.
 Dependency scan: `pnpm audit --prod --json`, exit 1 (advisories), current lockfile.
-No dependency upgrades have been applied by this initial pass.
+Next.js and its ESLint configuration are pinned to 15.5.28 in this local upgrade
+branch. All three builds and four loopback-only browser regressions pass. See the
+dependency checkpoint for the unchanged native versions and remaining advisories.
 
 Automated CI is authored locally, not yet published or run on GitHub. The
 dependency-advisory gate is expected to remain red until upgrade/triage work is

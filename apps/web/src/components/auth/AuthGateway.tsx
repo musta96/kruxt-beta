@@ -106,6 +106,19 @@ export function AuthGateway() {
     };
   }, [continueAuthenticatedUser, supabase]);
 
+  useEffect(() => {
+    if (checkingSession) return;
+    // The member form mounts after the session check, after router hash scrolling.
+    const scrollToMemberLogin = () => {
+      if (window.location.hash === "#member-login") {
+        document.getElementById("member-login")?.scrollIntoView();
+      }
+    };
+    scrollToMemberLogin();
+    window.addEventListener("hashchange", scrollToMemberLogin);
+    return () => window.removeEventListener("hashchange", scrollToMemberLogin);
+  }, [checkingSession]);
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);

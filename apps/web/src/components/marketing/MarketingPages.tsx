@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 import { ArrowIcon, MarketingChrome } from "./MarketingChrome";
 import { AthleteJourneyPreview, AthletePhonePreview, GymDashboardPreview } from "./ProductPreviews";
@@ -35,10 +36,10 @@ export function ProductMarketingPage({ gymAdminUrl }: MarketingPageProps) {
           disappears between tools.
         </p>
         <div className="marketing-cta-row">
-          <a className="marketing-button marketing-button-primary" href="/#member-login">
+          <Link className="marketing-button marketing-button-primary" href="/#member-login">
             Start training
             <ArrowIcon />
-          </a>
+          </Link>
           <a className="marketing-button marketing-button-secondary" href="/contact#gyms">
             Book a gym walkthrough
           </a>
@@ -101,10 +102,10 @@ export function AthletesMarketingPage({ gymAdminUrl }: MarketingPageProps) {
             community that understands the work.
           </p>
           <div className="marketing-cta-row">
-            <a className="marketing-button marketing-button-primary" href="/#member-login">
+            <Link className="marketing-button marketing-button-primary" href="/#member-login">
               Create your account
               <ArrowIcon />
-            </a>
+            </Link>
             <a className="marketing-button marketing-button-secondary" href="#athlete-features">
               Explore features
             </a>
@@ -236,10 +237,10 @@ export function PricingMarketingPage({ gymAdminUrl }: MarketingPageProps) {
           <h2>Free during beta</h2>
           <p>Plan, workout logging, proof, community, gym discovery, progress, integrations, privacy, and support.</p>
         </div>
-        <a className="marketing-button marketing-button-primary" href="/#member-login">
+        <Link className="marketing-button marketing-button-primary" href="/#member-login">
           Create your account
           <ArrowIcon />
-        </a>
+        </Link>
       </section>
 
       <section className="marketing-plan-list">

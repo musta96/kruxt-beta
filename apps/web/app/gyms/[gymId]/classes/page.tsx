@@ -1,5 +1,6 @@
 import { GymClassesScreen } from "@/components/gyms/GymClassesScreen";
 
-export default function GymClassesPage({ params }: { params: { gymId: string } }) {
-  return <GymClassesScreen gymId={params.gymId} />;
+export default async function GymClassesPage({ params }: { params: Promise<{ gymId: string }> }) {
+  const { gymId } = await params;
+  return <GymClassesScreen gymId={gymId} />;
 }

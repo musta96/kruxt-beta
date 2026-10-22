@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export function AthletePhonePreview() {
   return (
     <div className="product-phone" aria-label="KRUXT training plan preview">
@@ -19,10 +21,10 @@ export function AthletePhonePreview() {
           <strong>Lower body power</strong>
         </div>
         <p>62 min - Gym - Coach notes included</p>
-        <a href="/#member-login">
+        <Link href="/#member-login">
           Start workout
           <span>Open</span>
-        </a>
+        </Link>
       </div>
       <div className="product-proof-row">
         <span className="product-proof-icon">P</span>
@@ -89,7 +91,7 @@ export function AthleteJourneyPreview() {
             <em>{index === 0 ? "Complete" : "Open"}</em>
           </div>
         ))}
-        <a className="journey-start" href="/#member-login">Start workout</a>
+        <Link className="journey-start" href="/#member-login">Start workout</Link>
       </div>
 
       <div className="journey-screen journey-screen-proof">
