@@ -71,11 +71,34 @@ export function createPlatformSupabaseClient(): SupabaseClient {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false,
+      flowType: "pkce",
+      detectSessionInUrl: true,
       storageKey: buildAuthStorageKey(url),
     },
   });
 
   getClientCache().set(cacheKey, client);
   return client;
+}
+
+export async function isPlatformProviderEnabled(provider: "google" | "apple"): Promise<boolean> {
+  const url = readEnv(["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL"]);
+  const key = readEnv(["NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY"]);
+  if (!url || !key) throw new Error("Authentication configuration unavailable");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/settings`, {
+      headers: { apikey: key }, signal: controller.signal, cache: "no-store",
+    });
+    if (!response.ok) throw new Error("Authentication settings unavailable");
+    const settings: unknown = await response.json();
+    if (!settings || typeof settings !== "object" || !("external" in settings) ||
+      !settings.external || typeof settings.external !== "object") {
+      throw new Error("Authentication settings unavailable");
+    }
+    return (settings.external as Record<string, unknown>)[provider] === true;
+  } finally {
+    clearTimeout(timer);
+  }
 }
