@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { captureRecoveryEvents } from "./password-recovery";
 
 function readEnv(candidates: string[]): string | undefined {
   const staticEnv: Record<string, string | undefined> = {
@@ -67,15 +68,31 @@ export function createPlatformSupabaseClient(): SupabaseClient {
   const cachedClient = getClientCache().get(cacheKey);
   if (cachedClient) return cachedClient;
 
+  const storageKey = buildAuthStorageKey(url);
+  let pkceRecovery = false;
+  let implicitRecovery = false;
+  if (typeof window !== "undefined" && window.location.pathname === "/reset-password") {
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    // The SDK rejects implicit links in PKCE mode. Only legacy recovery links
+    // use this exception; the SDK still validates their tokens and emits proof.
+    implicitRecovery = hash.get("type") === "recovery" && !!hash.get("access_token") && !!hash.get("refresh_token");
+  }
+  if (typeof window !== "undefined" && window.location.pathname === "/reset-password" && new URL(window.location.href).searchParams.get("code")) {
+    try {
+      const stored: unknown = JSON.parse(window.localStorage.getItem(`${storageKey}-code-verifier`) ?? "null");
+      pkceRecovery = typeof stored === "string" && stored.endsWith("/PASSWORD_RECOVERY");
+    } catch { /* Missing or unavailable verifier must fail closed. */ }
+  }
   const client = createClient(url, anonKey, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      flowType: "pkce",
+      flowType: implicitRecovery ? "implicit" : "pkce",
       detectSessionInUrl: true,
-      storageKey: buildAuthStorageKey(url),
+      storageKey,
     },
   });
+  captureRecoveryEvents(client, pkceRecovery);
 
   getClientCache().set(cacheKey, client);
   return client;

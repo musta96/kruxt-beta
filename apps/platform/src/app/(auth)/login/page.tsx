@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { usePlatformAuth } from "@/contexts/platform-auth-context";
 import { PlatformAccessRecovery, PlatformLoginLinks } from "@/components/platform-access-recovery";
 
@@ -75,6 +76,7 @@ export default function PlatformLoginPage() {
               <div className="space-y-2">
                 <label htmlFor="password" className="block text-sm font-medium">Password</label>
                 <input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="platform-login-input" required />
+                <Link href="/forgot-password" className="inline-block py-2 text-sm text-kruxt-accent underline underline-offset-4">Forgot password?</Link>
                 <label className="inline-flex min-h-10 items-center gap-2 text-sm text-muted-foreground">
                   <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} className="h-4 w-4 accent-[hsl(var(--kruxt-accent))]" aria-controls="password" />Show password
                 </label>
