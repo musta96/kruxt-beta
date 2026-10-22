@@ -50,8 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (!mounted) return;
       setLoading(true);
-      void applySession(newSession);
+      // Avoid awaiting authenticated queries inside the Auth client's lock.
+      window.setTimeout(() => { if (mounted) void applySession(newSession); }, 0);
     });
 
     return () => {

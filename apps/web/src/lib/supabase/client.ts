@@ -45,6 +45,7 @@ export function createSupabaseBrowserClient(): SupabaseClient {
 
   const client = createClient(url, anonKey, {
     auth: {
+      flowType: "pkce",
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,

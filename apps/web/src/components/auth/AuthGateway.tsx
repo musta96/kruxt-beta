@@ -8,7 +8,10 @@ import { RequiredConsentReview } from "@/components/consent/RequiredConsentRevie
 import { MarketingHome } from "@/components/marketing/MarketingHome";
 import { ensureProfileExistsForUser, resolveAdminAccess } from "@/lib/auth/access";
 import { resolvePostAuthPath } from "@/components/public/usePublicSession";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createSupabaseBrowserClient, getSupabaseConfig } from "@/lib/supabase/client";
+import { authenticationErrorMessage } from "@/lib/auth/auth-error";
+import { hasProviderReturnError, sanitizedAuthReturnUrl, startSocialSignIn, PROVIDER_RETURN_ERROR, type SocialProvider } from "@/lib/auth/social-auth";
+import { Eye, EyeOff } from "lucide-react";
 
 type AuthMode = "signin" | "signup";
 
@@ -33,6 +36,7 @@ export function AuthGateway() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
 
@@ -61,12 +65,24 @@ export function AuthGateway() {
 
   useEffect(() => {
     let active = true;
+    let initializing = true;
+    const original = new URL(window.location.href);
+    const providerError = hasProviderReturnError(original);
+    const isCallback = original.searchParams.has("code");
 
     const checkSession = async () => {
       const { data, error: userError } = await supabase.auth.getUser();
       if (!active) return;
+      const clean = new URL(sanitizedAuthReturnUrl(new URL(window.location.href)), window.location.origin);
+      if ((isCallback || providerError) && !clean.hash) clean.hash = "member-login";
+      window.history.replaceState(window.history.state, "", clean.pathname + clean.search + clean.hash);
+      if (providerError || (isCallback && !data.user)) {
+        setError(PROVIDER_RETURN_ERROR);
+        setCheckingSession(false);
+        return;
+      }
       if (userError && userError.name !== "AuthSessionMissingError") {
-        setError(userError.message || "Unable to validate your session.");
+        setError(authenticationErrorMessage(userError));
         setCheckingSession(false);
         return;
       }
@@ -75,7 +91,7 @@ export function AuthGateway() {
           await continueAuthenticatedUser(data.user);
         } catch (sessionError) {
           if (!active) return;
-          setError(sessionError instanceof Error ? sessionError.message : "Unable to validate account access.");
+          setError(authenticationErrorMessage(sessionError));
           setCheckingSession(false);
         }
         return;
@@ -85,20 +101,25 @@ export function AuthGateway() {
     };
 
     const listener = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-      if (!active) return;
+      if (!active || initializing || providerError) return;
       if (event === "SIGNED_IN" && session?.user && !authOperationActive.current) {
         window.setTimeout(() => {
           if (!active) return;
           void continueAuthenticatedUser(session.user).catch((sessionError) => {
             if (!active) return;
-            setError(sessionError instanceof Error ? sessionError.message : "Unable to validate account access.");
+            setError(authenticationErrorMessage(sessionError));
             setCheckingSession(false);
           });
         }, 0);
       }
     });
 
-    void checkSession();
+    void checkSession().catch(() => {
+      if (!active) return;
+      window.history.replaceState(window.history.state, "", sanitizedAuthReturnUrl(new URL(window.location.href)));
+      setError(PROVIDER_RETURN_ERROR);
+      setCheckingSession(false);
+    }).finally(() => { initializing = false; });
 
     return () => {
       active = false;
@@ -121,6 +142,7 @@ export function AuthGateway() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (authOperationActive.current) return;
     setLoading(true);
     setError(null);
     authOperationActive.current = true;
@@ -162,7 +184,7 @@ export function AuthGateway() {
         setError(
           signInError.message.includes("Email not confirmed")
             ? "Account created. Check your email to confirm before signing in."
-            : signInError.message
+            : authenticationErrorMessage(signInError)
         );
         return;
       }
@@ -172,8 +194,22 @@ export function AuthGateway() {
       if (!userData.user) throw new Error("Account created without an authenticated session.");
       await continueAuthenticatedUser(userData.user);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Authentication failed.");
+      setError(authenticationErrorMessage(submitError));
     } finally {
+      authOperationActive.current = false;
+      setLoading(false);
+    }
+  }
+
+  async function handleSocialSignIn(provider: SocialProvider) {
+    if (authOperationActive.current) return;
+    authOperationActive.current = true;
+    setLoading(true);
+    setError(null);
+    try {
+      await startSocialSignIn(supabase, getSupabaseConfig(), provider, new URL("/#member-login", window.location.origin).href);
+    } catch (socialError) {
+      setError(socialError instanceof Error ? socialError.message : PROVIDER_RETURN_ERROR);
       authOperationActive.current = false;
       setLoading(false);
     }
@@ -218,27 +254,36 @@ export function AuthGateway() {
           <div className="marketing-auth-toggle">
             <button
               type="button"
+              disabled={loading}
+              aria-pressed={mode === "signin"}
               className={mode === "signin" ? "is-active" : ""}
-              onClick={() => setMode("signin")}
+              onClick={() => { setMode("signin"); setError(null); setShowPassword(false); }}
             >
               Sign in
             </button>
             <button
               type="button"
+              disabled={loading}
+              aria-pressed={mode === "signup"}
               className={mode === "signup" ? "is-active" : ""}
-              onClick={() => setMode("signup")}
+              onClick={() => { setMode("signup"); setError(null); setShowPassword(false); }}
             >
               Create account
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="marketing-auth-form">
+          <div className="marketing-social-auth" aria-busy={loading}>
+            <button type="button" className="marketing-button marketing-button-secondary" disabled={loading} onClick={() => void handleSocialSignIn("google")}>Continue with Google</button>
+            <button type="button" className="marketing-button marketing-button-secondary" disabled={loading} onClick={() => void handleSocialSignIn("apple")}>Continue with Apple</button>
+          </div>
+          <form onSubmit={handleSubmit} className="marketing-auth-form" aria-busy={loading}>
             {mode === "signup" ? (
               <div className="marketing-auth-name-grid">
                 <label>
                   <span>Name</span>
                   <input
                     autoComplete="name"
+                    disabled={loading}
                     maxLength={80}
                     value={displayName}
                     onChange={(event) => setDisplayName(event.target.value)}
@@ -249,6 +294,7 @@ export function AuthGateway() {
                   <span>Username</span>
                   <input
                     autoComplete="username"
+                    disabled={loading}
                     minLength={3}
                     maxLength={24}
                     pattern="[A-Za-z0-9_]{3,24}"
@@ -265,6 +311,7 @@ export function AuthGateway() {
               <span>Email</span>
               <input
                 type="email"
+                disabled={loading}
                 required
                 autoComplete="email"
                 value={email}
@@ -274,8 +321,10 @@ export function AuthGateway() {
             </label>
             <label>
               <span>Password</span>
+              <div className="marketing-auth-password">
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
+                disabled={loading}
                 required
                 minLength={mode === "signup" ? 8 : 1}
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
@@ -283,6 +332,10 @@ export function AuthGateway() {
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
               />
+              <button type="button" disabled={loading} onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"} title={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}>
+                {showPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+              </button>
+              </div>
             </label>
 
             {error ? (

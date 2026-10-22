@@ -65,7 +65,7 @@ export interface AdminSupabaseConfig {
   anonKey?: string;
 }
 
-export function createAdminSupabaseClient(config?: AdminSupabaseConfig): SupabaseClient {
+export function getAdminSupabasePublicConfig(config?: AdminSupabaseConfig) {
   const url = config?.url ?? readEnv([
     "NEXT_PUBLIC_SUPABASE_URL",
     "EXPO_PUBLIC_SUPABASE_URL",
@@ -84,6 +84,11 @@ export function createAdminSupabaseClient(config?: AdminSupabaseConfig): Supabas
       "SUPABASE_ANON_KEY"
     ]);
 
+  return { url, anonKey };
+}
+
+export function createAdminSupabaseClient(config?: AdminSupabaseConfig): SupabaseClient {
+  const { url, anonKey } = getAdminSupabasePublicConfig(config);
   if (!url || !anonKey) {
     // During Next.js static generation / build, env vars may not be available.
     // Return a placeholder client that will be replaced on the real client-side render.
@@ -105,9 +110,10 @@ export function createAdminSupabaseClient(config?: AdminSupabaseConfig): Supabas
 
   const client = createClient(url, anonKey, {
     auth: {
+      flowType: "pkce",
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false,
+      detectSessionInUrl: true,
       storageKey: buildAuthStorageKey(url)
     }
   });

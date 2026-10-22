@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { createAdminSupabaseClient } from "@/services";
 import { authenticationErrorMessage } from "@/services/auth-error";
 import { Eye, EyeOff } from "lucide-react";
+import { getAdminSupabasePublicConfig } from "@/services/supabase-client";
+import { hasProviderReturnError, sanitizedAuthReturnUrl, safeInternalNextPath, startSocialSignIn, PROVIDER_RETURN_ERROR, type SocialProvider } from "@/services/social-auth";
 
 type Mode = "signin" | "signup";
 
@@ -20,9 +22,37 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const busy = useRef(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const original = new URL(window.location.href);
+    const providerError = hasProviderReturnError(original);
+    const isCallback = original.searchParams.has("code");
+    const next = safeInternalNextPath(original.searchParams.get("next"));
+    const supabase = createAdminSupabaseClient();
+    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (!active) return;
+      window.history.replaceState(window.history.state, "", sanitizedAuthReturnUrl(new URL(window.location.href)));
+      if (providerError || sessionError || (isCallback && !data.session)) {
+        setError(PROVIDER_RETURN_ERROR);
+      } else if (data.session) {
+        router.replace(next);
+      }
+      setCheckingSession(false);
+    }).catch(() => {
+      if (!active) return;
+      window.history.replaceState(window.history.state, "", sanitizedAuthReturnUrl(new URL(window.location.href)));
+      setError(PROVIDER_RETURN_ERROR);
+      setCheckingSession(false);
+    });
+    return () => { active = false; };
+  }, [router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy.current || checkingSession) return;
     setError(null);
     setInfo(null);
 
@@ -31,6 +61,7 @@ export default function LoginPage() {
       return;
     }
 
+    busy.current = true;
     setLoading(true);
     try {
       if (mode === "signin") {
@@ -59,9 +90,30 @@ export default function LoginPage() {
     } catch (e) {
       setError(authenticationErrorMessage(e));
     } finally {
+      busy.current = false;
       setLoading(false);
     }
   }
+
+  async function handleSocialSignIn(provider: SocialProvider) {
+    if (busy.current || checkingSession) return;
+    busy.current = true;
+    setLoading(true);
+    setError(null);
+    setInfo(null);
+    const callback = new URL("/login", window.location.origin);
+    const next = getLoginNextPath();
+    if (next !== "/") callback.searchParams.set("next", next);
+    try {
+      await startSocialSignIn(createAdminSupabaseClient(), getAdminSupabasePublicConfig(), provider, callback.href);
+    } catch (socialError) {
+      setError(socialError instanceof Error ? socialError.message : PROVIDER_RETURN_ERROR);
+      busy.current = false;
+      setLoading(false);
+    }
+  }
+
+  const pending = loading || checkingSession;
 
   return (
     <div className="space-y-8">
@@ -79,7 +131,7 @@ export default function LoginPage() {
         <div className="flex items-center gap-1 rounded-lg border border-border bg-kruxt-panel p-1 text-xs">
           <button
             type="button"
-            disabled={loading}
+            disabled={pending}
             aria-pressed={mode === "signin"}
             onClick={() => {
               setMode("signin");
@@ -96,7 +148,7 @@ export default function LoginPage() {
           </button>
           <button
             type="button"
-            disabled={loading}
+            disabled={pending}
             aria-pressed={mode === "signup"}
             onClick={() => {
               setMode("signup");
@@ -119,7 +171,7 @@ export default function LoginPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           {mode === "signin"
             ? "Enter your credentials to access the admin panel."
-            : "Use a real email — Supabase may send a confirmation link."}
+            : "Create your account, then complete the required access review. Gym and operator access is assigned separately."}
         </p>
 
         {error && (
@@ -133,7 +185,11 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div className="mt-5 grid gap-3" aria-busy={pending}>
+          <button type="button" disabled={pending} onClick={() => void handleSocialSignIn("google")} className="w-full rounded-button border border-border bg-kruxt-panel px-4 py-2.5 text-sm font-semibold text-foreground hover:border-kruxt-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-kruxt-accent disabled:opacity-50">Continue with Google</button>
+          <button type="button" disabled={pending} onClick={() => void handleSocialSignIn("apple")} className="w-full rounded-button border border-border bg-kruxt-panel px-4 py-2.5 text-sm font-semibold text-foreground hover:border-kruxt-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-kruxt-accent disabled:opacity-50">Continue with Apple</button>
+        </div>
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4" aria-busy={pending}>
           <div>
             <label
               htmlFor="email"
@@ -146,7 +202,7 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               required
-              disabled={loading}
+              disabled={pending}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1.5 w-full rounded-button border border-border bg-kruxt-panel px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent"
@@ -167,14 +223,15 @@ export default function LoginPage() {
               type={showPassword ? "text" : "password"}
               autoComplete={mode === "signin" ? "current-password" : "new-password"}
               required
-              disabled={loading}
-              minLength={6}
+              disabled={pending}
+              minLength={mode === "signup" ? 8 : 1}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1.5 w-full rounded-button border border-border bg-kruxt-panel py-2 pl-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent"
               placeholder="••••••••"
             />
-            <button type="button" onClick={() => setShowPassword(value => !value)}
+            <button type="button" disabled={pending} onClick={() => setShowPassword(value => !value)}
+              aria-pressed={showPassword}
               aria-label={showPassword ? "Hide password" : "Show password"}
               title={showPassword ? "Hide password" : "Show password"}
               className="absolute bottom-0 right-0 flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground">
@@ -185,10 +242,10 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={pending}
             className="w-full rounded-button bg-kruxt-accent px-4 py-2.5 text-sm font-semibold text-kruxt-bg transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {loading
+            {pending
               ? "Working…"
               : mode === "signin"
                 ? "Sign In"
@@ -214,11 +271,6 @@ export default function LoginPage() {
       </p>
     </div>
   );
-}
-
-function safeInternalNextPath(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
-  return value;
 }
 
 function getLoginNextPath(): string {
