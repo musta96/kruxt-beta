@@ -8,7 +8,8 @@ export function captureRecoveryEvents(client: SupabaseClient, pkceRecovery: bool
     if (session && (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && awaitingExchange))) {
       recoverySessions.set(client, session);
       awaitingExchange = false;
-    } else if (event === "SIGNED_OUT" || event === "SIGNED_IN") {
+    } else if (event === "SIGNED_OUT" || (event === "SIGNED_IN"
+      && session?.access_token !== recoverySessions.get(client)?.access_token)) {
       recoverySessions.delete(client);
       awaitingExchange = false;
     }

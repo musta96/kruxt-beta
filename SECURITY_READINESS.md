@@ -102,7 +102,7 @@ database/tooling Node tests and configured package typechecks after integration.
 
 The full ordered PostgreSQL stack now passes privacy ACL/trigger, export
 projection/subject-isolation and Storage expiry regressions as well as the
-existing consent/activation contracts. `pnpm security:test` passes 53 Node checks
+existing consent/activation contracts. `pnpm security:test` passes 70 Node checks
 and 12 mobile tests. Login connection-error recovery was verified in the isolated
 local browser preview using disposable fixture inputs.
 Deno is not installed locally; hosted Edge runtime checks have not run.
@@ -118,6 +118,12 @@ provider, recurring monitor or notification recipient has been configured.
 
 Hosted rules of engagement are in `docs/security/hosted-dev-test-scope.md` and
 are **not approved for execution**.
+
+The auth UX branch adds Google/Apple web entrypoints and verified password
+recovery without operator self-enrollment. Provider configuration is disabled
+hosted-side and recovery routes are not deployed. See
+`docs/security/social-login-rollout.md`; these changes do not resolve the
+existing session-revocation, retention, dependency or hosted test gates.
 
 ## Authoritative Guidance
 

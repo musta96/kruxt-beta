@@ -19,6 +19,12 @@ export default defineConfig({
       url: "http://127.0.0.1:3294/login",
       reuseExistingServer: !process.env.CI,
       env: { NEXT_TELEMETRY_DISABLED: "1" }
+    },
+    {
+      command: "pnpm --filter @kruxt/platform exec next start --hostname 127.0.0.1 --port 3295",
+      url: "http://127.0.0.1:3295/login",
+      reuseExistingServer: !process.env.CI,
+      env: { NEXT_TELEMETRY_DISABLED: "1" }
     }
   ],
   projects: [

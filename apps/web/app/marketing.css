@@ -1012,6 +1012,15 @@
   margin-top: 0.7rem;
 }
 
+.marketing-auth-section .marketing-auth-copy h2 {
+  font-size: 2rem;
+  line-height: 1.2;
+}
+
+.marketing-auth-section .marketing-auth-copy p {
+  font-size: 1rem;
+}
+
 .marketing-auth-copy p {
   max-width: 31rem;
   margin: 1rem 0 0;

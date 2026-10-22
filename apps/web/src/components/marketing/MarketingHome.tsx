@@ -183,11 +183,10 @@ export function MarketingHome({ authPanel, gymAdminUrl }: MarketingHomeProps) {
 
       <section className="marketing-auth-section" id="member-login">
         <div className="marketing-auth-copy">
-          <span>Member access</span>
-          <h2>Bring your training into focus.</h2>
-          <p>Create your KRUXT account or continue where you left off. Gym owners and staff use the gym admin login.</p>
+          <h2>Your KRUXT account</h2>
+          <p>Sign in or create an account.</p>
           <a className="marketing-inline-link" href={gymAdminUrl}>
-            Gym owner or staff?
+            Gym admin sign-in
             <ArrowIcon />
           </a>
         </div>

@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { captureRecoveryEvents } from "./password-recovery";
 
 function readEnv(candidates: string[]): string | undefined {
   // CRITICAL: Next.js's webpack DefinePlugin only inlines `process.env.NAME`
@@ -108,15 +109,27 @@ export function createAdminSupabaseClient(config?: AdminSupabaseConfig): Supabas
     return cachedClient;
   }
 
+  const storageKey = buildAuthStorageKey(url);
+  const hash = typeof window === "undefined" ? null : new URLSearchParams(window.location.hash.slice(1));
+  const legacyCallback = !!hash?.get("access_token") && !!hash.get("refresh_token")
+    && ["invite", "recovery", "signup", "magiclink"].includes(hash.get("type") ?? "");
+  let pendingRecovery = false;
+  if (typeof window !== "undefined" && window.location.pathname === "/reset-password" && new URL(window.location.href).searchParams.has("code")) {
+    try {
+      const verifier: unknown = JSON.parse(window.localStorage.getItem(`${storageKey}-code-verifier`) ?? "null");
+      pendingRecovery = typeof verifier === "string" && verifier.endsWith("/PASSWORD_RECOVERY");
+    } catch { /* An unavailable verifier cannot establish recovery. */ }
+  }
   const client = createClient(url, anonKey, {
     auth: {
-      flowType: "pkce",
+      flowType: legacyCallback ? "implicit" : "pkce",
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
-      storageKey: buildAuthStorageKey(url)
+      storageKey
     }
   });
+  captureRecoveryEvents(client, pendingRecovery);
 
   getClientCache().set(cacheKey, client);
   return client;

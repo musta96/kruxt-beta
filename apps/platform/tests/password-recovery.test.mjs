@@ -48,6 +48,8 @@ test("same-browser PKCE marker permits one successful exchange, not a later logi
   c.emit("SIGNED_IN");
   assert.equal(isRecoverySession(c, session()), true);
   c.emit("SIGNED_IN");
+  assert.equal(isRecoverySession(c, session()), true);
+  c.emit("SIGNED_IN", { ...session(), access_token: "different-login-token" });
   assert.equal(isRecoverySession(c, session()), false);
 });
 

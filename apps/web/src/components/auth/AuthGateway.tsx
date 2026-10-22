@@ -272,6 +272,7 @@ export function AuthGateway() {
             </button>
           </div>
 
+          {error && <div className="marketing-auth-error" role="alert">{error}</div>}
           <div className="marketing-social-auth" aria-busy={loading}>
             <button type="button" className="marketing-button marketing-button-secondary" disabled={loading} onClick={() => void handleSocialSignIn("google")}>Continue with Google</button>
             <button type="button" className="marketing-button marketing-button-secondary" disabled={loading} onClick={() => void handleSocialSignIn("apple")}>Continue with Apple</button>
@@ -338,15 +339,10 @@ export function AuthGateway() {
               </div>
             </label>
 
-            {error ? (
-              <div className="marketing-auth-error" role="alert">
-                {error}
-              </div>
-            ) : null}
-
             <button type="submit" className="marketing-button marketing-button-primary" disabled={loading}>
               {loading ? "Please wait..." : mode === "signin" ? "Sign in to KRUXT" : "Create my account"}
             </button>
+            {mode === "signin" && <a className="marketing-inline-link" href={new URL("/forgot-password", gymAdminUrl).href}>Forgot your password?</a>}
             <p>
               {mode === "signup"
                 ? "Creating an account does not accept a policy. After authentication, you must review and explicitly accept the active required versions before entering KRUXT."
