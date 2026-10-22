@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MemberShell } from "@/components/public/MemberShell";
@@ -244,6 +245,9 @@ export function PublicGymsScreen() {
                 </div>
 
                 <div className="stack-actions" style={{ marginTop: 16 }}>
+                  <Link href={`/gyms/${gym.id}/classes`} className="secondary-cta">
+                    View class schedule
+                  </Link>
                   <button
                     type="button"
                     className="primary-cta"

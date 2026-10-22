@@ -151,7 +151,7 @@ function toWorkoutPayload(input: LogWorkoutAtomicInput["workout"]): Record<strin
     started_at: input.startedAt ?? null,
     ended_at: input.endedAt ?? null,
     rpe: input.rpe ?? null,
-    visibility: input.visibility ?? "public",
+    visibility: input.visibility ?? "private",
     source: input.source ?? "manual",
     external_activity_id: input.externalActivityId ?? null
   };

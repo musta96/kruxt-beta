@@ -43,8 +43,12 @@ export function createSupabaseBrowserClient(): SupabaseClient {
   const cached = getClientCache().get(cacheKey);
   if (cached) return cached;
 
+  const hash = typeof window === "undefined" ? null : new URLSearchParams(window.location.hash.slice(1));
+  const legacyCallback = !!hash?.get("access_token") && !!hash.get("refresh_token")
+    && ["invite", "recovery", "signup", "magiclink"].includes(hash.get("type") ?? "");
   const client = createClient(url, anonKey, {
     auth: {
+      flowType: legacyCallback ? "implicit" : "pkce",
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,

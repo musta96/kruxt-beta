@@ -6,10 +6,11 @@ import { Sidebar } from "@/components/sidebar";
 import { TopBar } from "@/components/top-bar";
 import { cn } from "@/lib/utils";
 import { usePlatformAuth } from "@/contexts/platform-auth-context";
+import { PlatformAccessRecovery, PlatformLoginLinks } from "@/components/platform-access-recovery";
 
 function FullPageLoader({ label }: { label: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-kruxt-bg">
+    <div role="status" aria-live="polite" className="flex min-h-screen items-center justify-center bg-kruxt-bg">
       <div className="flex items-center gap-3 text-muted-foreground">
         <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
           <circle
@@ -57,12 +58,10 @@ export default function DashboardLayout({
 
   if (!platformRole) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-kruxt-bg p-6">
-        <div className="max-w-md rounded-card border border-border bg-kruxt-surface p-6 text-center">
-          <p className="text-sm font-semibold text-foreground">Platform access required</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This account is signed in, but it is not an active KRUXT platform operator.
-          </p>
+      <div className="platform-login flex min-h-screen items-center justify-center bg-kruxt-bg p-6">
+        <div className="w-full max-w-sm space-y-7">
+          <PlatformAccessRecovery />
+          <PlatformLoginLinks />
         </div>
       </div>
     );

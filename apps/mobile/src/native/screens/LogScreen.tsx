@@ -14,7 +14,7 @@ export function LogScreen() {
   const [title, setTitle] = useState("Evening HYROX");
   const [notes, setNotes] = useState("");
   const [workoutType, setWorkoutType] = useState<(typeof WORKOUT_TYPES)[number]>("hyrox");
-  const [visibility, setVisibility] = useState<(typeof VISIBILITIES)[number]>("public");
+  const [visibility, setVisibility] = useState<(typeof VISIBILITIES)[number]>("private");
   const [exerciseQuery, setExerciseQuery] = useState("");
   const [exerciseResults, setExerciseResults] = useState<ExerciseOption[]>([]);
   const [selectedExercise, setSelectedExercise] = useState<ExerciseOption | null>(null);

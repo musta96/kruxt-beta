@@ -1,22 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
+import { MailCheck } from "lucide-react";
+import { createAdminSupabaseClient } from "@/services";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const busy = useRef(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy.current) return;
+    busy.current = true;
     setLoading(true);
-
-    // TODO: Wire to Supabase auth reset
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    setSubmitted(true);
-    setLoading(false);
+    setError(null);
+    try {
+      const { error } = await createAdminSupabaseClient().auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: new URL("/reset-password", window.location.origin).href
+      });
+      if (error) throw error;
+      setSubmitted(true);
+    } catch {
+      setError("The reset email could not be requested. Check your connection and try again. If this continues, contact support.");
+    } finally {
+      busy.current = false;
+      setLoading(false);
+    }
   }
 
   return (
@@ -34,11 +47,9 @@ export default function ForgotPasswordPage() {
       {/* Form card */}
       <div className="rounded-card border border-border bg-card p-6">
         {submitted ? (
-          <div className="space-y-4 text-center">
+          <div role="status" className="space-y-4 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-kruxt-success/15">
-              <svg className="h-6 w-6 text-kruxt-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-              </svg>
+              <MailCheck className="h-6 w-6 text-kruxt-success" aria-hidden="true" />
             </div>
             <h2 className="text-lg font-semibold text-foreground font-kruxt-headline">
               Check your email
@@ -64,6 +75,7 @@ export default function ForgotPasswordPage() {
             </p>
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+              {error && <p role="alert" className="text-sm text-kruxt-danger">{error}</p>}
               <div>
                 <label
                   htmlFor="email"
@@ -76,6 +88,7 @@ export default function ForgotPasswordPage() {
                   type="email"
                   autoComplete="email"
                   required
+                  disabled={loading}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="mt-1.5 w-full rounded-button border border-border bg-kruxt-panel px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent"

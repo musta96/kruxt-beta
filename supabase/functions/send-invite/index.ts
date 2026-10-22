@@ -131,14 +131,15 @@ async function sendInviteEmail(args: {
 }
 
 async function assertCanManageGym(supabase: ReturnType<typeof serviceClient>, gymId: string, userId: string) {
-  const [{ data: staffMembership }, { data: founderRole }] = await Promise.all([
+  const [gym, membership, founder] = await Promise.all([
+    supabase.from("gyms").select("owner_user_id").eq("id", gymId).maybeSingle(),
     supabase
       .from("gym_memberships")
       .select("id")
       .eq("gym_id", gymId)
       .eq("user_id", userId)
       .in("membership_status", ["trial", "active"])
-      .in("role", ["leader", "officer", "coach"])
+      .eq("role", "leader")
       .maybeSingle(),
     supabase
       .from("platform_operator_accounts")
@@ -149,11 +150,10 @@ async function assertCanManageGym(supabase: ReturnType<typeof serviceClient>, gy
       .maybeSingle(),
   ]);
 
-  if (!staffMembership && !founderRole) {
-    return false;
+  for (const result of [gym, membership, founder]) {
+    if (result.error) throw result.error;
   }
-
-  return true;
+  return gym.data?.owner_user_id === userId || Boolean(membership.data) || Boolean(founder.data);
 }
 
 Deno.serve(async (request) => {
@@ -258,6 +258,7 @@ Deno.serve(async (request) => {
       }
 
       const updatePayload: Record<string, unknown> = {
+        invited_by: auth.userId,
         token_hash: tokenHash,
         expires_at: expiresAt,
         status: "pending",

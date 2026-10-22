@@ -35,6 +35,21 @@ function makeDisplayName(email: string): string {
   return cleaned.slice(0, 64);
 }
 
+async function issuerCanManageGym(supabase: ReturnType<typeof serviceClient>, gymId: string, issuerId: string) {
+  const results = await Promise.all([
+    supabase.from("gyms").select("owner_user_id").eq("id", gymId).maybeSingle(),
+    supabase.from("gym_memberships").select("id")
+      .eq("gym_id", gymId).eq("user_id", issuerId)
+      .in("membership_status", ["trial", "active"]).eq("role", "leader").maybeSingle(),
+    supabase.from("platform_operator_accounts").select("role")
+      .eq("user_id", issuerId).eq("role", "founder").eq("is_active", true).maybeSingle(),
+  ]);
+  for (const result of results) {
+    if (result.error) throw result.error;
+  }
+  return results[0].data?.owner_user_id === issuerId || Boolean(results[1].data) || Boolean(results[2].data);
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers });
@@ -75,7 +90,7 @@ Deno.serve(async (request) => {
 
     const { data: invite, error: inviteError } = await supabase
       .from("gym_staff_invites")
-      .select("id,gym_id,email,role,status,expires_at,revoked_at")
+      .select("id,gym_id,email,role,status,expires_at,revoked_at,invited_by")
       .eq("token_hash", tokenHash)
       .maybeSingle();
 
@@ -96,6 +111,14 @@ Deno.serve(async (request) => {
 
     if (invite.revoked_at) {
       return new Response(JSON.stringify({ error: "Invite has been revoked." }), { status: 409, headers });
+    }
+
+    // Recheck the issuer so pre-hardening staff tokens cannot grant privileged membership.
+    if (!invite.invited_by || !(await issuerCanManageGym(supabase, invite.gym_id, invite.invited_by))) {
+      return new Response(JSON.stringify({ error: "Invite issuer is no longer authorized. Request a new invite." }), {
+        status: 403,
+        headers,
+      });
     }
 
     const expiresAt = new Date(invite.expires_at);

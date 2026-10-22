@@ -1,0 +1,36 @@
+name: consent-contract
+on:
+  pull_request:
+  push:
+    branches: ["codex/web-marketing-consent"]
+permissions:
+  contents: read
+jobs:
+  postgres-consent:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: consent-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply full migration stack and run behavioral contracts
+        env:
+          KRUXT_CONSENT_TEST_DATABASE_URL: postgresql://postgres:consent-test-only@localhost:5432/postgres
+        run: bash packages/db/tests/run_consent_contract.sh
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify document hashing and access gates
+        run: node --test packages/db/tests/consent-document-verification.test.mjs packages/db/tests/consent-activation-edge.test.mjs

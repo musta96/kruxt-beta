@@ -1,59 +1,146 @@
 # KRUXT Real-Life Testing Readiness
 
-One holistic system: mobile athlete app + gym admin platform + public web +
-platform console, all on one Supabase backend. This is the gate checklist for
-putting it in front of real people. Owners follow TEAM_PROTOCOL.md lanes.
+Last verified: 2026-10-19
 
-## The three journeys that must be flawless
+KRUXT is one system: mobile athlete app, gym admin, public/member web, and
+platform console on one Supabase backend. This file tracks the remaining gates
+before inviting real testers.
 
-### J1 — Athlete (mobile, Expo)
-Sign up → onboarding (profile, consents, gym select) → log workout → attach
-photo/video proof → post → vertical Proof Feed (video + posters) → react /
-comment → Guild Hall → Rank Ladder → Profile (edit, password, units, GDPR).
+## Release state
 
-| Step | Status |
+**Not ready for real testers yet.** The main code blockers now have reviewable
+fixes or guarded operator tooling, but several branches are unmerged and the
+hosted environment, legal documents, purge, UAT, and device checks are still
+outstanding.
+
+Security/GDPR release gate: the initial audit found unresolved authorization and
+privacy-workflow defects plus dependency advisories. See `SECURITY_READINESS.md`
+and #133. Local repairs and mocked regression tests are not yet deployed and
+are not a completed penetration test or compliance certification. Hosted DEV
+testing requires approval of `docs/security/hosted-dev-test-scope.md`.
+
+## Engineering checkpoints
+
+| Area | Current status |
+|------|----------------|
+| Platform inert controls | PR #112 open, mergeable, CI green |
+| Admin dashboard failure/empty states | PR #113 open, mergeable, CI green |
+| Rank diagnostics + cross-app handoffs | PR #114 open, mergeable, CI green; hosted secrets/URLs still required |
+| Demo-data purge safety | PR #116 open, mergeable, CI green; no live purge has run |
+| Four-account BZone UAT harness | PR #117 open, mergeable, CI green; strict credentialed run still pending |
+| Class scheduling and member booking | PR #118 review-ready through `1ee7269`; general CI, PostgreSQL workflow, and all three Vercel previews green |
+| Web signup, activation, and policy consent | PR #131 review-ready through `36bdd67`; general CI, PostgreSQL workflow, and all three Vercel previews green |
+| Native J1 onboarding gate | PR #130 review-ready through `e945b77`; general CI, PostgreSQL workflow, and all three Vercel previews green |
+| Coordinated deployment guards | #132: local-only default, DEV confirmation, migration parity and Edge manifest tests pass; historical migration reconciliation remains blocked |
+| Security/privacy and runtime checks | Local #133 branch: 88 Node tests, 12 mobile tests and PostgreSQL privacy contracts pass; admin build passes; proposed CI not published; dependency and erasure-policy gates remain open |
+| Fable onboarding checkpoint | Preserved unchanged as `7d6328a` on `claude/j1-hardening` |
+
+## Integration evidence
+
+The local `codex/readiness-integration-rehearsal` branch combines all eight
+readiness/product lanes in `/tmp/kruxt-readiness-integration-20261019`.
+Conflicts in env examples, ignore rules, test scripts, and package commands were
+resolved by preserving each lane's behavior.
+
+- Typecheck: all seven packages pass.
+- Configured lint: all seven package commands pass; web/admin/platform execute
+  ESLint, while mobile/shared/DB lint commands remain repository placeholders.
+- Node database/tooling tests: 45 pass; mobile tests: 11 pass.
+- Disposable PostgreSQL 17: full ordered migrations through `202608030006`,
+  mobile onboarding contract, both consent/activation contracts, class upgrade
+  contract, staff lifecycle contract, and ten concurrency scenarios pass.
+- Dedicated workflows now execute mobile, consent, and class PostgreSQL checks.
+  All three dedicated PostgreSQL workflows passed on the published heads.
+- Production builds for web, admin, and platform pass. Admin/platform builds
+  require network access for the existing Google Fonts configuration.
+- Playwright desktop and 390px mobile checks pass: no horizontal overflow,
+  broken images, console errors, or false missing-session banner; registration
+  renders and the signed-out class route requires sign-in. Screenshots are in
+  the integration checkout's `output/playwright/` directory.
+- Strict BZone preflight correctly refuses to launch without real account,
+  target, mobile-env, and mutation-confirmation inputs. No live UAT or purge ran.
+
+Local build checks use an inert public-key placeholder. They verify compilation
+and rendering, not hosted authentication or data access.
+
+## Journey gates
+
+### J1: Athlete
+
+Sign up -> onboarding -> review bound policies -> select eligible gym -> log
+workout -> attach proof -> feed/social -> guild/rank -> profile/GDPR.
+
+| Gate | Status |
 |------|--------|
-| Auth + onboarding + consent gates | ✅ built — needs device pass |
-| Log → proof (camera/library) → post | ✅ built — needs device pass |
-| Feed: images, videos, posters, reactions, comments | ✅ built — needs device pass |
-| Guild Hall / Rank Ladder wired to real data | ✅ built |
-| Rank actually updates after workouts | ❌ **BLOCKED — rank recompute job failing weekly since Feb (#103)** |
-| Profile: edit / password / units / links / GDPR export+delete | ✅ built (PR #102) |
-| Dead UI removed (2FA, Connected Devices, Privacy Settings rows) | ✅ removed (PR #102) |
+| Shipped native entrypoint enforces onboarding | Published in review-ready PR #130; merge/deploy pending |
+| Profile, policy review, consent, and completion are server-verified | Implemented locally; real PostgreSQL contract passes; disabled profiles fail closed |
+| Required policy acceptance is atomic | Implemented for web and mobile; approved policy documents still missing (#115) |
+| Rank recompute reports actionable failures | PR #114; successful hosted run blocked on Actions secrets (#103) |
+| Full workout/proof/feed/profile flow on a device | Pending Expo/device smoke |
 
-### J2 — Gym owner/staff (admin, kruxt-admin.vercel.app)
-Login → onboard gym → invite/approve members → manage roles & status (audited,
-bulk) → classes → check-ins → waivers → billing → compliance → support.
+### J2: Gym owner and staff
 
-| Step | Status |
+Login -> gym -> invites/members -> roles/status -> classes/bookings/check-ins ->
+waivers/billing/compliance/support.
+
+| Gate | Status |
 |------|--------|
-| Members console incl. audited bulk actions | ✅ merged (#84) — UAT pending (#96) |
-| Platform→admin handoff | ✅ fixed (#100) |
-| Classes / check-ins / waivers / billing depth | ⚠️ needs journey walkthrough — file gaps as issues during UAT |
-| Demo-seed button hidden in production | ⚠️ verify `NEXT_PUBLIC_ENABLE_DEMO_SEED` unset on Vercel |
+| Audited member operations | Built; strict four-account UAT pending (#96/#117) |
+| Class scheduling, staff mutations, waitlist, cancellation, and completion | Reviewed repairs published in review-ready PR #118; hosted rollout pending |
+| Admin controls show truthful states | PRs #112 and #113 ready for review |
+| Demo controls and identities absent from tester view | Guardrails in PR #116; operator purge and hosted env verification pending |
 
-### J3 — Cross-app seams (the "holistic" part)
-| Seam | Status |
+### J3: Cross-app and hosted runtime
+
+| Gate | Status |
 |------|--------|
-| Same Supabase project for all four apps | ⚠️ verify all Vercel envs point at the SAME project as mobile |
-| Cross-app links (`NEXT_PUBLIC_KRUXT_*_URL`, `EXPO_PUBLIC_APP_WEB_URL`) | ❌ set real URLs in Vercel + mobile env (#105) |
-| Mobile support/legal links (kruxt.app/legal, support@kruxt.app) | ⚠️ confirm real destinations exist |
-| Web `/join` + invite activation → mobile app | ⚠️ test invite E2E during UAT |
+| All apps point to DEV project `hgomsmhsybrxjdxbgkjy` | Web/admin/platform bundles evidenced by #117; actual mobile env still must be supplied and verified |
+| Cross-app URLs use real hosted destinations | Code/env examples in #114; Vercel and mobile env values still need configuration (#105) |
+| Invite activation hands off correctly across web/mobile | Pending credentialed UAT and device smoke |
+| Legal/support destinations are real and reviewable | Blocked on approved versioned documents and SHA-256 bindings (#115) |
 
-## Fake/test data purge (before real users)
-1. **BZone demo people seed** (`202605300001_bzone_demo_people_seed.sql`:
-   `demo.*+bzone@kruxt.test` accounts) — remove from the testing project or
-   confirm scoped-out (#104).
-2. Admin **demo-seed button** — prod env must not set `ENABLE_DEMO_SEED`.
-3. **DesignShowcase** shell in mobile — ensure unreachable from production nav.
-4. Any seeded workouts/gyms in the shared project that testers would see.
+## Required operator inputs
 
-## Ordered path to "start testing"
-1. Merge PR #102 → **fix rank recompute (#103, Codex, blocker)**.
-2. Data purge pass (#104, Codex) + env alignment (#105, Edoardo+Claude).
-3. Codex runs the 4-account BZone UAT (#96) journey-by-journey; file gaps.
-4. Device smoke-test of J1 on Expo Go (Edoardo + Claude fixes same-day).
-5. Fix, re-run failed journey steps, then invite real testers.
+1. GitHub Actions secrets `SUPABASE_URL` and legacy JWT
+   `SUPABASE_SERVICE_ROLE_KEY` for the current rank Edge Function contract.
+2. Hosted cross-app URL variables and the actual mobile env file pointing to
+   DEV project `hgomsmhsybrxjdxbgkjy`.
+3. Approved versioned HTTPS Terms, Privacy, and Health Data documents plus their
+   SHA-256 checksums (#115). Web review requires PDF/plain-text responses with
+   CORS access; it hashes the downloaded bytes and displays that verified copy.
+   Native review still opens the published URL and requires immutable hosting
+   plus physical-device verification.
+4. Four distinct disposable UAT accounts and exact disposable mutation targets.
+   No configured account file was found locally. Use
+   `docs/bzone-uat.env.example` as the blank template; store populated values in
+   the ignored `.env.uat.local`, never in the tracked example.
+5. A physical Expo-compatible device for the final J1 smoke pass.
 
-**Definition of ready:** every step above green; no visible control is a no-op;
-no `*.test` / demo accounts visible; one Supabase project end to end.
+## Ordered path to testing
+
+1. Review PRs #130, #131, #118, and #114; require general CI, the PostgreSQL
+   workflows, and Vercel previews to pass. The four branches were published with
+   Edoardo's explicit authorization on 2026-10-19.
+2. Prepare one integrated release revision. Hold automatic promotion of the
+   product PRs until an authorized maintenance window or compatibility release
+   is ready: new clients need new RPCs, while migration 006 breaks old direct
+   staff writes. Do not merge and auto-promote these independently.
+3. Follow `docs/ops/readiness-release.md`. Reconcile divergent local migration
+   histories against the real DEV history before applying anything. The guarded
+   scripts default to local-only checks and refuse incomplete/mismatched trees.
+   During the authorized window, deploy the complete reviewed migration plan
+   including `202608030001` through `202608030006`, then the updated activation
+   Edge function, then matching clients. Previously applied older SQL requires
+   forward repair migrations. Validate the class-window constraint separately.
+4. Configure Actions/Vercel/mobile environment values and publish the approved
+   checksummed legal documents.
+5. Run the #116 purge dry-run, review it, apply only with the exact confirmation,
+   and require `readyForRealTesting: true` in the post-audit.
+6. Run #117 in strict four-account mode and fix every failed or skipped journey.
+7. Run the native J1 flow on a real device, then invite testers only after all
+   gates above are green.
+
+**Definition of ready:** no visible control is inert, no demo identity is
+visible, required policies are content-bound, one DEV Supabase project is used
+end to end, strict UAT passes, and the complete athlete journey passes on a
+physical device.

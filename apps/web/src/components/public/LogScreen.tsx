@@ -198,7 +198,7 @@ export function LogScreen() {
   const [title, setTitle] = useState("Workout Session");
   const [notes, setNotes] = useState("");
   const [workoutType, setWorkoutType] = useState<WorkoutType>("hyrox");
-  const [visibility, setVisibility] = useState<WorkoutVisibility>("public");
+  const [visibility, setVisibility] = useState<WorkoutVisibility>("private");
   const [gymId, setGymId] = useState("");
   const [sessionRpe, setSessionRpe] = useState("7");
   const [blocks, setBlocks] = useState<LogExerciseBlock[]>([createEmptyBlock()]);

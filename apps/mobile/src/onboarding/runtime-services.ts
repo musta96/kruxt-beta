@@ -26,9 +26,6 @@ export function createOnboardingRuntimeServices(): OnboardingServices {
             credentials: {
               email: input.auth.email ?? "",
               password: input.auth.password ?? ""
-            },
-            baselineConsents: {
-              locale: undefined
             }
           });
           return;

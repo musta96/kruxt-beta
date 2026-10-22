@@ -1,5 +1,6 @@
-import React, { useState, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -8,26 +9,80 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { darkTheme, Button, Input, Chip } from "@kruxt/ui";
+import { darkTheme, Button, Input } from "@kruxt/ui";
+import { useSupabase } from "../../contexts/supabase-context";
+import { useAuth } from "../../contexts/auth-context";
+import { ProfileService } from "../../services";
 
 const theme = darkTheme;
 
-const FITNESS_LEVELS = ["Beginner", "Intermediate", "Advanced", "Elite"] as const;
-type FitnessLevel = (typeof FITNESS_LEVELS)[number];
-
 export default function ProfileSetupScreen() {
   const router = useRouter();
+  const supabase = useSupabase();
+  const { user, loading: authLoading } = useAuth();
 
   const [displayName, setDisplayName] = useState("");
-  const [fitnessLevel, setFitnessLevel] = useState<FitnessLevel | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const canContinue = displayName.trim().length >= 2 && fitnessLevel !== null;
+  const loadProfile = useCallback(async () => {
+    if (authLoading) return;
+    if (!user) {
+      setLoadingProfile(false);
+      setLoadError("You need to be signed in to set up your profile.");
+      return;
+    }
 
-  const handleContinue = useCallback(() => {
-    if (!canContinue) return;
-    // Store values in onboarding state (to be committed at review step)
-    router.push("/(onboarding)/consents");
-  }, [canContinue, router]);
+    setLoadingProfile(true);
+    setLoadError(null);
+    try {
+      const profile = await new ProfileService(supabase).getProfileById(user.id);
+      if (profile) {
+        setDisplayName(profile.displayName);
+      }
+    } catch (loadFailure: unknown) {
+      setLoadError(
+        loadFailure instanceof Error ? loadFailure.message : "Unable to load your profile.",
+      );
+    } finally {
+      setLoadingProfile(false);
+    }
+  }, [authLoading, supabase, user]);
+
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
+
+  const canContinue =
+    Boolean(user) &&
+    !authLoading &&
+    !loadingProfile &&
+    !loadError &&
+    !saving &&
+    displayName.trim().length >= 2;
+
+  const handleContinue = useCallback(async () => {
+    if (!canContinue || !user) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      await new ProfileService(supabase).ensureProfile(user.id, user.email ?? "", {
+        displayName: displayName.trim(),
+      });
+      router.push("/(onboarding)/consents");
+    } catch (saveFailure: unknown) {
+      setError(
+        saveFailure instanceof Error
+          ? saveFailure.message
+          : "Unable to save your profile. Try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [canContinue, displayName, router, supabase, user]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -39,56 +94,52 @@ export default function ProfileSetupScreen() {
           Set Up Your Profile
         </Text>
         <Text style={styles.subtitle}>
-          Tell us a bit about yourself so we can personalize your experience.
+          Choose the name other athletes will see across KRUXT.
         </Text>
 
-        {/* Avatar placeholder */}
-        <Pressable
-          style={styles.avatarContainer}
-          accessibilityLabel="Choose profile photo"
-          accessibilityRole="button"
-        >
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarIcon}>{"\uD83D\uDCF7"}</Text>
+        {(error || loadError) && (
+          <View style={styles.errorBanner} accessibilityRole="alert">
+            <Text style={styles.errorText}>{error ?? loadError}</Text>
+            {loadError && user && !authLoading ? (
+              <Pressable
+                onPress={() => void loadProfile()}
+                accessibilityLabel="Retry loading profile"
+                accessibilityRole="button"
+              >
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            ) : null}
           </View>
-          <Text style={styles.avatarLabel}>Add Photo</Text>
-        </Pressable>
+        )}
 
-        <Input
-          theme={theme}
-          label="Display Name"
-          placeholder="What should we call you?"
-          value={displayName}
-          onChangeText={setDisplayName}
-          autoCapitalize="words"
-          autoComplete="name"
-          textContentType="name"
-          accessibilityLabel="Display name"
-          style={styles.input}
-        />
-
-        <Text style={styles.sectionLabel}>Fitness Level</Text>
-        <View style={styles.chipRow}>
-          {FITNESS_LEVELS.map((level) => (
-            <Chip
-              key={level}
-              theme={theme}
-              label={level}
-              selected={fitnessLevel === level}
-              onPress={() => setFitnessLevel(level)}
-              style={styles.chip}
-            />
-          ))}
-        </View>
+        {loadingProfile || authLoading ? (
+          <View style={styles.loadingContainer} accessibilityLabel="Loading profile">
+            <ActivityIndicator color="#35D0FF" />
+          </View>
+        ) : (
+          <Input
+            theme={theme}
+            label="Display Name"
+            placeholder="What should we call you?"
+            value={displayName}
+            onChangeText={setDisplayName}
+            autoCapitalize="words"
+            autoComplete="name"
+            textContentType="name"
+            accessibilityLabel="Display name"
+            style={styles.input}
+          />
+        )}
 
         <Button
           theme={theme}
           variant="primary"
           size="lg"
-          label="Continue"
+          label="Save & Continue"
           onPress={handleContinue}
+          loading={saving}
           disabled={!canContinue}
-          accessibilityLabel="Continue to next step"
+          accessibilityLabel="Save profile and continue"
           style={styles.continueButton}
         />
       </ScrollView>
@@ -117,52 +168,37 @@ const styles = StyleSheet.create({
     fontFamily: "Sora",
     fontSize: 15,
     color: "#A7B1C2",
-    marginBottom: 32,
+    marginBottom: 24,
     lineHeight: 22,
   },
-  avatarContainer: {
-    alignItems: "center",
-    marginBottom: 32,
+  errorBanner: {
+    backgroundColor: "rgba(255, 107, 107, 0.12)",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255, 107, 107, 0.4)",
+    padding: 12,
+    marginBottom: 16,
   },
-  avatarCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: "#1D2430",
-    borderWidth: 2,
-    borderColor: "rgba(53, 208, 255, 0.3)",
-    borderStyle: "dashed",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  avatarIcon: {
-    fontSize: 32,
-  },
-  avatarLabel: {
+  errorText: {
     fontFamily: "Sora",
     fontSize: 13,
+    color: "#FF6B6B",
+    lineHeight: 18,
+  },
+  retryText: {
+    fontFamily: "Sora",
+    fontSize: 13,
+    fontWeight: "600",
     color: "#35D0FF",
-    fontWeight: "500",
+    marginTop: 10,
+  },
+  loadingContainer: {
+    minHeight: 80,
+    alignItems: "center",
+    justifyContent: "center",
   },
   input: {
     marginBottom: 24,
-  },
-  sectionLabel: {
-    fontFamily: "Sora",
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#A7B1C2",
-    marginBottom: 12,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 32,
-  },
-  chip: {
-    marginBottom: 4,
   },
   continueButton: {
     width: "100%",

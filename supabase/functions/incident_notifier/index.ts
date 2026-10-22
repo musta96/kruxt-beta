@@ -1,6 +1,6 @@
 import { jsonResponse, parseJsonOr } from "../_shared/http.ts";
 import { serviceClient } from "../_shared/supabase.ts";
-import { requireAuth, isAuthResult } from "../_shared/auth.ts";
+import { requireWorkerAuth } from "../_shared/worker-auth.ts";
 import { safeErrorResponse } from "../_shared/errors.ts";
 import { z } from "npm:zod@3";
 
@@ -126,8 +126,8 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  const auth = await requireAuth(request);
-  if (!isAuthResult(auth)) return auth;
+  const denied = await requireWorkerAuth(request);
+  if (denied) return denied;
 
   try {
     const raw = await parseJsonOr<unknown>(request, {});
@@ -140,6 +140,9 @@ Deno.serve(async (request) => {
     }
 
     const payload = parsed.data;
+    if (payload.forceDrill) {
+      return jsonResponse({ error: "Queue explicit drill-mode jobs; forceDrill cannot consume the shared queue." }, 400);
+    }
     const supabase = serviceClient();
     const claimLimit = clamp(payload.claimLimit, 1, 100, 20);
     const retryDelaySeconds = clamp(payload.retryDelaySeconds, 60, 86400, 900);
@@ -165,6 +168,9 @@ Deno.serve(async (request) => {
       try {
         const notifier = getNotifier(job.channel);
         const deliveryResult = await notifier.send(job, { forceDrill });
+        if (job.delivery_mode === "live" && (!deliveryResult.delivered || deliveryResult.mode !== "live")) {
+          throw new Error("Live incident notification was not delivered.");
+        }
 
         const { error: completeError } = await supabase.rpc("complete_incident_notification_job", {
           p_job_id: job.id,
