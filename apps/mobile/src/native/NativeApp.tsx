@@ -50,9 +50,9 @@ function LoadingScreen() {
 
 function emojiForRoute(routeName: string): string {
   if (routeName === "Feed") return "🔥";
-  if (routeName === "Gyms") return "G";
+  if (routeName === "Gyms") return "🏋️";
   if (routeName === "Log") return "✍️";
-  if (routeName === "Work") return "W";
+  if (routeName === "Work") return "🗂️";
   return "👤";
 }
 
@@ -98,10 +98,11 @@ function AuthenticatedTabs() {
           )
         })}
       >
+        {/* Same order as the member web app: Feed, Log, Gyms, then workspace and Profile. */}
         <Tabs.Screen name="Feed" component={FeedScreen} />
-        <Tabs.Screen name="Gyms" component={GymsScreen} />
         <Tabs.Screen name="Log" component={LogScreen} />
-        {hasWorkAccess ? <Tabs.Screen name="Work" component={WorkModeScreen} /> : null}
+        <Tabs.Screen name="Gyms" component={GymsScreen} />
+        {hasWorkAccess ? <Tabs.Screen name="Work" component={WorkModeScreen} options={{ title: "Workspace" }} /> : null}
         <Tabs.Screen name="Profile" component={ProfileScreen} />
       </Tabs.Navigator>
     </NavigationContainer>
