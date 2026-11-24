@@ -1,4 +1,5 @@
 "use client";
+import { appOrigin } from "@kruxt/ui/app-urls";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -149,11 +150,7 @@ function classMatchesQuery(row: GymClass, coachName: string, query: string): boo
 }
 
 function memberWebBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_KRUXT_WEB_URL ??
-    process.env.NEXT_PUBLIC_KRUXT_PUBLIC_WEB_URL ??
-    "https://kruxt-beta.vercel.app"
-  ).replace(/\/$/, "");
+  return appOrigin("member");
 }
 
 export default function ClassesPage() {

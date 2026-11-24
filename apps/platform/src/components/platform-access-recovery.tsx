@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { usePlatformAuth } from "@/contexts/platform-auth-context";
+import { appOrigin } from "@kruxt/ui/app-urls";
 
 function loginUrl(value: string, member = false): string {
   try {
@@ -12,8 +13,8 @@ function loginUrl(value: string, member = false): string {
 }
 
 export function PlatformLoginLinks() {
-  const memberUrl = loginUrl(process.env.NEXT_PUBLIC_KRUXT_WEB_URL ?? (process.env.NODE_ENV === "production" ? "https://kruxt-beta.vercel.app" : "http://localhost:3200"), true);
-  const gymUrl = loginUrl(process.env.NEXT_PUBLIC_KRUXT_GYM_ADMIN_URL ?? process.env.NEXT_PUBLIC_KRUXT_ADMIN_URL ?? process.env.NEXT_PUBLIC_ADMIN_APP_URL ?? (process.env.NODE_ENV === "production" ? "https://kruxt-admin.vercel.app" : "http://localhost:3000"));
+  const memberUrl = loginUrl(appOrigin("member"), true);
+  const gymUrl = loginUrl(appOrigin("admin"));
   return <nav aria-label="Other KRUXT sign-in options" className="flex flex-wrap gap-x-6 gap-y-3 border-t border-border pt-5 text-sm">
     <a href={memberUrl} className="text-kruxt-accent underline underline-offset-4">Member sign-in</a>
     <a href={gymUrl} className="text-kruxt-accent underline underline-offset-4">Gym admin sign-in</a>

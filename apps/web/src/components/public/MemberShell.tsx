@@ -5,8 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { CalendarDays, Rss, Dumbbell, Building2, UserRound, LogOut, Library, UsersRound, Trophy, Plug, ShieldCheck, CircleHelp, ChevronDown, ArrowUpRight } from "lucide-react";
 
 import { RequiredConsentReview } from "@/components/consent/RequiredConsentReview";
-import { resolvePostAuthPath, usePublicSession } from "@/components/public/usePublicSession";
-import { getGymAdminLoginUrl } from "@/lib/marketing-url";
+import { resolveBackoffice, usePublicSession } from "@/components/public/usePublicSession";
 import { canManagePrivacy } from "@/lib/auth/privacy-access";
 import { MemberAccessFrame } from "@/components/public/MemberAccessFrame";
 import { memberSignInPath } from "@/lib/auth/member-return";
@@ -142,8 +141,7 @@ export function MemberShell({
     );
   }
 
-  const adminPath = resolvePostAuthPath(state.access);
-  const hasBackofficeAccess = adminPath === "/admin" || adminPath === "/org";
+  const backoffice = resolveBackoffice(state.access);
 
   return (
     <main className="app-shell member-workspace">
@@ -163,7 +161,7 @@ export function MemberShell({
             {MORE_NAV.map((item) => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? "page" : undefined}><item.icon size={18} aria-hidden="true" /><span>{item.label}</span></Link>)}
           </nav>
           <div className="member-account">
-            {hasBackofficeAccess && <Link href={getGymAdminLoginUrl()} className="member-workspace-switch">Gym workspace <ArrowUpRight size={16} aria-hidden="true" /></Link>}
+            {backoffice && <a href={backoffice.url} className="member-workspace-switch">{backoffice.label} <ArrowUpRight size={16} aria-hidden="true" /></a>}
             <div className="member-account-row">
               <Link href="/profile" className="member-account-profile"><UserRound size={20} aria-hidden="true" /><span title={displayLabel}>{displayLabel}</span></Link>
               <button type="button" className="member-icon-button" aria-label="Sign out" title="Sign out" onClick={handleConsentSignOut}><LogOut size={18} aria-hidden="true" /></button>
@@ -192,7 +190,7 @@ export function MemberShell({
 
         <details className="member-more member-mobile-tools" key={pathname}>
           <summary>More <ChevronDown size={16} aria-hidden="true" /></summary>
-          <nav aria-label="Member tools">{MORE_NAV.map((item) => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? "page" : undefined}><item.icon size={18} aria-hidden="true" />{item.label}</Link>)}{hasBackofficeAccess && <Link href={getGymAdminLoginUrl()}><ArrowUpRight size={18} aria-hidden="true" />Gym workspace</Link>}</nav>
+          <nav aria-label="Member tools">{MORE_NAV.map((item) => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? "page" : undefined}><item.icon size={18} aria-hidden="true" />{item.label}</Link>)}{backoffice && <a href={backoffice.url}><ArrowUpRight size={18} aria-hidden="true" />{backoffice.label}</a>}</nav>
         </details>
         <section id="member-content" tabIndex={-1} className="mobile-content">{children}</section>
         </div>

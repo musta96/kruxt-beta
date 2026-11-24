@@ -1,4 +1,5 @@
 "use client";
+import { appUrl } from "@kruxt/ui/app-urls";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
@@ -42,9 +43,19 @@ export function resolvePostAuthPath(access: AdminAccessState): string {
   if (access.activationStatus === "pending_activation" || access.activationStatus === "disabled") {
     return "/activate-invite";
   }
-  if (access.platformRole) return "/admin";
-  if (access.staffGymIds.length > 0) return "/org";
+  // Staff and operators also train: they land in the member app and use the
+  // workspace link (resolveBackoffice) to open the gym admin or platform app.
   return "/feed";
+}
+
+export type Backoffice = { app: "admin" | "platform"; label: string; url: string };
+
+/** Which separate workspace app, if any, this account can open from the member app. */
+export function resolveBackoffice(access: AdminAccessState | null | undefined): Backoffice | null {
+  if (!access || access.activationStatus === "pending_activation" || access.activationStatus === "disabled") return null;
+  if (access.platformRole) return { app: "platform", label: "Platform console", url: appUrl("platform", "/login") };
+  if (access.staffGymIds.length > 0) return { app: "admin", label: "Gym workspace", url: appUrl("admin", "/login") };
+  return null;
 }
 
 export function usePublicSession() {

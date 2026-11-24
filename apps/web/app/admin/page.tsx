@@ -1,5 +1,7 @@
-import { AdminHome } from "@/components/admin/AdminHome";
+import { redirect } from "next/navigation";
+import { appUrl } from "@kruxt/ui/app-urls";
 
-export default function AdminPage() {
-  return <AdminHome />;
+// Gym and operator work lives in the platform console; this old web route only forwards there.
+export default function Page() {
+  redirect(appUrl("platform", "/"));
 }

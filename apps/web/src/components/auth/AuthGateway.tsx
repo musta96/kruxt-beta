@@ -13,23 +13,17 @@ import { authenticationErrorMessage } from "@/lib/auth/auth-error";
 import { hasProviderReturnError, sanitizedAuthReturnUrl, startSocialSignIn, PROVIDER_RETURN_ERROR, type SocialProvider } from "@/lib/auth/social-auth";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuthCaptcha } from "@kruxt/ui/auth-captcha";
+import { getGymAdminLoginUrl } from "@/lib/marketing-url";
 import { normalizeMemberReturn } from "@/lib/auth/member-return";
 import { savePendingMemberReturn, takePendingMemberReturn } from "@/lib/auth/pending-member-return";
 
 type AuthMode = "signin" | "signup";
 
-const DEFAULT_GYM_ADMIN_URL =
-  process.env.NODE_ENV === "production" ? "https://kruxt-admin.vercel.app" : "http://localhost:3000";
 
 export function AuthGateway() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const gymAdminUrl = normalizeLoginUrl(
-    process.env.NEXT_PUBLIC_KRUXT_GYM_ADMIN_URL ??
-      process.env.NEXT_PUBLIC_KRUXT_ADMIN_URL ??
-      process.env.NEXT_PUBLIC_ADMIN_APP_URL ??
-      DEFAULT_GYM_ADMIN_URL
-  );
+  const gymAdminUrl = getGymAdminLoginUrl();
   const [mode, setMode] = useState<AuthMode>("signin");
   const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -390,7 +384,3 @@ export function AuthGateway() {
   return <MarketingHome authPanel={authPanel} gymAdminUrl={gymAdminUrl} />;
 }
 
-function normalizeLoginUrl(url: string): string {
-  const trimmed = url.replace(/\/+$/, "");
-  return trimmed.endsWith("/login") ? trimmed : `${trimmed}/login`;
-}

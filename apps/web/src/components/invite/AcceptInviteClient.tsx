@@ -1,17 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useAuthCaptcha } from "@kruxt/ui/auth-captcha";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { invokeSupabaseFunction } from "@/lib/supabase/functions";
 import { authenticationErrorMessage } from "@/lib/auth/auth-error";
+import { getGymAdminLoginUrl } from "@/lib/marketing-url";
 
 type AuthMode = "signin" | "signup";
 
 export function AcceptInviteClient() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
@@ -249,9 +249,9 @@ export function AcceptInviteClient() {
           <div className="panel" style={{ marginTop: 12, color: "#7ef5df" }}>
             <p style={{ marginTop: 0 }}>{success}</p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button className="btn btn-primary" onClick={() => router.push("/org")}>
-                Open organization workspace
-              </button>
+              <a className="btn btn-primary" href={getGymAdminLoginUrl()}>
+                Open gym workspace
+              </a>
               {resolvedGymId && (
                 <span className="subheading">Gym: {resolvedGymId.slice(0, 8)}...</span>
               )}

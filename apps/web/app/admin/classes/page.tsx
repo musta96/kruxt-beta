@@ -1,5 +1,7 @@
-import { ClassesConsole } from "@/components/console/ClassesConsole";
+import { redirect } from "next/navigation";
+import { appUrl } from "@kruxt/ui/app-urls";
 
-export default function AdminClassesPage() {
-  return <ClassesConsole scope="founder" />;
+// Gym and operator work lives in the platform console; this old web route only forwards there.
+export default function Page() {
+  redirect(appUrl("platform", "/"));
 }

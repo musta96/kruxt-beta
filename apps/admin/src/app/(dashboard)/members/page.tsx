@@ -1,4 +1,5 @@
 "use client";
+import { appOrigin } from "@kruxt/ui/app-urls";
 
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
@@ -25,9 +26,6 @@ import type { GymRole, MembershipStatus } from "@kruxt/types";
 
 const INPUT =
   "w-full rounded-lg border border-border bg-kruxt-panel px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent/40";
-
-const DEFAULT_CONSUMER_WEB_URL =
-  process.env.NODE_ENV === "production" ? "https://kruxt-beta.vercel.app" : "http://localhost:3200";
 
 type StatusFilter = "all" | MembershipStatus;
 type BulkActionValue = `status:${MembershipStatus}` | `role:${GymRole}`;
@@ -100,13 +98,7 @@ function formatDateTime(value?: string | null): string {
 
 function inviteUrl(code: string): string {
   if (typeof window === "undefined") return `/join?code=${encodeURIComponent(code)}`;
-  const configuredOrigin =
-    process.env.NEXT_PUBLIC_KRUXT_WEB_URL ||
-    process.env.NEXT_PUBLIC_KRUXT_CONSUMER_WEB_URL ||
-    process.env.NEXT_PUBLIC_KRUXT_APP_URL ||
-    DEFAULT_CONSUMER_WEB_URL;
-
-  return `${configuredOrigin.replace(/\/$/, "")}/join?code=${encodeURIComponent(code)}`;
+  return `${appOrigin("member")}/join?code=${encodeURIComponent(code)}`;
 }
 
 function ProfileSearchResults({
