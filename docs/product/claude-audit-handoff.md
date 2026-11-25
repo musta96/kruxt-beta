@@ -1,14 +1,14 @@
 # KRUXT: Claude Audit Handoff
 
 Give Claude this file and [the audit prompt](claude-audit-prompt.md). Start with a
-local, read-only audit. GitHub is useful for history; the active checkout is
-necessary to see work that has not been committed or published.
+local, read-only audit. GitHub is useful for history; inspect local changes
+separately rather than assuming a checkout and its remote are identical.
 
 ## Local Access
 
 | Priority | Absolute path | What it is |
 | --- | --- | --- |
-| Required | `/Users/edoardomustarelli/Documents/Personal 1 /codex-worktrees/journey-design` | Active integration checkout, branch `codex/98-journey-design`, observed HEAD `458fa4b`. Inspect working tree and relevant untracked files. |
+| Required | `/Users/edoardomustarelli/Documents/Personal 1 /codex-worktrees/journey-design` | Active integration checkout, branch `codex/98-journey-design`, observed HEAD `97beac1` on 25 November 2026 (history rewritten that day; old IDs `4fb1fd7`/`18ddcfa`/`9da4e46` became `c853bbf`/`90f9c76`/`97beac1`). Recheck HEAD and local changes at audit start. |
 | Historical | `/Users/edoardomustarelli/Documents/Personal 1 /.claude/worktrees/infallible-nobel` | Prior Claude/Fable work, branch `claude/j1-hardening`. Start with `READINESS.md`; verify claims against code. |
 | Optional | `/Users/edoardomustarelli/Documents/Personal 1 ` | Parent repository and Git worktree metadata. Scope access to repository operations; do not recursively ingest this folder. It contains credentials. There is a trailing space before the closing backtick. |
 | Optional | `/Users/edoardomustarelli/Documents/KRUXT-continuation` | Historical continuation checkout, not the current source of truth. |
@@ -19,6 +19,26 @@ Use `git worktree list` for the full map and `git log` / `git diff` to decide
 what actually differs. Ignore prunable temporary worktrees. If the tool cannot
 grant narrow folder/file access, use a reviewed, sanitized audit copy containing
 selected tracked and untracked source/evidence, not a zip of the raw checkout.
+
+### Audit Baseline
+
+- `c853bbf` (formerly `4fb1fd7`) is the November 24 working-tree snapshot, not
+  evidence that its changes were reviewed or deployed. On 25 November its history
+  was rewritten: personal contact details in the legal drafts became placeholders,
+  `docs/security/` and `SECURITY_READINESS.md` were left out of Git (local only),
+  and the dev login line in `KRUXT_PLAN.md` was removed. The repository was public
+  when the original commit was pushed; treat the removed details as exposed.
+  The original drafts are kept locally in `output/runtime/legal-drafts-with-contact-details/` (git-ignored).
+- `90f9c76` (formerly `18ddcfa`) consolidates gym-workspace routing and shared app URLs and removes
+  duplicate web consoles. Verify that class, member and invite workflows survive
+  the redirects, including authorization and session continuity. The commit
+  alone is not evidence that hosted behavior changed.
+- `97beac1` (formerly `9da4e46`) is the mobile tab order and `CLAUDE.md` navigation
+  change. The two files Codex saw as locally modified at intake were byte-identical
+  to this commit; the checkout had simply not pulled it yet.
+- Claude's audit reports are private Claude docs, not files in the checkout:
+  "KRUXT Technical Cofounder Audit" and "KRUXT Product, Brand & UX Review"
+  (24 Nov 2026). They contain security findings, so keep them out of Git.
 
 ### What To Read In The Active Checkout
 
