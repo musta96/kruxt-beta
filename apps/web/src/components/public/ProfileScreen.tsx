@@ -511,7 +511,7 @@ export function ProfileScreen() {
               className="input"
               value={form.displayName}
               onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))}
-              placeholder="Edoardo Mustarelli"
+              placeholder="Mario Rossi"
             />
           </div>
 

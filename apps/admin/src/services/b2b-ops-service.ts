@@ -804,6 +804,36 @@ export class B2BOpsService {
 
   async createGymClass(gymId: string, input: CreateGymClassInput): Promise<GymClass> {
     await this.access.requireGymStaff(gymId);
+    const status = input.status ?? "scheduled";
+    const bookingClosesAt = input.bookingClosesAt ?? input.startsAt;
+    const now = Date.now();
+    const bookingClosesAtMs = new Date(bookingClosesAt).getTime();
+    const bookingOpensAt =
+      input.bookingOpensAt ??
+      (Number.isFinite(bookingClosesAtMs)
+        ? new Date(Math.min(now, bookingClosesAtMs)).toISOString()
+        : "");
+    const startsAtMs = new Date(input.startsAt).getTime();
+    const endsAtMs = new Date(input.endsAt).getTime();
+    const bookingOpensAtMs = new Date(bookingOpensAt).getTime();
+
+    if (
+      ![startsAtMs, endsAtMs, bookingOpensAtMs, bookingClosesAtMs].every(Number.isFinite) ||
+      endsAtMs <= startsAtMs ||
+      bookingOpensAtMs > bookingClosesAtMs ||
+      bookingClosesAtMs > startsAtMs
+    ) {
+      throw new KruxtAdminError(
+        "ADMIN_CLASS_SCHEDULE_INVALID",
+        "Class booking window must open before it closes and close by class start."
+      );
+    }
+    if (status === "scheduled" && bookingClosesAtMs <= now) {
+      throw new KruxtAdminError(
+        "ADMIN_CLASS_BOOKING_WINDOW_CLOSED",
+        "Scheduled classes need a booking close time in the future."
+      );
+    }
 
     const { data, error } = await this.supabase
       .from("gym_classes")
@@ -813,11 +843,11 @@ export class B2BOpsService {
         title: input.title,
         description: input.description ?? null,
         capacity: input.capacity,
-        status: input.status ?? "scheduled",
+        status,
         starts_at: input.startsAt,
         ends_at: input.endsAt,
-        booking_opens_at: input.bookingOpensAt ?? null,
-        booking_closes_at: input.bookingClosesAt ?? null
+        booking_opens_at: bookingOpensAt,
+        booking_closes_at: bookingClosesAt
       })
       .select("*")
       .single();
@@ -843,13 +873,10 @@ export class B2BOpsService {
       booking_closes_at: input.bookingClosesAt
     };
 
-    const { data, error } = await this.supabase
-      .from("gym_classes")
-      .update(payload)
-      .eq("id", classId)
-      .eq("gym_id", gymId)
-      .select("*")
-      .single();
+    const { data, error } = await this.supabase.rpc("update_gym_class_by_staff", {
+      p_class_id: classId,
+      p_patch: payload
+    }).single();
 
     throwIfAdminError(error, "ADMIN_CLASS_UPDATE_FAILED", "Unable to update class.");
 
@@ -857,20 +884,7 @@ export class B2BOpsService {
   }
 
   async setGymClassStatus(gymId: string, classId: string, status: GymClass["status"]): Promise<GymClass> {
-    await this.access.requireGymStaff(gymId);
-    await this.assertClassBelongsToGym(classId, gymId);
-
-    const { data, error } = await this.supabase
-      .from("gym_classes")
-      .update({ status })
-      .eq("id", classId)
-      .eq("gym_id", gymId)
-      .select("*")
-      .single();
-
-    throwIfAdminError(error, "ADMIN_CLASS_STATUS_UPDATE_FAILED", "Unable to update class status.");
-
-    return mapClass(data as GymClassRow);
+    return this.updateGymClass(gymId, classId, { status });
   }
 
   async listClassBookings(gymId: string, classId: string, limit = 300): Promise<ClassBooking[]> {
@@ -893,20 +907,15 @@ export class B2BOpsService {
     await this.access.requireGymStaff(gymId);
     await this.assertClassBelongsToGym(input.classId, gymId);
 
-    const { data, error } = await this.supabase
-      .from("class_bookings")
-      .upsert(
-        {
-          class_id: input.classId,
-          user_id: input.userId,
-          status: input.status ?? "booked",
-          source_channel: input.sourceChannel ?? "admin_panel",
-          checked_in_at: input.checkedInAt ?? null
-        },
-        { onConflict: "class_id,user_id" }
-      )
-      .select("*")
-      .single();
+    const { data, error } = await this.supabase.rpc("upsert_class_booking_by_staff", {
+      p_class_id: input.classId,
+      p_user_id: input.userId,
+      p_patch: {
+        status: input.status ?? "booked",
+        source_channel: input.sourceChannel ?? "admin_panel",
+        checked_in_at: input.checkedInAt
+      }
+    }).single();
 
     throwIfAdminError(error, "ADMIN_CLASS_BOOKING_UPSERT_FAILED", "Unable to upsert class booking.");
 
@@ -918,7 +927,7 @@ export class B2BOpsService {
 
     const { data: bookingData, error: bookingError } = await this.supabase
       .from("class_bookings")
-      .select("id,class_id")
+      .select("id,class_id,user_id")
       .eq("id", bookingId)
       .maybeSingle();
 
@@ -930,12 +939,11 @@ export class B2BOpsService {
 
     await this.assertClassBelongsToGym((bookingData as { class_id: string }).class_id, gymId);
 
-    const { data, error } = await this.supabase
-      .from("class_bookings")
-      .update({ status })
-      .eq("id", bookingId)
-      .select("*")
-      .single();
+    const { data, error } = await this.supabase.rpc("upsert_class_booking_by_staff", {
+      p_class_id: bookingData.class_id,
+      p_user_id: bookingData.user_id,
+      p_patch: { status }
+    }).single();
 
     throwIfAdminError(error, "ADMIN_CLASS_BOOKING_UPDATE_FAILED", "Unable to update class booking status.");
 
@@ -979,16 +987,14 @@ export class B2BOpsService {
 
     await this.assertClassBelongsToGym((waitlistData as { class_id: string }).class_id, gymId);
 
-    const { data, error } = await this.supabase
-      .from("class_waitlist")
-      .update({
+    const { data, error } = await this.supabase.rpc("update_class_waitlist_by_staff", {
+      p_waitlist_id: waitlistEntryId,
+      p_patch: {
         status: input.status,
         notified_at: input.notifiedAt,
         expires_at: input.expiresAt
-      })
-      .eq("id", waitlistEntryId)
-      .select("*")
-      .single();
+      }
+    }).single();
 
     throwIfAdminError(error, "ADMIN_CLASS_WAITLIST_UPDATE_FAILED", "Unable to update class waitlist entry.");
 

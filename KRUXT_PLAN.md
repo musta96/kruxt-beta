@@ -198,7 +198,6 @@ Roughly in priority order:
 - Run platform: `cd apps/platform && pnpm dev` → http://localhost:3100
 - Run web: `cd apps/web && pnpm dev` → http://localhost:3200 (check `package.json` for actual port)
 - Supabase: https://supabase.com/dashboard/project/hgomsmhsybrxjdxbgkjy
-- Owner auth in dev: `mustarelli.edoardo@gmail.com` / `Kruxt2026!`
 - Owner gym: `iron-temple` (Iron Temple Fitness) — feel free to swap for `bzone-fitness` via Settings later.
 
 ### Common SQL helpers (dev only)

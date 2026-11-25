@@ -10,13 +10,14 @@ import {
 import type { User, Session } from "@supabase/supabase-js";
 import type { PlatformOperatorRole } from "@kruxt/types";
 import { createAdminSupabaseClient } from "@/services";
+import { authenticationErrorMessage } from "@/services/auth-error";
 
 interface AuthState {
   user: User | null;
   session: Session | null;
   platformRole: PlatformOperatorRole | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   refreshAccess: () => Promise<void>;
 }
@@ -50,8 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (!mounted) return;
       setLoading(true);
-      void applySession(newSession);
+      // Avoid awaiting authenticated queries inside the Auth client's lock.
+      window.setTimeout(() => { if (mounted) void applySession(newSession); }, 0);
     });
 
     return () => {
@@ -92,14 +95,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(
     email: string,
-    password: string
+    password: string,
+    captchaToken?: string
   ): Promise<{ error?: string }> {
+    if (process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY?.trim() && !captchaToken?.trim()) {
+      return { error: authenticationErrorMessage({ code: "captcha_required" }) };
+    }
     const supabase = createAdminSupabaseClient();
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
     });
-    if (error) return { error: error.message };
+    if (error) return { error: authenticationErrorMessage(error) };
     return {};
   }
 

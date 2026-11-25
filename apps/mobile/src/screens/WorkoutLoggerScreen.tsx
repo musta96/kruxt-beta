@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,7 +11,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Button, Card, Chip, Input, ProgressBar } from "@kruxt/ui";
 import { darkTheme } from "@kruxt/ui/theme";
@@ -97,12 +95,16 @@ export function WorkoutLoggerScreen() {
     setSubmitting(false);
 
     if (result.ok) {
+      const mediaWarning =
+        "mediaWarning" in result && typeof result.mediaWarning === "string"
+          ? result.mediaWarning
+          : undefined;
       // Reset the logger so the next session starts clean.
       setDraft(flowRef.current.createDraft());
       setCurrentStep(0);
       Alert.alert(
-        "Proof Posted!",
-        `+${result.progressDelta.xpDelta ?? 0} XP  \u2022  Chain: ${result.progressDelta.current.chainDays}d`,
+        "Workout saved",
+        `+${result.progressDelta.xpDelta ?? 0} XP  \u2022  Chain: ${result.progressDelta.current.chainDays}d${mediaWarning ? `\n\n${mediaWarning}` : ""}`,
         [
           { text: "Keep logging", style: "cancel" },
           {
@@ -125,61 +127,6 @@ export function WorkoutLoggerScreen() {
     },
     [],
   );
-
-  const applyPickedAsset = useCallback(
-    (result: ImagePicker.ImagePickerResult) => {
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      if (!asset?.uri) return;
-      setDraft((prev) => ({
-        ...prev,
-        proofMedia: { uri: asset.uri, mimeType: asset.mimeType ?? null },
-      }));
-    },
-    [],
-  );
-
-  const handlePickMedia = useCallback(async () => {
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (permission.status !== "granted") {
-        Alert.alert(
-          "Permission needed",
-          "Allow photo/video access to attach workout proof.",
-        );
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images", "videos"],
-        quality: 0.85,
-        videoMaxDuration: 60,
-      });
-      applyPickedAsset(result);
-    } catch (e) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Unable to pick media.");
-    }
-  }, [applyPickedAsset]);
-
-  const handleCaptureMedia = useCallback(async () => {
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (permission.status !== "granted") {
-        Alert.alert(
-          "Camera permission needed",
-          "Allow camera access to capture your proof.",
-        );
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ["images", "videos"],
-        quality: 0.85,
-        videoMaxDuration: 60,
-      });
-      applyPickedAsset(result);
-    } catch (e) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Unable to capture media.");
-    }
-  }, [applyPickedAsset]);
 
   const handleClearMedia = useCallback(() => {
     setDraft((prev) => ({ ...prev, proofMedia: null }));
@@ -267,8 +214,6 @@ export function WorkoutLoggerScreen() {
           {step === "review" && (
             <ReviewStep
               draft={draft}
-              onPickMedia={handlePickMedia}
-              onCaptureMedia={handleCaptureMedia}
               onClearMedia={handleClearMedia}
             />
           )}
@@ -589,13 +534,9 @@ function SetRow({
 
 function ReviewStep({
   draft,
-  onPickMedia,
-  onCaptureMedia,
   onClearMedia,
 }: {
   draft: WorkoutLoggerDraft;
-  onPickMedia: () => void;
-  onCaptureMedia: () => void;
   onClearMedia: () => void;
 }) {
   const totalSets = draft.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
@@ -642,39 +583,22 @@ function ReviewStep({
           </View>
         )}
       </Card>
-      {/* Proof media attach */}
+      {/* Media attachments are quarantined pending private storage reconciliation. */}
       <Card theme={theme} style={styles.proofCard}>
         <Text style={styles.proofTitle}>Proof Media</Text>
-        {draft.proofMedia?.uri ? (
-          <View>
-            <Image source={{ uri: draft.proofMedia.uri }} style={styles.proofPreview} />
-            {(draft.proofMedia.mimeType ?? "").startsWith("video") && (
-              <View style={styles.proofVideoBadge}>
-                <Text style={styles.proofVideoBadgeText}>{"▶ VIDEO"}</Text>
-              </View>
-            )}
-            <View style={styles.proofActions}>
-              <Pressable onPress={onPickMedia} style={styles.proofActionBtn}>
-                <Text style={styles.proofActionText}>Replace</Text>
-              </Pressable>
-              <Pressable onPress={onClearMedia} style={styles.proofActionBtn}>
-                <Text style={styles.proofActionTextDanger}>Remove</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <View>
-            <View style={styles.proofPickRow}>
-              <Pressable onPress={onCaptureMedia} style={styles.proofPickHalf}>
-                <Text style={styles.proofPickerIcon}>{"\u{1F4F7}"}</Text>
-                <Text style={styles.proofPickerText}>Camera</Text>
-              </Pressable>
-              <Pressable onPress={onPickMedia} style={styles.proofPickHalf}>
-                <Text style={styles.proofPickerIcon}>{"\u{1F5BC}️"}</Text>
-                <Text style={styles.proofPickerText}>Library</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.proofPickerHint}>Optional — proof hits different</Text>
+        <Text style={styles.proofStatus}>
+          Media attachments are temporarily unavailable. You can still save your workout.
+        </Text>
+        {draft.proofMedia && (
+          <View style={styles.proofActions}>
+            <Pressable
+              onPress={onClearMedia}
+              style={styles.proofActionBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Remove media attachment"
+            >
+              <Text style={styles.proofActionTextDanger}>Remove</Text>
+            </Pressable>
           </View>
         )}
       </Card>
@@ -904,65 +828,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 12,
   },
-  proofPicker: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(53,208,255,0.3)",
-    borderStyle: "dashed",
-    backgroundColor: "rgba(53,208,255,0.04)",
-  },
-  proofPickRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  proofPickHalf: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 24,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(53,208,255,0.3)",
-    borderStyle: "dashed",
-    backgroundColor: "rgba(53,208,255,0.04)",
-  },
-  proofPickerIcon: { fontSize: 28, marginBottom: 6 },
-  proofPickerText: {
+  proofStatus: {
     fontFamily: "Sora",
     fontSize: 15,
-    fontWeight: "600",
+    lineHeight: 22,
     color: "#F4F6F8",
-  },
-  proofPickerHint: {
-    fontFamily: "Sora",
-    fontSize: 12,
-    color: "#A7B1C2",
-    marginTop: 2,
-  },
-  proofPreview: {
-    width: "100%",
-    height: 220,
-    borderRadius: 14,
-    backgroundColor: "rgba(141,153,174,0.1)",
-  },
-  proofVideoBadge: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    backgroundColor: "rgba(14,17,22,0.8)",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  proofVideoBadgeText: {
-    fontFamily: "Roboto Mono",
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#35D0FF",
-    letterSpacing: 1,
   },
   proofActions: {
     flexDirection: "row",
@@ -970,6 +840,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   proofActionBtn: {
+    minHeight: 44,
     flex: 1,
     alignItems: "center",
     paddingVertical: 10,
@@ -977,7 +848,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(141,153,174,0.18)",
   },
-  proofActionText: { fontFamily: "Sora", fontSize: 13, fontWeight: "600", color: "#F4F6F8" },
   proofActionTextDanger: { fontFamily: "Sora", fontSize: 13, fontWeight: "600", color: "#FF6B6B" },
   // Footer
   footer: {

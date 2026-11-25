@@ -30,6 +30,8 @@ export interface ExerciseSearchResult {
 }
 
 export interface SubmitWorkoutInput {
+  /** Persist with the draft and reuse only for retries of the same submission. */
+  idempotencyKey?: string;
   title: string;
   notes?: string;
   workoutType: WorkoutType;
@@ -55,6 +57,7 @@ export interface SubmitWorkoutInput {
 
 export interface SubmitWorkoutResult {
   workoutId: string;
+  progressAvailable: boolean;
   xpDelta: {
     xpBefore: number;
     xpAfter: number;
@@ -65,6 +68,13 @@ export interface SubmitWorkoutResult {
     rankTierBefore: RankTier;
     rankTierAfter: RankTier;
   };
+}
+
+export class WorkoutSaveUncertainError extends Error {
+  constructor() {
+    super("The save response could not be confirmed. Check your activity before starting another workout; do not submit this session again.");
+    this.name = "WorkoutSaveUncertainError";
+  }
 }
 
 export interface UploadWorkoutProofResult {
@@ -120,11 +130,12 @@ type ExerciseRow = {
   equipment: string | null;
 };
 
-async function requireUser(client: SupabaseClient): Promise<{ id: string }> {
+async function requireUser(client: SupabaseClient, expectedUserId?: string): Promise<{ id: string }> {
   const { data, error } = await client.auth.getUser();
   if (error || !data.user) {
     throw new Error("Authentication required.");
   }
+  if (expectedUserId && data.user.id !== expectedUserId) throw new Error("Your account changed. Reload before continuing.");
 
   return { id: data.user.id };
 }
@@ -542,10 +553,15 @@ export async function deleteWorkoutTemplate(client: SupabaseClient, templateId: 
 
 export async function submitWorkout(
   client: SupabaseClient,
-  input: SubmitWorkoutInput
+  input: SubmitWorkoutInput,
+  expectedUserId?: string
 ): Promise<SubmitWorkoutResult> {
-  const user = await requireUser(client);
+  const user = await requireUser(client, expectedUserId);
   const exercises = input.exercises.filter((item) => item.exerciseId);
+
+  if (input.idempotencyKey && (!input.startedAt || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.idempotencyKey))) {
+    throw new Error("Idempotent submissions require a UUID key and a stable startedAt timestamp.");
+  }
 
   if (exercises.length === 0) {
     throw new Error("Add at least one exercise block before submitting.");
@@ -573,8 +589,11 @@ export async function submitWorkout(
     throw new Error("Required legal consents are missing. Review your account consents before logging workouts.");
   }
 
+  await requireUser(client, user.id);
+
   const { data: workoutIdData, error: logError } = await client.rpc("log_workout_atomic", {
     p_workout: {
+      ...(input.idempotencyKey ? { idempotency_key: input.idempotencyKey } : {}),
       gym_id: input.gymId ?? null,
       title: input.title.trim() || "Workout Session",
       workout_type: input.workoutType,
@@ -608,25 +627,28 @@ export async function submitWorkout(
         }
       ]
     }))
-  });
+  }).then((response) => response, () => { throw new WorkoutSaveUncertainError(); });
 
   if (logError) {
+    if (!logError.code) throw new WorkoutSaveUncertainError();
     throw new Error(logError.message || "Unable to log workout.");
   }
 
   const workoutId = workoutIdData as string | null;
   if (!workoutId) {
-    throw new Error("Workout logging completed without a workout id.");
+    throw new WorkoutSaveUncertainError();
   }
 
-  const { data: afterProfile, error: afterError } = await client
-    .from("profiles")
-    .select("xp_total,level,chain_days,rank_tier")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (afterError) {
-    throw new Error(afterError.message || "Unable to load updated progress.");
+  // The write is committed. A readback failure must never invite another write.
+  let afterProfile: typeof beforeProfile = null;
+  let progressAvailable = false;
+  try {
+    const response = await client.from("profiles")
+      .select("xp_total,level,chain_days,rank_tier").eq("id", user.id).maybeSingle();
+    afterProfile = response.data;
+    progressAvailable = !response.error && Boolean(response.data);
+  } catch {
+    // Keep the saved workout receipt even when the connection drops afterwards.
   }
 
   const xpBefore = (beforeProfile?.xp_total as number | null | undefined) ?? 0;
@@ -640,6 +662,7 @@ export async function submitWorkout(
 
   return {
     workoutId,
+    progressAvailable,
     xpDelta: {
       xpBefore,
       xpAfter,
@@ -658,9 +681,10 @@ export async function uploadWorkoutProofMedia(
   input: {
     workoutId: string;
     files: File[];
+    expectedUserId?: string;
   }
 ): Promise<UploadWorkoutProofResult> {
-  const user = await requireUser(client);
+  const user = await requireUser(client, input.expectedUserId);
 
   if (input.files.length === 0) {
     return { uploadedCount: 0 };
@@ -670,12 +694,15 @@ export async function uploadWorkoutProofMedia(
     throw new Error(`Upload up to ${MAX_PROOF_FILES} proof files per workout.`);
   }
 
-  let sortOrder = 1;
-  const uploadedPaths: string[] = [];
+  const { data: existing, error: existingError } = await client.from("workout_proof_media")
+    .select("storage_path,sort_order").eq("workout_id", input.workoutId).eq("uploader_user_id", user.id);
+  if (existingError) throw new Error("Your workout is saved, but its attachments could not be checked. Retry attachments only.");
+  const registered = new Map(((existing ?? []) as Array<{ storage_path: string; sort_order: number }>)
+    .map((row) => [row.sort_order, row.storage_path]));
   let uploadedCount = 0;
 
-  try {
-    for (const file of input.files) {
+    for (const [index, file] of input.files.entries()) {
+      const sortOrder = index + 1;
       const mediaKind = inferMediaKind(file.type);
       if (!mediaKind) {
         throw new Error("Only image and video proof files are supported.");
@@ -686,7 +713,19 @@ export async function uploadWorkoutProofMedia(
       }
 
       const fileName = sanitizeFileName(file.name);
-      const objectPath = `${user.id}/${input.workoutId}/${Date.now()}-${sortOrder}-${fileName}`;
+      const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+      const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      const contentKey = `${sortOrder}-${hash}-${fileName}`;
+      if (registered.has(sortOrder)) {
+        if (!registered.get(sortOrder)!.endsWith(`/${contentKey}`)) throw new Error("An attachment already occupies this position. Your workout and existing media are unchanged.");
+        uploadedCount += 1;
+        continue;
+      }
+
+      // Unregistered objects are not selectable under Storage RLS. A fresh attempt
+      // path can resume after metadata failure without requiring an overwrite.
+      const objectPath = `${user.id}/${input.workoutId}/${crypto.randomUUID()}/${contentKey}`;
+      await requireUser(client, user.id);
 
       const { error: uploadError } = await client.storage.from(WORKOUT_PROOF_BUCKET).upload(objectPath, file, {
         upsert: false,
@@ -704,9 +743,8 @@ export async function uploadWorkoutProofMedia(
         throw new Error(uploadError.message || "Unable to upload proof file.");
       }
 
-      uploadedPaths.push(objectPath);
-
-      const { error: insertError } = await client.from("workout_proof_media").insert({
+      await requireUser(client, user.id);
+      const registration = {
         workout_id: input.workoutId,
         uploader_user_id: user.id,
         storage_bucket: WORKOUT_PROOF_BUCKET,
@@ -715,11 +753,42 @@ export async function uploadWorkoutProofMedia(
         mime_type: file.type || "application/octet-stream",
         file_bytes: file.size,
         sort_order: sortOrder
-      });
+      };
+      let insertError: { code?: string; message?: string } | null;
+      try {
+        const response = await client.from("workout_proof_media").insert(registration);
+        insertError = response.error;
+      } catch {
+        insertError = {};
+      }
 
       if (insertError) {
-        await client.storage.from(WORKOUT_PROOF_BUCKET).remove([objectPath]);
+        // A lost response can hide a committed registration. An empty/failed read
+        // is not proof of rollback, so only confirmed database rejections permit cleanup.
+        let confirmed = false;
+        await requireUser(client, user.id);
+        try {
+          const { data, error } = await client.from("workout_proof_media")
+            .select("workout_id,uploader_user_id,storage_bucket,storage_path,sort_order")
+            .eq("workout_id", input.workoutId).eq("uploader_user_id", user.id)
+            .eq("storage_path", objectPath).maybeSingle();
+          confirmed = !error && data?.workout_id === input.workoutId
+            && data?.uploader_user_id === user.id && data?.storage_bucket === WORKOUT_PROOF_BUCKET
+            && data?.storage_path === objectPath && data?.sort_order === sortOrder;
+        } catch {
+          // Preserve the object until its registration can be checked safely.
+        }
+        if (confirmed) {
+          uploadedCount += 1;
+          continue;
+        }
 
+        const rejected = ["23502", "23503", "23505", "23514", "22P02", "42501"].includes(insertError.code ?? "");
+        if (!rejected) {
+          throw new Error("Your workout is saved, but attachment registration could not be confirmed. Retry attachments only.");
+        }
+        await requireUser(client, user.id);
+        try { await client.storage.from(WORKOUT_PROOF_BUCKET).remove([objectPath]); } catch { /* A confirmed rejected registration may leave an unregistered orphan. */ }
         if (isMissingWorkoutProofMediaDependency(insertError)) {
           throw new Error(
             "Workout proof media database contract is not ready yet. Apply the workout proof media migration in Supabase first."
@@ -730,14 +799,20 @@ export async function uploadWorkoutProofMedia(
       }
 
       uploadedCount += 1;
-      sortOrder += 1;
     }
-  } catch (error) {
-    if (uploadedPaths.length > 0) {
-      await client.storage.from(WORKOUT_PROOF_BUCKET).remove(uploadedPaths);
-    }
-    throw error;
-  }
 
   return { uploadedCount };
+}
+
+export async function updateWorkoutAudience(
+  client: SupabaseClient,
+  workoutId: string,
+  visibility: WorkoutVisibility,
+  expectedUserId?: string
+): Promise<void> {
+  const user = await requireUser(client, expectedUserId);
+  if (!["private", "followers", "gym", "public"].includes(visibility)) throw new Error("Choose a valid audience.");
+  const { data, error } = await client.from("workouts").update({ visibility })
+    .eq("id", workoutId).eq("user_id", user.id).select("id,visibility").single();
+  if (error || !data || data.visibility !== visibility) throw new Error("The audience change was not confirmed. Check your activity before sharing again.");
 }

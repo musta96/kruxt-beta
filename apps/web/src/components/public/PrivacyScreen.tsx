@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { RefreshCw, Send, Download } from "lucide-react";
 import type { PrivacyRequest, PrivacyRequestType } from "@kruxt/types";
 
 import { MemberShell } from "@/components/public/MemberShell";
 import { usePublicSession } from "@/components/public/usePublicSession";
-import { loadPrivacySnapshot, submitPrivacyRequest, type PrivacySnapshot } from "@/lib/public/privacy";
+import { loadPrivacySnapshot, submitPrivacyRequest, privacyErrorMessage, type PrivacySnapshot } from "@/lib/public/privacy";
+import { canManagePrivacy } from "@/lib/auth/privacy-access";
 
 const REQUEST_TYPES: Array<{ value: PrivacyRequestType; label: string; copy: string }> = [
-  { value: "access", label: "Access", copy: "Receive a readable copy of your KRUXT data." },
-  { value: "export", label: "Portability", copy: "Generate a machine-readable export." },
+  { value: "access", label: "Access to my data", copy: "Request a readable copy of your personal data." },
+  { value: "export", label: "Data portability", copy: "Request your data in a machine-readable format." },
   { value: "rectify", label: "Rectification", copy: "Ask the team to correct inaccurate data." },
   { value: "restrict_processing", label: "Restriction", copy: "Limit processing while a request is reviewed." },
   { value: "delete", label: "Erasure", copy: "Request deletion where retention law allows it." }
@@ -18,7 +20,7 @@ const REQUEST_TYPES: Array<{ value: PrivacyRequestType; label: string; copy: str
 function formatDate(value: string | null | undefined): string {
   if (!value) return "Not set";
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
+  if (Number.isNaN(parsed.getTime())) return "Not available";
   return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
@@ -27,121 +29,117 @@ function requestLabel(request: PrivacyRequest): string {
 }
 
 export function PrivacyScreen() {
-  const { state, supabase } = usePublicSession();
+  const session = usePublicSession();
+  return <PrivacyCenter key={session.state.user?.id ?? "signed-out"} session={session} />;
+}
+
+function PrivacyCenter({ session }: { session: ReturnType<typeof usePublicSession> }) {
+  const { state, supabase } = session;
   const [snapshot, setSnapshot] = useState<PrivacySnapshot | null>(null);
   const [requestType, setRequestType] = useState<PrivacyRequestType>("access");
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<"load" | "submit">("load");
+  const [receipts, setReceipts] = useState<Array<{ id: string; type: PrivacyRequestType }>>([]);
+  const receipt = receipts.at(-1);
+  const eligible = canManagePrivacy(state);
+  const userId = state.user?.id;
+  const identity = useRef<string | null>(null);
+  const loadGeneration = useRef(0);
+  const submission = useRef(false);
+  identity.current = eligible && userId ? userId : null;
+  const invalidateLoad = useCallback(() => { loadGeneration.current++; identity.current = null; }, []);
+
+  const load = useCallback(async () => {
+    if (!eligible || !userId) return;
+    const generation = ++loadGeneration.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const nextSnapshot = await loadPrivacySnapshot(supabase);
+      if (generation === loadGeneration.current && identity.current === userId) setSnapshot(nextSnapshot);
+    } catch (loadError) {
+      if (generation === loadGeneration.current && identity.current === userId) {
+        setSnapshot(null);
+        setErrorKind("load");
+        setError(privacyErrorMessage(loadError, "load"));
+      }
+    } finally {
+      if (generation === loadGeneration.current && identity.current === userId) setLoading(false);
+    }
+  }, [eligible, userId, supabase]);
 
   useEffect(() => {
-    if (state.status !== "ready" || !state.user) return;
-
-    let active = true;
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const nextSnapshot = await loadPrivacySnapshot(supabase);
-        if (active) setSnapshot(nextSnapshot);
-      } catch (loadError) {
-        if (active) setError(loadError instanceof Error ? loadError.message : "Unable to load privacy center.");
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-
+    identity.current = eligible && userId ? userId : null;
+    setSnapshot(null);
+    setReceipts([]);
+    setReason("");
+    setError(null);
+    setSubmitting(false);
+    submission.current = false;
     void load();
+    return invalidateLoad;
+  }, [load, eligible, userId, invalidateLoad]);
 
-    return () => {
-      active = false;
-    };
-  }, [state.status, state.user, supabase]);
+  const alreadyOpen = Boolean(snapshot?.openRequests.some(request => request.requestType === requestType) || receipts.some(item => item.type === requestType));
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!eligible || !userId || identity.current !== userId || submission.current || alreadyOpen) return;
+    submission.current = true;
     setSubmitting(true);
     setError(null);
-    setSuccess(null);
 
     try {
-      const nextSnapshot = await submitPrivacyRequest(supabase, {
+      const id = await submitPrivacyRequest(supabase, {
         requestType,
         reason
       });
-      setSnapshot(nextSnapshot);
+      if (identity.current !== userId) return;
+      setReceipts(current => [...current, { id, type: requestType }]);
       setReason("");
-      setSuccess("Privacy request submitted.");
+      await load();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to submit privacy request.");
+      if (identity.current === userId) {
+        setErrorKind("submit");
+        setError(privacyErrorMessage(submitError, "submit"));
+      }
     } finally {
-      setSubmitting(false);
+      if (identity.current === userId) {
+        submission.current = false;
+        setSubmitting(false);
+      }
     }
   }
 
   return (
     <MemberShell
       title="Privacy"
-      subtitle="Consent gates, GDPR-style data requests, and export receipts from the Phase 8 runtime."
+      subtitle="Your data requests and available downloads."
     >
-      {error ? <div className="status-banner status-danger">{error}</div> : null}
-      {success ? <div className="status-banner status-success">{success}</div> : null}
+      {error ? <div className="status-banner status-danger" role="alert">{receipt && errorKind === "load" ? "Your request was received. Request history could not be refreshed; do not submit it again." : error}</div> : null}
+      {receipt ? <div className="status-banner status-success" role="status">Your {REQUEST_TYPES.find(type => type.value === receipt.type)?.label.toLowerCase()} request was received. It will be reviewed before any action is taken.</div> : null}
 
-      {loading ? (
-        <section className="feed-card">
-          <p className="feed-body">Loading privacy center...</p>
-        </section>
-      ) : (
+      {eligible ? (
         <>
-          <section className="hero-card">
-            <div>
-              <p className="eyebrow">CONSENT GATE</p>
-              <h2 className="section-title">
-                {snapshot?.hasRequiredConsents ? "Required consents are current." : "Consent review required."}
-              </h2>
-              <p className="section-copy">
-                KRUXT checks terms, privacy, and health-data processing requirements before sensitive flows keep moving.
-              </p>
-              {(snapshot?.missingRequiredConsents.length ?? 0) > 0 ? (
-                <ul className="checklist">
-                  {snapshot?.missingRequiredConsents.map((gap) => (
-                    <li key={`${gap.consentType}_${gap.reason}`}>
-                      {gap.consentType} · {gap.reason}
-                      {gap.requiredPolicyVersion ? ` · version ${gap.requiredPolicyVersion}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-            <div className="hero-stats">
-              <div className="metric-card">
-                <span className="metric-label">Open</span>
-                <strong className="metric-value">{snapshot?.openRequests.length ?? 0}</strong>
-              </div>
-              <div className="metric-card">
-                <span className="metric-label">Overdue</span>
-                <strong className="metric-value">{snapshot?.overdueOpenCount ?? 0}</strong>
-              </div>
-              <div className="metric-card">
-                <span className="metric-label">Exports</span>
-                <strong className="metric-value">{snapshot?.downloadableExports.length ?? 0}</strong>
-              </div>
-            </div>
+          <section className="member-privacy-summary">
+            <p className="section-copy">{snapshot?.consentStatusUnavailable ? "Policy status is temporarily unavailable. You can still submit a data request." : snapshot?.hasRequiredConsents ? "Your current policy reviews are recorded." : "You do not need to accept policies to submit a data request."}</p>
+            <button type="button" className="secondary-cta" disabled={loading || submitting} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" /> {loading ? "Refreshing requests..." : "Refresh requests"}</button>
           </section>
 
-          <section className="split-card">
-            <article className="glass-panel">
-              <p className="eyebrow">NEW REQUEST</p>
+          <div className="member-privacy-layout">
+            <section className="member-privacy-section">
               <h2 className="section-title">Submit a data request</h2>
               <form className="form-grid" onSubmit={(event) => void handleSubmit(event)}>
-                <label>
-                  <span className="field-label">Request type</span>
+                <div>
+                  <label className="field-label" htmlFor="privacy-request-type">Request type</label>
                   <select
+                    id="privacy-request-type"
                     className="input"
                     value={requestType}
+                    disabled={submitting}
                     onChange={(event) => setRequestType(event.target.value as PrivacyRequestType)}
                   >
                     {REQUEST_TYPES.map((type) => (
@@ -150,26 +148,28 @@ export function PrivacyScreen() {
                       </option>
                     ))}
                   </select>
-                </label>
-                <p className="supporting-copy">{REQUEST_TYPES.find((type) => type.value === requestType)?.copy}</p>
-                <label>
-                  <span className="field-label">Reason or details</span>
+                </div>
+                <p className="supporting-copy" id="privacy-request-context">{REQUEST_TYPES.find((type) => type.value === requestType)?.copy} {alreadyOpen ? "A request of this type has already been received." : ""}</p>
+                <div>
+                  <label className="field-label" htmlFor="privacy-request-reason">Reason or details</label>
                   <textarea
+                    id="privacy-request-reason"
                     className="input profile-bio"
                     value={reason}
+                    maxLength={2000}
+                    disabled={submitting}
                     onChange={(event) => setReason(event.target.value)}
-                    placeholder="Optional context for the KRUXT or gym privacy team."
+                    placeholder="Optional details. Avoid passwords and unnecessary health information."
                   />
-                </label>
-                <button type="submit" className="primary-cta" disabled={submitting}>
-                  {submitting ? "Submitting..." : "Submit request"}
+                </div>
+                <button type="submit" className="primary-cta" aria-describedby="privacy-request-context" disabled={submitting || alreadyOpen}>
+                  <Send size={16} aria-hidden="true" /> {submitting ? "Submitting..." : alreadyOpen ? "Request received" : "Submit request"}
                 </button>
               </form>
-            </article>
+            </section>
 
-            <article className="glass-panel">
-              <p className="eyebrow">EXPORTS</p>
-              <h2 className="section-title">Downloadable receipts</h2>
+            <section className="member-privacy-section">
+              <h2 className="section-title">Available downloads</h2>
               <div className="rank-list">
                 {(snapshot?.downloadableExports ?? []).map((request) => (
                   <div key={request.id} className="rank-row">
@@ -180,26 +180,24 @@ export function PrivacyScreen() {
                       </p>
                     </div>
                     {request.responseLocation ? (
-                      <a href={request.responseLocation} className="secondary-cta">
-                        Open
+                      <a href={request.responseLocation} className="secondary-cta" rel="noreferrer" referrerPolicy="no-referrer">
+                        <Download size={16} aria-hidden="true" /> Download
                       </a>
                     ) : null}
                   </div>
                 ))}
                 {(snapshot?.downloadableExports.length ?? 0) === 0 ? (
-                  <p className="feed-body">No fulfilled exports are available yet.</p>
+                  <p className="feed-body">{loading ? "Loading downloads..." : error ? "Downloads could not be loaded. Refresh to retry." : "No downloads are available yet. Fulfilled access and portability requests will appear here until their links expire."}</p>
                 ) : null}
               </div>
-            </article>
-          </section>
+            </section>
+          </div>
 
-          <section className="glass-panel">
+          <section className="member-privacy-section">
             <div className="profile-form-header">
               <div>
-                <p className="eyebrow">TIMELINE</p>
                 <h2 className="section-title">Recent privacy requests</h2>
               </div>
-              <span className="ghost-chip">30-day SLA</span>
             </div>
             <div className="rank-list">
               {(snapshot?.recentRequests ?? []).map((request) => (
@@ -217,12 +215,12 @@ export function PrivacyScreen() {
                 </div>
               ))}
               {(snapshot?.recentRequests.length ?? 0) === 0 ? (
-                <p className="feed-body">No privacy requests submitted yet.</p>
+                <p className="feed-body">{loading ? "Loading request history..." : error ? "Request history is unavailable. Refresh to retry." : "No privacy requests submitted yet."}</p>
               ) : null}
             </div>
           </section>
         </>
-      )}
+      ) : null}
     </MemberShell>
   );
 }

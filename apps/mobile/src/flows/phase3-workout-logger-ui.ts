@@ -116,6 +116,7 @@ export interface WorkoutLoggerSubmitSuccess {
   result: LogWorkoutAtomicResult;
   verification: WorkoutLoggerSubmitVerification;
   progressDelta: WorkoutLoggerProgressDelta;
+  mediaWarning?: string;
   nextRoute: WorkoutLoggerNextRoute;
 }
 
@@ -702,17 +703,14 @@ export function createPhase3WorkoutLoggerUiFlow(options: { locale?: string | nul
           };
         }
 
-        // Best-effort: attach proof media if the athlete selected one. A media
-        // failure must NOT void an otherwise-valid logged workout — the photo
-        // can be re-added later, but the chain/PR/XP signals already landed.
+        let mediaWarning: string | undefined;
         if (draft.proofMedia?.uri) {
           try {
             const attached = await workouts.attachProofMedia(result.workoutId, draft.proofMedia);
             result.workout.proofMediaUrl = attached.url;
             result.workout.proofMediaType = attached.type;
           } catch {
-            // Swallow: the workout is saved; surfacing a hard error here would
-            // confuse the athlete into thinking the log failed.
+            mediaWarning = "Your workout was saved without media. Media attachments are temporarily unavailable.";
           }
         }
 
@@ -728,6 +726,7 @@ export function createPhase3WorkoutLoggerUiFlow(options: { locale?: string | nul
           result,
           verification,
           progressDelta: computeProgressDelta(previousProgress, currentProgress),
+          ...(mediaWarning ? { mediaWarning } : {}),
           nextRoute: {
             name: "feed_detail",
             params: {

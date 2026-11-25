@@ -7,6 +7,7 @@ import type { User } from "@supabase/supabase-js";
 
 import { broadcastPublicSessionRefresh } from "@/components/public/usePublicSession";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getGymAdminLoginUrl } from "@/lib/marketing-url";
 
 type InviteRow = {
   id: string;
@@ -190,7 +191,7 @@ export function ActivateProfileInviteClient() {
             </p>
             <div className="stack-actions" style={{ marginTop: "1rem" }}>
               <Link href="/feed" className="primary-cta">Open member app</Link>
-              <Link href="/org" className="secondary-cta">Open gym workspace</Link>
+              <a href={getGymAdminLoginUrl()} className="secondary-cta">Open gym workspace</a>
             </div>
           </div>
         </section>

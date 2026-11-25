@@ -7,10 +7,11 @@ import { MemberShell } from "@/components/public/MemberShell";
 import { usePublicSession } from "@/components/public/usePublicSession";
 import {
   loadLibrarySnapshot,
-  type EditorialProgram,
   type LibraryExercise,
   type LibrarySnapshot
 } from "@/lib/public/library";
+import { loadWorkoutTemplates, type WorkoutTemplate } from "@/lib/public/workout-log";
+import { buildTemplateWorkoutHref } from "@/lib/public/workout-handoff";
 
 type LibraryTab = "programs" | "workouts" | "techniques" | "exercises";
 
@@ -22,13 +23,6 @@ const TABS: Array<{ value: LibraryTab; label: string }> = [
 ];
 
 const CATEGORY_ENTRYPOINTS = ["Strength", "HIIT", "For The Gym", "HYROX"];
-
-function programStatusClass(status: EditorialProgram["status"]): string {
-  if (status === "completed") return "status-success";
-  if (status === "scheduled") return "status-warning";
-  if (status === "locked") return "status-danger";
-  return "";
-}
 
 function matchesExercise(exercise: LibraryExercise, query: string, category: string, equipment: string): boolean {
   const normalizedQuery = query.trim().toLowerCase();
@@ -44,7 +38,9 @@ function matchesExercise(exercise: LibraryExercise, query: string, category: str
 export function LibraryScreen() {
   const { state, supabase } = usePublicSession();
   const [snapshot, setSnapshot] = useState<LibrarySnapshot | null>(null);
-  const [tab, setTab] = useState<LibraryTab>("programs");
+  const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
+  const [selectedDays, setSelectedDays] = useState<Record<string, string>>({});
+  const [tab, setTab] = useState<LibraryTab>("workouts");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [equipment, setEquipment] = useState("");
@@ -60,8 +56,15 @@ export function LibraryScreen() {
       setLoading(true);
       setError(null);
       try {
-        const nextSnapshot = await loadLibrarySnapshot(supabase);
-        if (active) setSnapshot(nextSnapshot);
+        const [nextSnapshot, nextTemplates] = await Promise.all([
+          loadLibrarySnapshot(supabase),
+          loadWorkoutTemplates(supabase)
+        ]);
+        if (active) {
+          setSnapshot(nextSnapshot);
+          setTemplates(nextTemplates);
+          setSelectedDays({});
+        }
       } catch (loadError) {
         if (active) setError(loadError instanceof Error ? loadError.message : "Unable to load library.");
       } finally {
@@ -114,11 +117,7 @@ export function LibraryScreen() {
           <section className="hero-card">
             <div>
               <p className="eyebrow">CONTENT LIBRARY</p>
-              <h2 className="section-title">Pick the right training asset, then send it into Plan, Log, and Rank.</h2>
-              <p className="section-copy">
-                Programs are journeys, workouts are reusable sessions, techniques explain the movement family, and
-                exercises stay searchable by equipment and pattern.
-              </p>
+              <h2 className="section-title">Find your next session</h2>
               <div className="category-entry-grid">
                 {CATEGORY_ENTRYPOINTS.map((entry) => (
                   <button
@@ -154,11 +153,12 @@ export function LibraryScreen() {
 
           <section className="glass-panel">
             <div className="library-toolbar">
-              <div className="segmented-control" role="tablist" aria-label="Library sections">
+              <div className="segmented-control" role="group" aria-label="Library sections">
                 {TABS.map((item) => (
                   <button
                     key={item.value}
                     type="button"
+                    aria-pressed={tab === item.value}
                     className={`segment-button ${tab === item.value ? "is-active" : ""}`}
                     onClick={() => setTab(item.value)}
                   >
@@ -169,11 +169,12 @@ export function LibraryScreen() {
               <div className="library-filters">
                 <input
                   className="input"
+                  aria-label="Search library"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search library"
                 />
-                <select className="input" value={category} onChange={(event) => setCategory(event.target.value)}>
+                <select className="input" aria-label="Category" value={category} onChange={(event) => setCategory(event.target.value)}>
                   <option value="">All categories</option>
                   {(snapshot?.facets.categories ?? []).map((facet) => (
                     <option key={facet} value={facet}>
@@ -181,7 +182,7 @@ export function LibraryScreen() {
                     </option>
                   ))}
                 </select>
-                <select className="input" value={equipment} onChange={(event) => setEquipment(event.target.value)}>
+                <select className="input" aria-label="Equipment" value={equipment} onChange={(event) => setEquipment(event.target.value)}>
                   <option value="">All equipment</option>
                   {(snapshot?.facets.equipment ?? []).map((facet) => (
                     <option key={facet} value={facet}>
@@ -202,14 +203,10 @@ export function LibraryScreen() {
                       <p className="eyebrow">{program.category}</p>
                       <h2 className="feed-title">{program.title}</h2>
                     </div>
-                    <span className={`billing-status ${programStatusClass(program.status)}`}>{program.status}</span>
+                    <span className="billing-status">Preview</span>
                   </div>
                   <p className="section-copy">{program.outcome}</p>
                   <dl className="feed-stat-row">
-                    <div>
-                      <dt>Coach</dt>
-                      <dd>{program.coach}</dd>
-                    </div>
                     <div>
                       <dt>Level</dt>
                       <dd>{program.difficulty}</dd>
@@ -230,12 +227,10 @@ export function LibraryScreen() {
                   </div>
                   <div className="stack-actions">
                     <Link href="/plan" className="primary-cta">
-                      Start program
-                    </Link>
-                    <Link href="/log" className="secondary-cta">
-                      Try session
+                      View my plan
                     </Link>
                   </div>
+                  <p className="supporting-copy">Program outline only. No workout sessions are attached.</p>
                 </article>
               ))}
             </section>
@@ -243,35 +238,61 @@ export function LibraryScreen() {
 
           {tab === "workouts" ? (
             <section className="content-card-grid">
-              {(snapshot?.workoutTemplates ?? []).map((template) => (
-                <article key={template.id} className="content-card">
-                  <div className="content-card-header">
-                    <div>
-                      <p className="eyebrow">{template.workoutType}</p>
-                      <h2 className="feed-title">{template.name}</h2>
+              {(snapshot?.workoutTemplates ?? []).map((template) => {
+                const persistedTemplate = templates.find((item) => item.id === template.id);
+                const dayId = selectedDays[template.id] ?? persistedTemplate?.days[0]?.id ?? "";
+                const href = persistedTemplate ? buildTemplateWorkoutHref(persistedTemplate, dayId) : null;
+                return (
+                  <article key={template.id} className="content-card">
+                    <div className="content-card-header">
+                      <div>
+                        <p className="eyebrow">{template.workoutType}</p>
+                        <h2 className="feed-title">{template.name}</h2>
+                      </div>
+                      <span className="billing-status status-success">{template.status}</span>
                     </div>
-                    <span className="billing-status status-success">{template.status}</span>
-                  </div>
-                  <p className="section-copy">{template.description ?? "Saved from the logger and ready to repeat."}</p>
-                  <dl className="feed-stat-row">
-                    <div>
-                      <dt>Days</dt>
-                      <dd>{template.dayCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Exercises</dt>
-                      <dd>{template.exerciseCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Source</dt>
-                      <dd>{template.source}</dd>
-                    </div>
-                  </dl>
-                  <Link href="/log" className="primary-cta">
-                    Log from template
-                  </Link>
-                </article>
-              ))}
+                    <p className="section-copy">{template.description ?? "Saved from the logger and ready to repeat."}</p>
+                    <dl className="feed-stat-row">
+                      <div>
+                        <dt>Days</dt>
+                        <dd>{template.dayCount}</dd>
+                      </div>
+                      <div>
+                        <dt>Exercises</dt>
+                        <dd>{template.exerciseCount}</dd>
+                      </div>
+                      <div>
+                        <dt>Source</dt>
+                        <dd>{template.source}</dd>
+                      </div>
+                    </dl>
+                    <label>
+                      <span className="field-label">Workout day</span>
+                      <select
+                        className="input"
+                        value={dayId}
+                        disabled={!persistedTemplate?.days.length}
+                        onChange={(event) => setSelectedDays((current) => ({ ...current, [template.id]: event.target.value }))}
+                      >
+                        {!persistedTemplate?.days.length ? <option value="">No available days</option> : null}
+                        {(persistedTemplate?.days ?? []).map((day) => (
+                          <option key={day.id} value={day.id}>{day.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    {href ? (
+                      <Link href={href} className="primary-cta" prefetch={false}>
+                        Log from template
+                      </Link>
+                    ) : (
+                      <>
+                        <button type="button" className="primary-cta" disabled>Log from template</button>
+                        <p className="supporting-copy" role="status">This template day cannot be opened. Choose another day or edit the template in Log.</p>
+                      </>
+                    )}
+                  </article>
+                );
+              })}
               {(snapshot?.workoutTemplates.length ?? 0) === 0 ? (
                 <article className="content-card">
                   <p className="eyebrow">EMPTY</p>

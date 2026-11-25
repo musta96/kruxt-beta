@@ -156,7 +156,7 @@ export function GymOnboardingForm() {
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Edoardo Mustarelli"
+                placeholder="Mario Rossi"
                 className={INPUT}
                 autoComplete="name"
               />

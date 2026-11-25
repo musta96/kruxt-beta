@@ -145,6 +145,7 @@ export interface PublishPolicyVersionInput {
   policyType: "terms" | "privacy" | "health_data" | "waiver";
   version: string;
   documentUrl: string;
+  checksum: string;
   effectiveAt?: string;
   label?: string;
   requiresReconsent?: boolean;

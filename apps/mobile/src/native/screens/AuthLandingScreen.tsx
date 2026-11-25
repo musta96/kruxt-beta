@@ -70,7 +70,7 @@ export function AuthLandingScreen() {
               label="Display name"
               value={displayName}
               onChangeText={setDisplayName}
-              placeholder="Edoardo Mustarelli"
+              placeholder="Mario Rossi"
             />
             <Field
               label="Username"
@@ -87,7 +87,7 @@ export function AuthLandingScreen() {
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
-          placeholder="mustarelli.edoardo@gmail.com"
+          placeholder="nome@esempio.it"
         />
         <Field
           label="Password"

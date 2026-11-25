@@ -207,6 +207,32 @@ const BZONE_MANUAL_BILLING = {
   externalPaymentUrl: "https://www.bzonefitness.it/contatti/"
 };
 
+export interface DemoSeedEnvironment {
+  nodeEnv?: string;
+  enableDemoSeed?: string;
+}
+
+export function isDemoSeedClientEnabled(environment: DemoSeedEnvironment = {}): boolean {
+  const nodeEnv = environment.nodeEnv ?? process.env.NODE_ENV;
+  const enableDemoSeed =
+    environment.enableDemoSeed ?? process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED;
+  return nodeEnv !== "production" && enableDemoSeed === "true";
+}
+
+async function assertDemoSeedEnabled(supabase: SupabaseClient): Promise<void> {
+  if (!isDemoSeedClientEnabled()) {
+    throw new Error(
+      "Demo seeding is disabled. Use a non-production build with NEXT_PUBLIC_ENABLE_DEMO_SEED=true."
+    );
+  }
+
+  const { data, error } = await supabase.rpc("demo_seed_is_enabled");
+  if (error) throw new Error(`Demo seed gate: ${error.message}`);
+  if (data !== true) {
+    throw new Error("Demo seeding is disabled for this Supabase project.");
+  }
+}
+
 function numberFromRecord(record: Record<string, unknown>, key: keyof DemoPeopleSeedResult): number {
   const value = record[key];
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -229,6 +255,8 @@ export async function seedBzoneDemoData(
   supabase: SupabaseClient,
   gymId: string
 ): Promise<SeedResult> {
+  await assertDemoSeedEnabled(supabase);
+
   // 1. Canonical BZone identity for the selected test gym.
   const { error: gymError } = await supabase
     .from("gyms")
@@ -288,17 +316,22 @@ export async function seedBzoneDemoData(
   } else {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const bookingOpensAt = new Date();
     const classRows: Record<string, unknown>[] = [];
     for (let weekOffset = 0; weekOffset < NUM_WEEKS; weekOffset++) {
       for (const c of BZONE_CLASSES) {
+        const startsAt = buildClassTime(c.weekday, c.start, weekOffset, today);
+        if (new Date(startsAt) <= bookingOpensAt) continue;
         classRows.push({
           gym_id: gymId,
           title: c.title,
           description: c.description,
           capacity: c.capacity,
           status: "scheduled",
-          starts_at: buildClassTime(c.weekday, c.start, weekOffset, today),
+          starts_at: startsAt,
           ends_at: buildClassTime(c.weekday, c.end, weekOffset, today),
+          booking_opens_at: bookingOpensAt.toISOString(),
+          booking_closes_at: startsAt,
         });
       }
     }

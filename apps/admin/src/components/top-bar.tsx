@@ -9,10 +9,13 @@ import { useGym } from "@/contexts/gym-context";
 import { useServices } from "@/hooks/use-services";
 import type { GymJoinRequestDirectoryItem } from "@/services";
 import { createAdminSupabaseClient } from "@/services";
+import { openWorkspace, resolveWorkspaceOrigin, workspaceReturnOrigin } from "@kruxt/ui/workspace-session";
+import { getAdminSupabasePublicConfig } from "@/services/supabase-client";
 
 interface TopBarProps {
   sidebarCollapsed: boolean;
   onMenuToggle: () => void;
+  mobileOpen: boolean;
 }
 
 function avatarInitials(email: string | null | undefined): string {
@@ -25,7 +28,7 @@ function avatarInitials(email: string | null | undefined): string {
   return namePart.slice(0, 2).toUpperCase();
 }
 
-export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
+export function TopBar({ sidebarCollapsed, onMenuToggle, mobileOpen }: TopBarProps) {
   const { user, platformRole, signOut } = useAuth();
   const { gymId, gymName, supportSessionId, clearSupportSession } = useGym();
   const { gym } = useServices();
@@ -35,8 +38,26 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
   const [pendingRequests, setPendingRequests] = useState<GymJoinRequestDirectoryItem[]>([]);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [endingSession, setEndingSession] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMenuOpen(false);
+    setNotificationsOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (menuOpen) menuRef.current?.querySelector("button")?.focus();
+      if (notificationsOpen) notificationRef.current?.querySelector("button")?.focus();
+      setMenuOpen(false);
+      setNotificationsOpen(false);
+    };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [menuOpen, notificationsOpen]);
 
   // Close floating menus when clicking outside.
   useEffect(() => {
@@ -84,57 +105,68 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
 
   const initials = avatarInitials(user?.email);
   const shortGymId = gymId ? gymId.slice(0, 8) : "—";
-  const platformUrl = process.env.NEXT_PUBLIC_PLATFORM_APP_URL ?? "http://localhost:3100";
   const manageHref = gymId ? `/?gymId=${encodeURIComponent(gymId)}` : "/";
   const previewHref = gymId ? `/preview?gymId=${encodeURIComponent(gymId)}` : "/preview";
   const isPreview = pathname.startsWith("/preview");
 
   async function endPlatformSession() {
-    if (!supportSessionId) {
-      window.location.href = platformUrl;
-      return;
-    }
-
+    if (!user || endingSession) return;
     setEndingSession(true);
+    setWorkspaceError(null);
     try {
       const supabase = createAdminSupabaseClient();
-      await supabase
-        .from("gym_support_access_sessions")
-        .update({
-          session_status: "ended",
-          ended_at: new Date().toISOString(),
-          terminated_reason: "KRUXT operator returned to platform.",
-        })
-        .eq("id", supportSessionId);
+      await openWorkspace({
+        win: window, client: supabase, workspace: "platform", expectedUser: user.id,
+        projectUrl: getAdminSupabasePublicConfig().url ?? "",
+        origin: resolveWorkspaceOrigin("platform", window.location.origin, [
+          workspaceReturnOrigin(window, "platform") ?? undefined,
+          process.env.NEXT_PUBLIC_KRUXT_PLATFORM_URL,
+          process.env.NEXT_PUBLIC_PLATFORM_APP_URL,
+        ]),
+        prepare: async () => {
+          if (supportSessionId) {
+            const { data, error } = await supabase.from("gym_support_access_sessions")
+              .update({ session_status: "ended", ended_at: new Date().toISOString(),
+                terminated_reason: "KRUXT operator returned to platform." })
+              .eq("id", supportSessionId).select("id,session_status").maybeSingle();
+            if (error || data?.id !== supportSessionId || data.session_status !== "ended") {
+              throw new Error("The support session could not be confirmed as ended. Retry before returning to platform.");
+            }
+            clearSupportSession();
+          }
+          return "/tenants";
+        },
+      });
     } catch (error) {
-      console.warn("[TopBar] failed to end support session:", error);
+      setWorkspaceError(error instanceof Error ? error.message : "Unable to return to platform. Try again.");
     } finally {
-      clearSupportSession();
-      window.location.href = platformUrl;
+      setEndingSession(false);
     }
   }
 
   return (
     <header
       className={cn(
-        "sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-kruxt-surface/80 px-6 backdrop-blur-md transition-all duration-200",
-        sidebarCollapsed ? "ml-16" : "ml-60"
+        "sticky top-0 z-20 flex h-16 min-w-0 items-center justify-between gap-2 border-b border-border bg-kruxt-surface px-3 sm:px-6 transition-all duration-200 [&_button:focus-visible]:outline [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-kruxt-accent",
+        sidebarCollapsed ? "lg:ml-16" : "lg:ml-60"
       )}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-4">
         {/* Mobile menu button */}
         <button
           onClick={onMenuToggle}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-kruxt-panel hover:text-foreground lg:hidden"
-          aria-label="Toggle menu"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-kruxt-panel hover:text-foreground lg:hidden"
+          aria-label="Open navigation"
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-navigation"
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
           </svg>
         </button>
 
-        <div>
-          <h2 className="text-sm font-semibold text-foreground font-kruxt-headline tracking-wide">
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold text-foreground font-kruxt-headline">
             {gymName || "Loading…"}
           </h2>
           <p className="text-xs text-muted-foreground font-kruxt-mono">
@@ -143,15 +175,16 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        {workspaceError && <p role="alert" className="absolute left-3 right-3 top-16 border border-kruxt-danger bg-kruxt-surface p-3 text-sm text-kruxt-danger">{workspaceError}</p>}
         {platformRole && (
           <button
             type="button"
             onClick={() => void endPlatformSession()}
             disabled={endingSession}
-            className="hidden rounded-md border border-kruxt-platform/40 px-3 py-1.5 text-xs font-semibold text-kruxt-platform transition-colors hover:bg-kruxt-platform/10 md:inline-flex"
+            className="inline-flex rounded-md border border-kruxt-platform/40 px-3 py-1.5 text-xs font-semibold text-kruxt-platform transition-colors hover:bg-kruxt-platform/10 disabled:opacity-50"
           >
-            {endingSession ? "Ending..." : "Back to Platform"}
+            {endingSession ? "Opening..." : "Back to Platform"}
           </button>
         )}
 
@@ -183,7 +216,7 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
         </div>
 
         {/* Search */}
-        <div className="hidden items-center gap-2 rounded-lg border border-border bg-kruxt-panel px-3 py-1.5 md:flex">
+        <div className="hidden items-center gap-2 rounded-lg border border-border bg-kruxt-panel px-3 py-1.5 2xl:flex">
           <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
           </svg>
@@ -198,7 +231,7 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
         {/* Notifications */}
         <div className="relative" ref={notificationRef}>
           <button
-            className="relative flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-kruxt-panel hover:text-foreground"
+            className="relative flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-kruxt-panel hover:text-foreground"
             aria-label="Notifications"
             aria-expanded={notificationsOpen}
             onClick={() => setNotificationsOpen((open) => !open)}
@@ -213,7 +246,7 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
             )}
           </button>
           {notificationsOpen && (
-            <div className="absolute right-0 top-10 w-80 rounded-card border border-border bg-kruxt-surface p-2 shadow-2xl">
+            <div className="fixed right-3 top-16 w-80 max-w-[calc(100vw-1.5rem)] rounded-card border border-border bg-kruxt-surface p-2 shadow-2xl sm:absolute sm:right-0 sm:top-12">
               <div className="border-b border-border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Notifications</p>
                 <p className="text-sm font-medium text-foreground">
@@ -259,7 +292,7 @@ export function TopBar({ sidebarCollapsed, onMenuToggle }: TopBarProps) {
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setMenuOpen((m) => !m)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-kruxt-accent/20 text-xs font-bold text-kruxt-accent transition-colors hover:bg-kruxt-accent/30"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-kruxt-accent/20 text-xs font-bold text-kruxt-accent transition-colors hover:bg-kruxt-accent/30"
             aria-label="Account menu"
             aria-expanded={menuOpen}
           >

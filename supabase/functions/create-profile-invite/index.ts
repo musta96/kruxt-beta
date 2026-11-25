@@ -96,7 +96,7 @@ async function sendActivationEmail(args: {
   const from = Deno.env.get("INVITE_EMAIL_FROM")?.trim() || Deno.env.get("RESEND_FROM_EMAIL")?.trim();
 
   if (!apiKey || !from) {
-    return { status: "link_only", provider: "none" };
+    return { status: "failed", provider: "none", error: "Invite email delivery is not configured." };
   }
 
   const replyTo = Deno.env.get("INVITE_EMAIL_REPLY_TO")?.trim();
@@ -148,20 +148,19 @@ async function sendActivationEmail(args: {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       return {
         status: "failed",
         provider: "resend",
-        error: `Resend returned ${response.status}: ${errorText.slice(0, 300)}`,
+        error: `Invite email delivery failed (HTTP ${response.status}).`,
       };
     }
 
     return { status: "sent", provider: "resend" };
-  } catch (error) {
+  } catch {
     return {
       status: "failed",
       provider: "resend",
-      error: error instanceof Error ? error.message : "Unknown email delivery failure.",
+      error: "Invite email delivery failed.",
     };
   }
 }
@@ -209,24 +208,7 @@ async function platformInviteContext(supabase: ServiceClient, actorUserId: strin
     .maybeSingle();
 
   if (operatorError || !operator) return { allowed: false };
-  if (operator.role === "founder") return { allowed: true, role: operator.role };
-
-  const [{ data: override }, { data: rolePermission }] = await Promise.all([
-    supabase
-      .from("platform_operator_permission_overrides")
-      .select("is_allowed")
-      .eq("user_id", actorUserId)
-      .eq("permission_key", "platform.tenants.create_staff_invite")
-      .maybeSingle(),
-    supabase
-      .from("platform_role_permissions")
-      .select("is_allowed")
-      .eq("role", operator.role)
-      .eq("permission_key", "platform.tenants.create_staff_invite")
-      .maybeSingle(),
-  ]);
-
-  return { allowed: override?.is_allowed ?? rolePermission?.is_allowed ?? false, role: operator.role };
+  return { allowed: operator.role === "founder", role: operator.role };
 }
 
 async function assertCanInvite(
@@ -510,7 +492,6 @@ async function createInvite(
   return json({
     ok: true,
     invite: updatedInvite ?? invite,
-    inviteUrl: actionLink,
     mode: "create",
     emailDelivery: emailDelivery.status,
     emailProvider: emailDelivery.provider,
@@ -611,7 +592,6 @@ async function resendInvite(
   return json({
     ok: true,
     invite: updatedInvite,
-    inviteUrl: actionLink,
     mode: "resend",
     emailDelivery: emailDelivery.status,
     emailProvider: emailDelivery.provider,

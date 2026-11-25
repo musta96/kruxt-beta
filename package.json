@@ -4,6 +4,14 @@
   "version": "0.1.0",
   "description": "KRUXT monorepo (mobile, admin, db, shared types)",
   "packageManager": "pnpm@10.6.5",
+  "pnpm": {
+    "overrides": {
+      "shell-quote@<1.11.0": "1.11.0",
+      "postcss@<8.5.31": "8.5.31",
+      "nanoid@>=3.0.0 <3.3.18": "3.3.18",
+      "undici@>=6.0.0 <6.29.1": "6.29.1"
+    }
+  },
   "scripts": {
     "build": "npm run web:build",
     "build:packages": "turbo run build",
@@ -23,11 +31,42 @@
     "clean:local": "node scripts/clean-local-caches.mjs",
     "clean:local:dry": "node scripts/clean-local-caches.mjs --dry-run",
     "clean:local:deps": "node scripts/clean-local-caches.mjs --include-node-modules",
-    "db:test": "bash packages/db/tests/run_smoke.sh && node --test packages/db/tests/backfill-video-proof-thumbnails.test.mjs"
+    "security:test": "node --test packages/db/tests/worker-security.test.mjs packages/db/tests/invite-security.test.mjs packages/db/tests/privacy-worker-lifecycle.test.mjs packages/db/tests/auth-security.test.mjs scripts/deployment-guard.test.mjs scripts/check-runtime-health.test.mjs scripts/dependency-security.test.mjs scripts/migration-lineage.test.mjs && node --experimental-strip-types --test apps/web/tests/social-auth.test.mjs apps/admin/tests/social-auth.test.mjs apps/platform/tests/password-recovery.test.mjs apps/platform/tests/operator-permissions.test.mjs apps/platform/tests/operator-role-profiles.test.mjs packages/ui/src/workspace-session.test.mjs && pnpm --filter @kruxt/mobile test",
+    "health:check": "node scripts/check-runtime-health.mjs",
+    "test:preview": "playwright test --config=tests/uat/framework-upgrade/playwright.config.ts",
+    "test:journeys": "node --experimental-strip-types --test apps/web/tests/workout-handoff.test.mjs apps/web/tests/workout-lifecycle.test.mjs apps/web/tests/workout-draft.test.mjs apps/web/tests/feed-safety.test.mjs apps/web/tests/feed-connections.test.mjs apps/web/tests/rank-participation.test.mjs apps/admin/tests/class-series.test.mjs apps/admin/tests/class-series-publishing.test.mjs apps/admin/tests/class-series-pending.test.mjs apps/web/tests/class-series-updates.test.mjs",
+    "test:workspaces": "node --experimental-strip-types --test apps/admin/src/components/navigation-shell.test.mjs apps/platform/src/components/navigation-shell.test.mjs apps/web/tests/rank-participation-ui.test.mjs apps/platform/tests/operator-permissions-ui.test.mjs apps/platform/tests/operator-mfa.test.mjs packages/ui/src/workspace-session.browser.test.mjs",
+    "test:workout-recovery": "playwright test --config=tests/uat/workout-draft.playwright.config.ts",
+    "test:class-inbox": "node --experimental-strip-types --test apps/web/tests/class-series-updates-ui.test.mjs",
+    "test:class-recovery": "node --experimental-strip-types --test apps/admin/src/components/class-series-pending-cleanup.test.mjs",
+    "test:auth-errors": "node --experimental-strip-types --test apps/admin/tests/auth-error.test.mjs apps/web/tests/auth-error.test.mjs apps/web/tests/profile-bootstrap.test.mjs apps/web/tests/consent-review-errors.test.mjs apps/platform/tests/auth-error.test.mjs",
+    "legal:check": "node scripts/legal-readiness.mjs",
+    "test:legal-readiness": "node --test scripts/legal-readiness.test.mjs",
+    "test:privacy-requests": "node --experimental-strip-types --test apps/web/tests/privacy-access.test.mjs apps/web/tests/privacy-requests.test.mjs",
+    "test:privacy-center": "node --test apps/web/tests/privacy-center.browser.test.mjs",
+    "test:member-continuity": "node --experimental-strip-types --test apps/web/tests/member-return.test.mjs apps/web/tests/pending-member-return.test.mjs",
+    "test:member-session-ui": "node --test apps/web/tests/public-session.browser.test.mjs apps/web/tests/member-login-return.browser.test.mjs",
+    "test:auth-error-ui": "node --experimental-strip-types --test apps/admin/tests/auth-error-ui.test.mjs",
+    "test:signup-journeys": "node --experimental-strip-types --test apps/web/tests/join-invite-signup-ui.test.mjs",
+    "test:captcha": "node --test packages/ui/src/auth-captcha.browser.test.mjs",
+    "test:dependency-patches": "node --test scripts/dependency-patch-contract.test.mjs",
+    "test:schema-export-guard": "node --test scripts/export-dev-schema.test.mjs",
+    "test:migration-catalog": "node --test scripts/migration-live-catalog.test.mjs",
+    "test:dev-preflight": "node --test scripts/dev-release-preflight.test.mjs",
+    "db:test": "bash packages/db/tests/run_smoke.sh && bash packages/db/tests/run_mobile_onboarding_contract_ephemeral.sh && node --test packages/db/tests/*.test.mjs scripts/deployment-guard.test.mjs",
+    "db:test:processing-permissions": "env -u KRUXT_CONSENT_TEST_DATABASE_URL KRUXT_PROCESSING_V2_CONTRACT=1 bash packages/db/tests/run_consent_contract.sh",
+    "db:test:private-proof": "KRUXT_PRIVATE_PROOF_CONTRACT=1 bash packages/db/tests/run_workout_social_contract.sh",
+    "uat:bzone:preflight": "node tests/uat/bzone/preflight.mjs",
+    "uat:bzone:typecheck": "tsc --noEmit -p tests/uat/bzone/tsconfig.json",
+    "uat:bzone:list": "playwright test --config=tests/uat/bzone/playwright.config.ts --list",
+    "uat:bzone": "playwright test --config=tests/uat/bzone/playwright.config.ts",
+    "uat:bzone:strict": "node tests/uat/bzone/preflight.mjs --strict && KRUXT_UAT_STRICT=1 playwright test --config=tests/uat/bzone/playwright.config.ts"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "^22.14.1",
     "eslint": "^8.57.1",
-    "eslint-config-next": "^14.2.35",
+    "eslint-config-next": "15.5.28",
     "turbo": "^2.4.4",
     "typescript": "^5.9.3"
   },
@@ -40,12 +79,12 @@
     "framer-motion": "^11.18.2",
     "lovable-tagger": "^1.1.13",
     "lucide-react": "^0.575.0",
-    "postcss": "^8.5.6",
+    "postcss": "8.5.31",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.30.3",
+    "react-router-dom": "6.30.6",
     "tailwindcss": "^3.4.19",
-    "vite": "^5.4.21",
-    "zod": "^4.3.6"
+    "vite": "6.4.5",
+    "zod": "4.6.7"
   }
 }

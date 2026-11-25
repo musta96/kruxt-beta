@@ -1,25 +1,60 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useAuthCaptcha } from "@kruxt/ui/auth-captcha";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { createAdminSupabaseClient } from "@/services";
+import { authenticationErrorMessage } from "@/services/auth-error";
+import { Eye, EyeOff } from "lucide-react";
+import { getAdminSupabasePublicConfig } from "@/services/supabase-client";
+import { hasProviderReturnError, sanitizedAuthReturnUrl, safeInternalNextPath, startSocialSignIn, PROVIDER_RETURN_ERROR, type SocialProvider } from "@/services/social-auth";
 
 type Mode = "signin" | "signup";
 
 export default function LoginPage() {
   const router = useRouter();
   const { signIn } = useAuth();
+  const captcha = useAuthCaptcha(process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY);
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const busy = useRef(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const original = new URL(window.location.href);
+    const providerError = hasProviderReturnError(original);
+    const isCallback = original.searchParams.has("code");
+    const next = safeInternalNextPath(original.searchParams.get("next"));
+    const supabase = createAdminSupabaseClient();
+    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (!active) return;
+      window.history.replaceState(window.history.state, "", sanitizedAuthReturnUrl(new URL(window.location.href)));
+      if (providerError || sessionError || (isCallback && !data.session)) {
+        setError(PROVIDER_RETURN_ERROR);
+      } else if (data.session) {
+        router.replace(next);
+      }
+      setCheckingSession(false);
+    }).catch(() => {
+      if (!active) return;
+      window.history.replaceState(window.history.state, "", sanitizedAuthReturnUrl(new URL(window.location.href)));
+      setError(PROVIDER_RETURN_ERROR);
+      setCheckingSession(false);
+    });
+    return () => { active = false; };
+  }, [router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy.current || checkingSession) return;
     setError(null);
     setInfo(null);
 
@@ -28,10 +63,14 @@ export default function LoginPage() {
       return;
     }
 
+    busy.current = true;
     setLoading(true);
+    let requestStarted = false;
     try {
       if (mode === "signin") {
-        const result = await signIn(email, password);
+        const captchaToken = captcha.takeToken();
+        requestStarted = true;
+        const result = await signIn(email, password, captchaToken);
         if (result.error) {
           setError(result.error);
         } else {
@@ -39,26 +78,51 @@ export default function LoginPage() {
         }
       } else {
         const supabase = createAdminSupabaseClient();
+        const captchaToken = captcha.takeToken();
+        requestStarted = true;
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
+          ...(captchaToken ? { options: { captchaToken } } : {}),
         });
         if (signUpError) {
-          setError(signUpError.message);
+          setError(authenticationErrorMessage(signUpError));
         } else if (data.session) {
           router.replace(getLoginNextPath());
         } else {
-          setInfo("Account created. Check your email to confirm, then sign in.");
+          setInfo("Check your email for a confirmation link if one is needed, then sign in. If you already have an account, sign in or reset your password.");
           setMode("signin");
           setPassword("");
         }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Authentication failed.");
+      setError(authenticationErrorMessage(e));
     } finally {
+      if (requestStarted) captcha.reset();
+      busy.current = false;
       setLoading(false);
     }
   }
+
+  async function handleSocialSignIn(provider: SocialProvider) {
+    if (busy.current || checkingSession) return;
+    busy.current = true;
+    setLoading(true);
+    setError(null);
+    setInfo(null);
+    const callback = new URL("/login", window.location.origin);
+    const next = getLoginNextPath();
+    if (next !== "/") callback.searchParams.set("next", next);
+    try {
+      await startSocialSignIn(createAdminSupabaseClient(), getAdminSupabasePublicConfig(), provider, callback.href);
+    } catch (socialError) {
+      setError(socialError instanceof Error ? socialError.message : PROVIDER_RETURN_ERROR);
+      busy.current = false;
+      setLoading(false);
+    }
+  }
+
+  const pending = loading || checkingSession;
 
   return (
     <div className="space-y-8">
@@ -76,7 +140,10 @@ export default function LoginPage() {
         <div className="flex items-center gap-1 rounded-lg border border-border bg-kruxt-panel p-1 text-xs">
           <button
             type="button"
+            disabled={pending}
+            aria-pressed={mode === "signin"}
             onClick={() => {
+              captcha.reset();
               setMode("signin");
               setError(null);
               setInfo(null);
@@ -91,7 +158,10 @@ export default function LoginPage() {
           </button>
           <button
             type="button"
+            disabled={pending}
+            aria-pressed={mode === "signup"}
             onClick={() => {
+              captcha.reset();
               setMode("signup");
               setError(null);
               setInfo(null);
@@ -112,21 +182,25 @@ export default function LoginPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           {mode === "signin"
             ? "Enter your credentials to access the admin panel."
-            : "Use a real email — Supabase may send a confirmation link."}
+            : "Create your account, then complete the required access review. Gym and operator access is assigned separately."}
         </p>
 
-        {error && (
-          <div className="mt-4 rounded-lg border border-kruxt-danger/30 bg-kruxt-danger/10 px-4 py-3 text-sm text-kruxt-danger">
+        {error && !(captcha.verified && error.startsWith("Security verification")) && (
+          <div role="alert" className="mt-4 rounded-lg border border-kruxt-danger/30 bg-kruxt-danger/10 px-4 py-3 text-sm text-kruxt-danger">
             {error}
           </div>
         )}
         {info && (
-          <div className="mt-4 rounded-lg border border-kruxt-accent/30 bg-kruxt-accent/10 px-4 py-3 text-sm text-kruxt-accent">
+          <div role="status" className="mt-4 rounded-lg border border-kruxt-accent/30 bg-kruxt-accent/10 px-4 py-3 text-sm text-kruxt-accent">
             {info}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div className="mt-5 grid gap-3" aria-busy={pending}>
+          <button type="button" disabled={pending} onClick={() => void handleSocialSignIn("google")} className="w-full rounded-button border border-border bg-kruxt-panel px-4 py-2.5 text-sm font-semibold text-foreground hover:border-kruxt-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-kruxt-accent disabled:opacity-50">Continue with Google</button>
+          <button type="button" disabled={pending} onClick={() => void handleSocialSignIn("apple")} className="w-full rounded-button border border-border bg-kruxt-panel px-4 py-2.5 text-sm font-semibold text-foreground hover:border-kruxt-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-kruxt-accent disabled:opacity-50">Continue with Apple</button>
+        </div>
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4" aria-busy={pending}>
           <div>
             <label
               htmlFor="email"
@@ -139,6 +213,7 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               required
+              disabled={pending}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1.5 w-full rounded-button border border-border bg-kruxt-panel px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent"
@@ -153,25 +228,36 @@ export default function LoginPage() {
             >
               Password
             </label>
+            <div className="relative">
             <input
               id="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete={mode === "signin" ? "current-password" : "new-password"}
               required
-              minLength={6}
+              disabled={pending}
+              minLength={mode === "signup" ? 8 : 1}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 w-full rounded-button border border-border bg-kruxt-panel px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent"
+              className="mt-1.5 w-full rounded-button border border-border bg-kruxt-panel py-2 pl-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-accent focus:outline-none focus:ring-1 focus:ring-kruxt-accent"
               placeholder="••••••••"
             />
+            <button type="button" disabled={pending} onClick={() => setShowPassword(value => !value)}
+              aria-pressed={showPassword}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? "Hide password" : "Show password"}
+              className="absolute bottom-0 right-0 flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground">
+              {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+            </button>
+            </div>
           </div>
 
+          {captcha.widget}
           <button
             type="submit"
-            disabled={loading}
+            disabled={pending}
             className="w-full rounded-button bg-kruxt-accent px-4 py-2.5 text-sm font-semibold text-kruxt-bg transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {loading
+            {pending
               ? "Working…"
               : mode === "signin"
                 ? "Sign In"
@@ -197,11 +283,6 @@ export default function LoginPage() {
       </p>
     </div>
   );
-}
-
-function safeInternalNextPath(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
-  return value;
 }
 
 function getLoginNextPath(): string {

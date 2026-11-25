@@ -1,0 +1,48 @@
+name: class-postgres
+
+on:
+  pull_request:
+    paths:
+      - "packages/db/**"
+      - "packages/types/**"
+      - "apps/admin/src/**"
+      - "apps/web/src/**"
+      - ".github/workflows/class-postgres.yml"
+  push:
+    paths:
+      - "packages/db/**"
+      - "packages/types/**"
+      - "apps/admin/src/**"
+      - "apps/web/src/**"
+      - ".github/workflows/class-postgres.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  class-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: class-test-only
+          POSTGRES_DB: class_contract
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d class_contract"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      KRUXT_TEST_DATABASE_URL: postgresql://postgres:class-test-only@localhost:5432/class_contract
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Run real class SQL contracts and concurrency tests
+        run: bash packages/db/tests/run_class_postgres.sh

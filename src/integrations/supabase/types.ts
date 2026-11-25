@@ -5643,6 +5643,7 @@ export type Database = {
           last_workout_at: string | null
           level: number
           locale: string | null
+          mobile_onboarding_completed_at: string | null
           preferred_units: string
           rank_tier: Database["public"]["Enums"]["rank_tier"]
           updated_at: string
@@ -5661,6 +5662,7 @@ export type Database = {
           last_workout_at?: string | null
           level?: number
           locale?: string | null
+          mobile_onboarding_completed_at?: string | null
           preferred_units?: string
           rank_tier?: Database["public"]["Enums"]["rank_tier"]
           updated_at?: string
@@ -5679,6 +5681,7 @@ export type Database = {
           last_workout_at?: string | null
           level?: number
           locale?: string | null
+          mobile_onboarding_completed_at?: string | null
           preferred_units?: string
           rank_tier?: Database["public"]["Enums"]["rank_tier"]
           updated_at?: string
@@ -7239,6 +7242,22 @@ export type Database = {
         }
         Returns: string
       }
+      capture_mobile_onboarding_consents: {
+        Args: {
+          p_accept_health_data: boolean
+          p_accept_privacy: boolean
+          p_accept_terms: boolean
+          p_health_data_policy_version_id: string
+          p_locale?: string
+          p_marketing_email_opt_in?: boolean
+          p_privacy_policy_version_id: string
+          p_push_notifications_opt_in?: boolean
+          p_source?: string
+          p_terms_policy_version_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       apply_user_anonymization: {
         Args: { p_privacy_request_id?: string; p_user_id: string }
         Returns: Json
@@ -7303,6 +7322,12 @@ export type Database = {
       build_privacy_export_payload: {
         Args: { p_user_id?: string }
         Returns: Json
+      }
+      book_gym_class: { Args: { p_class_id: string }; Returns: string }
+      cancel_gym_class: { Args: { p_class_id: string }; Returns: string }
+      cancel_gym_class_booking: {
+        Args: { p_booking_id: string }
+        Returns: string
       }
       calculate_level_from_xp: { Args: { _xp: number }; Returns: number }
       can_manage_discount_campaign: {
@@ -7438,6 +7463,10 @@ export type Database = {
         Args: { p_job_id: string; p_response_payload?: Json }
         Returns: string
       }
+      complete_mobile_onboarding: {
+        Args: { p_user_id?: string }
+        Returns: Json
+      }
       complete_privacy_delete_job: {
         Args: { p_anonymization_summary?: Json; p_job_id: string }
         Returns: string
@@ -7527,6 +7556,10 @@ export type Database = {
         }
         Returns: Json
       }
+      get_mobile_onboarding_state: {
+        Args: { p_user_id?: string }
+        Returns: Json
+      }
       get_platform_admin_overview: { Args: never; Returns: Json }
       has_active_legal_hold: { Args: { p_user_id?: string }; Returns: boolean }
       has_gym_staff_access: {
@@ -7556,6 +7589,10 @@ export type Database = {
       join_challenge: { Args: { p_challenge_id: string }; Returns: string }
       join_waitlist: { Args: { p_class_id: string }; Returns: string }
       leave_challenge: { Args: { p_challenge_id: string }; Returns: boolean }
+      leave_class_waitlist: {
+        Args: { p_waitlist_id: string }
+        Returns: string
+      }
       legal_locale_fallback_chain: {
         Args: { p_locale?: string }
         Returns: string[]
@@ -7616,6 +7653,10 @@ export type Database = {
       log_workout_atomic: {
         Args: { p_exercises: Json; p_workout: Json }
         Returns: string
+      }
+      mobile_user_has_bound_required_consents: {
+        Args: { p_as_of?: string; p_user_id: string }
+        Returns: boolean
       }
       normalize_legal_locale: { Args: { p_locale?: string }; Returns: string }
       platform_has_approved_gym_support_grant: {

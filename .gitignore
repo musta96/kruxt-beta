@@ -10,7 +10,13 @@ node_modules
 dist
 build
 coverage
+demo-data-purge-report.json
+output/playwright/
+output/runtime/
 supabase/.temp
+packages/db/supabase/.temp/
+docs/security/evidence/*.restricted.json
+docs/security/evidence/*.restricted.jsonb
 packages/db/supabase/migrations_archive/
 
 *.tsbuildinfo

@@ -1,0 +1,134 @@
+name: security-privacy
+on:
+  pull_request:
+  push:
+    branches: [main, codex/security-gdpr-audit, codex/security-next-upgrade]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: security-privacy-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: security-fixture-only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Negative authorization and privacy lifecycle regressions
+        run: pnpm security:test
+      - name: Safe authentication and recovery error regressions
+        run: |
+          pnpm test:auth-errors
+          node --experimental-strip-types --test packages/db/tests/consent-document-verification.test.mjs
+      - name: Offline legal readiness fail-closed fixtures
+        run: pnpm test:legal-readiness
+      - name: Privacy request access and receipt contracts
+        run: pnpm test:privacy-requests
+      - name: Member sign-in destination allowlist and pending references
+        run: pnpm test:member-continuity
+      - name: Patched dependency behavior contracts
+        run: pnpm test:dependency-patches
+      - name: Native schema export guard fixtures without database connections
+        run: |
+          bash -n scripts/export-dev-schema.sh
+          pnpm test:schema-export-guard
+      - name: Migration catalog evidence validation
+        run: |
+          pnpm test:migration-catalog
+          pnpm test:dev-preflight
+      - name: Training continuity and social safety contracts
+        run: pnpm test:journeys
+      - name: Full migration and PostgreSQL privacy contracts
+        env:
+          KRUXT_CONSENT_TEST_DATABASE_URL: postgresql://postgres:security-fixture-only@localhost:5432/postgres
+          KRUXT_PROCESSING_V2_CONTRACT: "1"
+        run: bash packages/db/tests/run_consent_contract.sh
+      - name: Isolated PostgreSQL operator-write boundaries
+        env:
+          KRUXT_OPERATOR_TEST_DATABASE_URL: postgresql://postgres:security-fixture-only@localhost:5432/postgres
+        run: bash packages/db/tests/run_operator_permission_contract.sh
+  preview-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: public-test-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --filter @kruxt/web --filter @kruxt/admin --filter @kruxt/platform build
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Gym and operator mobile workspace regressions
+        env:
+          PLATFORM_SCREENSHOT_DIR: output/playwright/operator-access
+        run: |
+          mkdir -p output/playwright/operator-access
+          pnpm test:workspaces
+      - name: Loopback-only desktop and mobile preview regressions
+        run: pnpm test:preview
+      - name: Private workout draft recovery and retry regressions
+        run: pnpm test:workout-recovery
+      - name: Member class subscriptions and private inbox regressions
+        run: pnpm test:class-inbox
+      - name: Tab-local class request retention across routes and sign-out
+        run: pnpm test:class-recovery
+      - name: Auth context and non-enumerating recovery integration
+        run: pnpm test:auth-error-ui
+      - name: Signup confirmation and gym invitation continuity
+        run: pnpm test:signup-journeys
+      - name: Privacy center without policy acceptance
+        run: pnpm test:privacy-center
+      - name: Member sign-in continuity and session ordering
+        run: pnpm test:member-session-ui
+      - name: Synthetic CAPTCHA token lifecycle
+        run: pnpm test:captcha
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: preview-compatibility-failure
+          path: |
+            output/playwright/next-upgrade/
+            output/playwright/operator-access/
+            output/playwright/workout-draft/
+            output/playwright/signup-session/
+            output/playwright/privacy-center/
+          retention-days: 7
+  dependency-advisories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Fail on unresolved high or critical production advisories
+        run: pnpm audit --prod --audit-level high

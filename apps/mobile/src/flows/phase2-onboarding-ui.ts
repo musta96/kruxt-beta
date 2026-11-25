@@ -1,4 +1,4 @@
-import type { CreateGymInput, Gym, PolicyVersion, UpsertProfileInput } from "@kruxt/types";
+import type { Gym, PolicyVersion, UpsertProfileInput } from "@kruxt/types";
 import { translateLegalText } from "@kruxt/types";
 
 import {
@@ -7,11 +7,24 @@ import {
   KruxtAppError,
   Phase2OnboardingService,
   PolicyService,
-  type BaselineConsentInput,
   type Phase2OnboardingInput,
   type Phase2OnboardingResult
 } from "../services";
 import { phase2OnboardingChecklistKeys } from "./phase2-onboarding";
+import {
+  createDefaultOnboardingUiDraft,
+  type OnboardingGymDraft,
+  type OnboardingProfileDraft,
+  type OnboardingUiDraft
+} from "./phase2-onboarding-draft";
+
+export type {
+  OnboardingAuthDraft,
+  OnboardingConsentDraft,
+  OnboardingGymDraft,
+  OnboardingProfileDraft,
+  OnboardingUiDraft
+} from "./phase2-onboarding-draft";
 
 export type OnboardingUiStep = "welcome" | "auth" | "profile" | "gym" | "consents" | "review";
 
@@ -22,43 +35,6 @@ export interface OnboardingScreenSpec {
   title: string;
   subtitle: string;
   primaryActionLabel: string;
-}
-
-export interface OnboardingAuthDraft {
-  mode: Phase2OnboardingInput["mode"];
-  email: string;
-  password: string;
-}
-
-export interface OnboardingProfileDraft {
-  username: string;
-  displayName: string;
-  avatarUrl?: string;
-  bio?: string;
-  locale?: string;
-  preferredUnits?: "metric" | "imperial";
-}
-
-export type OnboardingGymDraft =
-  | {
-      mode: "skip";
-    }
-  | {
-      mode: "create";
-      createGym: CreateGymInput;
-      setAsHomeGym?: boolean;
-    }
-  | {
-      mode: "join";
-      gymId: string;
-      setAsHomeGym?: boolean;
-    };
-
-export interface OnboardingUiDraft {
-  auth: OnboardingAuthDraft;
-  profile: OnboardingProfileDraft;
-  consents: BaselineConsentInput;
-  gym: OnboardingGymDraft;
 }
 
 export interface OnboardingUiPolicySnapshot {
@@ -177,32 +153,6 @@ const PHASE2_ONBOARDING_MICROCOPY: OnboardingUiMicrocopy = {
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const usernamePattern = /^[a-z0-9_]{3,24}$/;
 
-function createDefaultDraft(): OnboardingUiDraft {
-  return {
-    auth: {
-      mode: "signup",
-      email: "",
-      password: ""
-    },
-    profile: {
-      username: "",
-      displayName: "",
-      preferredUnits: "metric"
-    },
-    consents: {
-      acceptTerms: false,
-      acceptPrivacy: false,
-      acceptHealthData: false,
-      marketingEmailOptIn: false,
-      pushNotificationsOptIn: true,
-      source: "mobile"
-    },
-    gym: {
-      mode: "skip"
-    }
-  };
-}
-
 function inferStepFromField(field: string): OnboardingUiStep {
   if (field.startsWith("auth.")) {
     return "auth";
@@ -255,8 +205,24 @@ function toGymPreference(gym: OnboardingGymDraft): Phase2OnboardingInput["gymPre
 function toServiceInput(draft: OnboardingUiDraft): Phase2OnboardingInput {
   const profile = sanitizeProfileDraft(draft.profile);
 
+  if (draft.auth.mode === "signin") {
+    return {
+      mode: "signin",
+      credentials: {
+        email: draft.auth.email.trim(),
+        password: draft.auth.password
+      },
+      profile,
+      gymPreference: toGymPreference(draft.gym)
+    };
+  }
+
+  if (!draft.reviewedPolicyIds) {
+    throw new KruxtAppError("POLICY_BASELINE_MISSING", "Current baseline policies are required.");
+  }
+
   return {
-    mode: draft.auth.mode,
+    mode: "signup",
     credentials: {
       email: draft.auth.email.trim(),
       password: draft.auth.password
@@ -264,6 +230,7 @@ function toServiceInput(draft: OnboardingUiDraft): Phase2OnboardingInput {
     profile,
     baselineConsents: {
       ...draft.consents,
+      ...draft.reviewedPolicyIds,
       locale: profile.locale ?? draft.consents.locale
     },
     gymPreference: toGymPreference(draft.gym)
@@ -355,6 +322,13 @@ export function validateStep(step: OnboardingUiStep, draft: OnboardingUiDraft): 
   }
 
   if (step === "consents") {
+    if (draft.auth.mode === "signup" && !draft.reviewedPolicyIds) {
+      errors.push({
+        field: "consents.policyIds",
+        message: "Reload and review the current required policy documents."
+      });
+    }
+
     if (!draft.consents.acceptTerms) {
       errors.push({
         field: "consents.acceptTerms",
@@ -539,26 +513,37 @@ export function createPhase2OnboardingUiFlow(options: { locale?: string | null }
     screens: [...PHASE2_ONBOARDING_SCREEN_SPECS],
     microcopy: { ...PHASE2_ONBOARDING_MICROCOPY },
     createDraft: (overrides: Partial<OnboardingUiDraft> = {}): OnboardingUiDraft => ({
-      ...createDefaultDraft(),
+      ...createDefaultOnboardingUiDraft(),
       ...overrides,
-      auth: { ...createDefaultDraft().auth, ...overrides.auth },
-      profile: { ...createDefaultDraft().profile, ...overrides.profile },
-      consents: { ...createDefaultDraft().consents, ...overrides.consents },
-      gym: (overrides.gym ?? createDefaultDraft().gym) as OnboardingGymDraft
+      auth: { ...createDefaultOnboardingUiDraft().auth, ...overrides.auth },
+      profile: { ...createDefaultOnboardingUiDraft().profile, ...overrides.profile },
+      consents: { ...createDefaultOnboardingUiDraft().consents, ...overrides.consents },
+      gym: (overrides.gym ?? createDefaultOnboardingUiDraft().gym) as OnboardingGymDraft
     }),
     load: async (): Promise<OnboardingUiLoadResult> => {
       try {
-        const [activePolicies, visibleGyms] = await Promise.all([
-          policies.listActivePolicies(),
+        const [baselinePolicies, visibleGyms] = await Promise.all([
+          policies.getCurrentBaselinePolicies(),
           gyms.listVisibleGyms(24)
         ]);
+        const activePolicies = [
+          baselinePolicies.terms,
+          baselinePolicies.privacy,
+          baselinePolicies.healthData
+        ];
+        const defaultDraft = createDefaultOnboardingUiDraft();
+        defaultDraft.reviewedPolicyIds = {
+          termsPolicyId: baselinePolicies.terms.id,
+          privacyPolicyId: baselinePolicies.privacy.id,
+          healthDataPolicyId: baselinePolicies.healthData.id
+        };
 
         return {
           ok: true,
           snapshot: {
             stepOrder: onboardingUiStepOrder,
             screens: [...PHASE2_ONBOARDING_SCREEN_SPECS],
-            defaultDraft: createDefaultDraft(),
+            defaultDraft,
             policies: resolvePolicySnapshot(activePolicies),
             gymSuggestions: toGymOptions(visibleGyms),
             microcopy: { ...PHASE2_ONBOARDING_MICROCOPY }

@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useMemo } from "react";
 
+import { RequiredConsentReview } from "@/components/consent/RequiredConsentReview";
 import type { AdminAccessState } from "@/lib/auth/access";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const FOUNDER_NAV = [
   { href: "/admin", label: "Overview" },
@@ -37,6 +40,7 @@ export function AdminShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   if (access.status === "loading") {
     return (
@@ -44,6 +48,21 @@ export function AdminShell({
         <div className="panel">
           <h1 className="heading">Admin Console</h1>
           <p className="subheading">Checking access...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (access.status === "error") {
+    return (
+      <main className="container">
+        <div className="panel" style={{ maxWidth: 760 }}>
+          <h1 className="heading">Access check unavailable</h1>
+          <p className="subheading">{access.error || "KRUXT could not safely validate this account."}</p>
+          <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="btn btn-primary" onClick={() => window.location.reload()}>Retry</button>
+            <button className="btn" onClick={() => void onSignOut()}>Sign out</button>
+          </div>
         </div>
       </main>
     );
@@ -60,6 +79,43 @@ export function AdminShell({
           </div>
         </div>
       </main>
+    );
+  }
+
+  if (access.status === "activation_required" || access.status === "disabled") {
+    return (
+      <main className="container">
+        <div className="panel" style={{ maxWidth: 760 }}>
+          <h1 className="heading">
+            {access.status === "activation_required" ? "Account activation required" : "Account disabled"}
+          </h1>
+          <p className="subheading">
+            {access.status === "activation_required"
+              ? "Complete the verified invite activation flow before opening this workspace."
+              : "This account cannot open KRUXT workspaces."}
+          </p>
+          <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {access.status === "activation_required" ? (
+              <button className="btn btn-primary" onClick={() => router.push("/activate-invite")}>
+                Complete activation
+              </button>
+            ) : null}
+            <button className="btn" onClick={() => void onSignOut()}>Sign out</button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (access.status === "consent_required") {
+    return (
+      <RequiredConsentReview
+        client={supabase}
+        userId={access.user.id}
+        onComplete={() => router.replace("/")}
+        onSignOut={() => void onSignOut()}
+        variant="standalone"
+      />
     );
   }
 

@@ -23,20 +23,21 @@ set description = excluded.description,
     rollout_percentage = excluded.rollout_percentage,
     updated_at = now();
 
--- Initial policy versions
+-- Provisional policy placeholders. Issue #115 must publish approved, checksummed versions.
 insert into public.policy_version_tracking(
   policy_type,
   version,
   label,
   document_url,
+  checksum,
   effective_at,
   is_active,
   requires_reconsent,
   change_summary
 )
 values
-  ('terms', 'v1.0.0', 'KRUXT Terms of Service', 'https://kruxt.app/legal/terms/v1.0.0', now(), true, true, 'Initial baseline policy'),
-  ('privacy', 'v1.0.0', 'KRUXT Privacy Notice', 'https://kruxt.app/legal/privacy/v1.0.0', now(), true, true, 'Initial baseline policy'),
-  ('health_data', 'v1.0.0', 'KRUXT Health Data Processing', 'https://kruxt.app/legal/health/v1.0.0', now(), true, true, 'Initial baseline policy')
+  ('terms', 'v1.0.0', 'Provisional KRUXT Terms of Service', 'https://kruxt.app/legal/terms/v1.0.0', null, now(), false, true, 'Provisional seed only; not approved for clickwrap'),
+  ('privacy', 'v1.0.0', 'Provisional KRUXT Privacy Notice', 'https://kruxt.app/legal/privacy/v1.0.0', null, now(), false, true, 'Provisional seed only; not approved for clickwrap'),
+  ('health_data', 'v1.0.0', 'Provisional KRUXT Health Data Processing', 'https://kruxt.app/legal/health/v1.0.0', null, now(), false, true, 'Provisional seed only; not approved for clickwrap')
 on conflict (policy_type, version)
 do nothing;

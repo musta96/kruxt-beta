@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { MemberShell } from "@/components/public/MemberShell";
 import { usePublicSession } from "@/components/public/usePublicSession";
@@ -14,6 +14,7 @@ export function RankScreen() {
   const [achievements, setAchievements] = useState<AchievementSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingChallengeId, setUpdatingChallengeId] = useState<string | null>(null);
+  const updatingChallenge = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -32,7 +33,6 @@ export function RankScreen() {
       setError(loadError instanceof Error ? loadError.message : "Unable to load rank overview.");
     } finally {
       setLoading(false);
-      setUpdatingChallengeId(null);
     }
   }, [state.user, supabase]);
 
@@ -41,7 +41,9 @@ export function RankScreen() {
     void loadRank();
   }, [loadRank, state.status, state.user]);
 
-  async function handleToggleChallenge(challengeId: string, joined: boolean) {
+  async function handleToggleChallenge(challengeId: string, joined: boolean, completed: boolean) {
+    if (completed || updatingChallenge.current) return;
+    updatingChallenge.current = true;
     setUpdatingChallengeId(challengeId);
     setError(null);
     setSuccess(null);
@@ -56,7 +58,10 @@ export function RankScreen() {
       }
       await loadRank();
     } catch (toggleError) {
+      await loadRank();
       setError(toggleError instanceof Error ? toggleError.message : "Unable to update challenge status.");
+    } finally {
+      updatingChallenge.current = false;
       setUpdatingChallengeId(null);
     }
   }
@@ -64,10 +69,10 @@ export function RankScreen() {
   return (
     <MemberShell
       title="Rank Ladder"
-      subtitle="Weekly boards, active challenges, and the competition surface that sits on top of your logged training."
+      subtitle="Weekly leaderboards and recorded challenge participation."
     >
-      {error ? <div className="status-banner status-danger">{error}</div> : null}
-      {success ? <div className="status-banner status-success">{success}</div> : null}
+      {error ? <div role="alert" className="status-banner status-danger">{error}</div> : null}
+      {success ? <div role="status" className="status-banner status-success">{success}</div> : null}
 
       {loading ? (
         <section className="section-stack">
@@ -117,7 +122,7 @@ export function RankScreen() {
                 <p className="eyebrow">WEEKLY BOARDS</p>
                 <h2 className="section-title">Leaderboards</h2>
               </div>
-              <button type="button" className="secondary-cta" onClick={() => void loadRank()}>
+              <button type="button" className="secondary-cta" disabled={updatingChallengeId !== null} onClick={() => void loadRank()}>
                 Refresh
               </button>
             </div>
@@ -166,22 +171,29 @@ export function RankScreen() {
             <div className="board-grid">
               {(overview?.activeChallenges ?? []).map((challenge) => (
                 <article key={challenge.id} className="feed-card">
-                  <div className="feed-card-header">
+                  <div className="feed-card-header" style={{ flexWrap: "wrap" }}>
                     <div>
                       <p className="feed-meta">{challenge.challengeType}</p>
                       <h3 className="feed-title">{challenge.title}</h3>
                     </div>
-                    <button
-                      type="button"
-                      className={`ghost-chip ${challenge.joined ? "is-selected" : ""}`}
-                      disabled={updatingChallengeId === challenge.id}
-                      onClick={() => void handleToggleChallenge(challenge.id, challenge.joined)}
-                    >
-                      {updatingChallengeId === challenge.id ? "Updating..." : challenge.joined ? "Joined" : "Join"}
-                    </button>
+                    {challenge.completed ? (
+                      <span className="ghost-chip">Completed</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className={`ghost-chip ${challenge.joined ? "is-selected" : ""}`}
+                        disabled={updatingChallengeId !== null}
+                        aria-label={`${challenge.joined ? "Leave" : "Join"} challenge: ${challenge.title}`}
+                        onClick={() => void handleToggleChallenge(challenge.id, challenge.joined, challenge.completed)}
+                      >
+                        {updatingChallengeId === challenge.id ? "Updating..." : challenge.joined ? "Leave challenge" : "Join challenge"}
+                      </button>
+                    )}
                   </div>
 
                   {challenge.description ? <p className="feed-body">{challenge.description}</p> : null}
+                  {challenge.completed ? <p className="supporting-copy">Completed entries cannot be left.</p> : null}
+                  {challenge.joined && !challenge.completed ? <p className="supporting-copy">Leaving removes your entry and score.</p> : null}
 
                   <dl className="feed-stat-row">
                     <div>
