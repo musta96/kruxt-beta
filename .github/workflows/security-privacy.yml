@@ -72,6 +72,9 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
       NEXT_PUBLIC_SUPABASE_ANON_KEY: public-test-placeholder
+      # Test builds only: show both buttons so the browser suites exercise the
+      # click-time provider check. Production leaves this unset until verified.
+      NEXT_PUBLIC_KRUXT_VERIFIED_SOCIAL_PROVIDERS: google,apple
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

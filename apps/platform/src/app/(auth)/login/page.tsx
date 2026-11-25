@@ -7,6 +7,9 @@ import Link from "next/link";
 import { usePlatformAuth } from "@/contexts/platform-auth-context";
 import { PlatformAccessRecovery, PlatformLoginLinks } from "@/components/platform-access-recovery";
 import { platformAuthErrorMessage } from "@/services/auth-error";
+import { SOCIAL_PROVIDER_LABELS, verifiedSocialProviders } from "@kruxt/ui/social-sign-in";
+
+const SOCIAL_PROVIDERS = verifiedSocialProviders(process.env.NEXT_PUBLIC_KRUXT_VERIFIED_SOCIAL_PROVIDERS);
 
 export default function PlatformLoginPage() {
   const router = useRouter();
@@ -79,11 +82,16 @@ export default function PlatformLoginPage() {
             {visibleError && <p role="alert" className="rounded-md border border-kruxt-danger/30 bg-kruxt-danger/10 p-3 text-sm leading-relaxed text-kruxt-danger">{visibleError}</p>}
             <fieldset disabled={busy || !!platformRole} className="space-y-5">
               <legend className="sr-only">Operator sign-in</legend>
-              <div className="grid gap-3">
-                <button type="button" onClick={() => void authenticate("google")} className="platform-login-secondary">Continue with Google</button>
-                <button type="button" onClick={() => void authenticate("apple")} className="platform-login-secondary">Continue with Apple</button>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />or use email<span className="h-px flex-1 bg-border" /></div>
+              {SOCIAL_PROVIDERS.length > 0 && (
+                <>
+                  <div className="grid gap-3">
+                    {SOCIAL_PROVIDERS.map((provider) => (
+                      <button key={provider} type="button" onClick={() => void authenticate(provider)} className="platform-login-secondary">Continue with {SOCIAL_PROVIDER_LABELS[provider]}</button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />or use email<span className="h-px flex-1 bg-border" /></div>
+                </>
+              )}
               <div className="space-y-2">
                 <label htmlFor="email" className="block text-sm font-medium">Operator email</label>
                 <input id="email" name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={email} onChange={(event) => setEmail(event.target.value)} className="platform-login-input" required />

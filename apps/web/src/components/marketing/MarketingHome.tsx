@@ -13,25 +13,25 @@ const athleteSteps = [
   {
     number: "01",
     title: "Plan the week",
-    copy: "Build around your goals, schedule, equipment, classes, and coach. Move sessions when life moves."
+    copy: "See the sessions your coach assigned and the classes you booked, in one weekly view."
   },
   {
     number: "02",
     title: "Do the work",
-    copy: "Follow clear workout blocks, log sets and effort, check in at your gym, and bring wearable data into context."
+    copy: "Follow clear workout blocks, log sets and effort, and check in at your gym."
   },
   {
     number: "03",
-    title: "Own the proof",
-    copy: "Turn completed sessions into proof, progress, streaks, milestones, rank, and accountability with your people."
+    title: "Keep your progress",
+    copy: "Completed workouts build a private training history. Share a session with your gym or friends only when you choose."
   }
 ];
 
 const gymOutcomes = [
   ["Know every member", "Profiles, access requests, membership status, waivers, check-ins, consent history, and activity."],
-  ["Run the floor", "Classes, capacity, coach assignment, staff shifts, coverage, and daily operations."],
-  ["Coach beyond the session", "PT assignments, live training plans, exercise swaps, progress, notes, and secure messaging."],
-  ["Grow with control", "Plans, invoices, payments, reports, branding, permissions, and a complete activity trail."]
+  ["Run the floor", "Classes, capacity, coach assignment, staff shifts, and daily operations."],
+  ["Coach beyond the session", "PT assignments, training plans, exercise swaps, progress, notes, and messages."],
+  ["Grow with control", "Membership plans, invoices and payment records, reports, branding, permissions, and an activity trail."]
 ];
 
 export function MarketingHome({ authPanel, gymAdminUrl }: MarketingHomeProps) {
@@ -79,8 +79,8 @@ export function MarketingHome({ authPanel, gymAdminUrl }: MarketingHomeProps) {
         <div className="marketing-section-heading">
           <h2>One place for the work behind your progress.</h2>
           <p>
-            Your plan, workout log, proof, community, gym access, coach feedback, rank, and personal progress stay
-            connected instead of living across six different apps.
+            Your plan, workout log, community, gym classes, coach feedback, and personal progress stay connected in
+            one place.
           </p>
         </div>
 
@@ -106,8 +106,8 @@ export function MarketingHome({ authPanel, gymAdminUrl }: MarketingHomeProps) {
         <div className="marketing-gym-copy">
           <h2>Run the gym. Keep the human connection.</h2>
           <p>
-            Replace scattered spreadsheets, booking tools, payment notes, chat threads, and coaching apps with one
-            connected operating system for your gym.
+            Bring members, classes, bookings, and coaching into one place, alongside the tools you already use for
+            payments and accounting.
           </p>
           <div className="marketing-outcome-list">
             {gymOutcomes.map(([title, copy], index) => (

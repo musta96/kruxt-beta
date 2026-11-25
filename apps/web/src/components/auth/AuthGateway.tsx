@@ -14,11 +14,13 @@ import { hasProviderReturnError, sanitizedAuthReturnUrl, startSocialSignIn, PROV
 import { Eye, EyeOff } from "lucide-react";
 import { useAuthCaptcha } from "@kruxt/ui/auth-captcha";
 import { getGymAdminLoginUrl } from "@/lib/marketing-url";
+import { SOCIAL_PROVIDER_LABELS, verifiedSocialProviders } from "@kruxt/ui/social-sign-in";
 import { normalizeMemberReturn } from "@/lib/auth/member-return";
 import { savePendingMemberReturn, takePendingMemberReturn } from "@/lib/auth/pending-member-return";
 
 type AuthMode = "signin" | "signup";
 
+const SOCIAL_PROVIDERS = verifiedSocialProviders(process.env.NEXT_PUBLIC_KRUXT_VERIFIED_SOCIAL_PROVIDERS);
 
 export function AuthGateway() {
   const router = useRouter();
@@ -299,10 +301,13 @@ export function AuthGateway() {
 
           {error && !(captcha.verified && error.startsWith("Security verification")) && <div className="marketing-auth-error" role="alert">{error}</div>}
           {confirmationPending && <p role="status">Check your email for a confirmation link if one is needed, then sign in. If you already have an account, sign in or reset your password.</p>}
-          <div className="marketing-social-auth" aria-busy={loading}>
-            <button type="button" className="marketing-button marketing-button-secondary" disabled={loading} onClick={() => void handleSocialSignIn("google")}>Continue with Google</button>
-            <button type="button" className="marketing-button marketing-button-secondary" disabled={loading} onClick={() => void handleSocialSignIn("apple")}>Continue with Apple</button>
-          </div>
+          {SOCIAL_PROVIDERS.length > 0 && (
+            <div className="marketing-social-auth" aria-busy={loading}>
+              {SOCIAL_PROVIDERS.map((provider) => (
+                <button key={provider} type="button" className="marketing-button marketing-button-secondary" disabled={loading} onClick={() => void handleSocialSignIn(provider)}>Continue with {SOCIAL_PROVIDER_LABELS[provider]}</button>
+              ))}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="marketing-auth-form" aria-busy={loading}>
             {mode === "signup" ? (
               <div className="marketing-auth-name-grid">

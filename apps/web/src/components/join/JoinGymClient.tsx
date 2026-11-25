@@ -9,14 +9,10 @@ import { ensureProfileForUser } from "@/lib/auth/access";
 import { authenticationErrorMessage } from "@/lib/auth/auth-error";
 import { hasRequiredConsents } from "@/lib/auth/required-consents";
 import { RequiredConsentReview } from "@/components/consent/RequiredConsentReview";
+import { loadMemberLanding, MEMBER_FALLBACK_PATH, settleMemberLanding, type MemberLanding } from "@/lib/invite/member-landing";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type AuthMode = "signin" | "signup";
-
-type MembershipRow = {
-  id: string;
-  membership_status: "pending" | "trial" | "active" | "paused" | "cancelled";
-};
 
 export function JoinGymClient() {
   const router = useRouter();
@@ -31,6 +27,7 @@ export function JoinGymClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [landing, setLanding] = useState<MemberLanding>({ path: MEMBER_FALLBACK_PATH, toGymClasses: false });
   const [confirmationPending, setConfirmationPending] = useState(false);
   const authOperationActive = useRef(false);
   const captcha = useAuthCaptcha(process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY);
@@ -77,6 +74,7 @@ export function JoinGymClient() {
     setLoading(true);
     setError(null);
     setSuccess(null);
+    setLanding({ path: MEMBER_FALLBACK_PATH, toGymClasses: false });
 
     try {
       const { data: auth, error: authError } = await supabase.auth.getUser();
@@ -108,18 +106,17 @@ export function JoinGymClient() {
       });
       if (redeemError) throw redeemError;
 
-      const { data: membership, error: membershipError } = await supabase
-        .from("gym_memberships")
-        .select("id,membership_status")
-        .eq("id", String(membershipId))
-        .maybeSingle();
-      if (membershipError) throw membershipError;
-
-      const status = (membership as MembershipRow | null)?.membership_status;
+      // Redemption succeeded. A slow or failed access check must not turn it into a retry.
+      const nextLanding = await settleMemberLanding(loadMemberLanding(supabase, {
+        userId: auth.user.id,
+        membershipId: typeof membershipId === "string" ? membershipId : null,
+        checkRequiredConsents: (userId) => hasRequiredConsents(supabase, userId)
+      }));
+      setLanding(nextLanding);
       setSuccess(
-        status === "pending"
-          ? "Your request is in. Gym staff will approve the private gym area access."
-          : "Invite accepted. Your private gym access is ready."
+        nextLanding.toGymClasses
+          ? "Invite accepted. Your gym's class schedule is ready."
+          : "Invite accepted. Class access is not confirmed yet. You can still open the member app."
       );
     } catch {
       setError("Unable to redeem invite code. Try again or contact gym staff.");
@@ -362,8 +359,8 @@ export function JoinGymClient() {
         {success && (
           <div className="panel" style={{ marginTop: 12, color: "#7ef5df" }}>
             <p style={{ marginTop: 0 }}>{success}</p>
-            <button className="btn btn-primary" onClick={() => router.push("/feed")}>
-              Open KRUXT
+            <button className="btn btn-primary" onClick={() => router.push(landing.path)}>
+              {landing.toGymClasses ? "See your gym's classes" : "Open KRUXT"}
             </button>
           </div>
         )}

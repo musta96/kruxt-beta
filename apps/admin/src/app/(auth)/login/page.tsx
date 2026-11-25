@@ -10,6 +10,9 @@ import { authenticationErrorMessage } from "@/services/auth-error";
 import { Eye, EyeOff } from "lucide-react";
 import { getAdminSupabasePublicConfig } from "@/services/supabase-client";
 import { hasProviderReturnError, sanitizedAuthReturnUrl, safeInternalNextPath, startSocialSignIn, PROVIDER_RETURN_ERROR, type SocialProvider } from "@/services/social-auth";
+import { SOCIAL_PROVIDER_LABELS, verifiedSocialProviders } from "@kruxt/ui/social-sign-in";
+
+const SOCIAL_PROVIDERS = verifiedSocialProviders(process.env.NEXT_PUBLIC_KRUXT_VERIFIED_SOCIAL_PROVIDERS);
 
 type Mode = "signin" | "signup";
 
@@ -196,10 +199,13 @@ export default function LoginPage() {
           </div>
         )}
 
-        <div className="mt-5 grid gap-3" aria-busy={pending}>
-          <button type="button" disabled={pending} onClick={() => void handleSocialSignIn("google")} className="w-full rounded-button border border-border bg-kruxt-panel px-4 py-2.5 text-sm font-semibold text-foreground hover:border-kruxt-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-kruxt-accent disabled:opacity-50">Continue with Google</button>
-          <button type="button" disabled={pending} onClick={() => void handleSocialSignIn("apple")} className="w-full rounded-button border border-border bg-kruxt-panel px-4 py-2.5 text-sm font-semibold text-foreground hover:border-kruxt-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-kruxt-accent disabled:opacity-50">Continue with Apple</button>
-        </div>
+        {SOCIAL_PROVIDERS.length > 0 && (
+          <div className="mt-5 grid gap-3" aria-busy={pending}>
+            {SOCIAL_PROVIDERS.map((provider) => (
+              <button key={provider} type="button" disabled={pending} onClick={() => void handleSocialSignIn(provider)} className="w-full rounded-button border border-border bg-kruxt-panel px-4 py-2.5 text-sm font-semibold text-foreground hover:border-kruxt-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-kruxt-accent disabled:opacity-50">Continue with {SOCIAL_PROVIDER_LABELS[provider]}</button>
+            ))}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="mt-6 space-y-4" aria-busy={pending}>
           <div>
             <label

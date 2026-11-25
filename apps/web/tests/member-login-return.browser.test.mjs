@@ -24,10 +24,13 @@ before(async () => {
       activationStatus:f.accessStatus==='disabled'?'disabled':f.accessStatus==='activation_required'?'pending_activation':'active',platformRole:f.role,staffGymIds:[],error:null});
     f.oauth=async(...args)=>{f.calls.push(['oauth',args[2],args[3]]);};
     createRoot(document.getElementById('root')).render(params.has('strict')?<React.StrictMode><AuthGateway/></React.StrictMode>:<AuthGateway/>);
-  ` }, bundle: true, write: false, jsx: "automatic", format: "iife", define: { "process.env": "{}", "process.env.NODE_ENV": '"test"', "process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY": "undefined" },
+  ` }, bundle: true, write: false, jsx: "automatic", format: "iife", define: { "process.env": "{}", "process.env.NODE_ENV": '"test"', "process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY": "undefined",
+      // Each test chooses its verified providers; nothing set means no social buttons.
+      "process.env.NEXT_PUBLIC_KRUXT_VERIFIED_SOCIAL_PROVIDERS": "window.fixtureSocialProviders" },
     plugins: [{ name: "login-fixtures", setup(builder) {
       builder.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: "navigation", namespace: "fixture" }));
       builder.onResolve({ filter: /^@kruxt\/ui\/auth-captcha$/ }, () => ({ path: "captcha", namespace: "fixture" }));
+      builder.onResolve({ filter: /^@kruxt\/ui\/social-sign-in$/ }, () => ({ path: resolve(app, "../../packages/ui/src/social-sign-in.ts") }));
       builder.onResolve({ filter: /^@\// }, args => {
         const real = ["@/lib/auth/member-return", "@/lib/auth/pending-member-return", "@/lib/auth/auth-error"];
         if (real.includes(args.path)) {
@@ -43,6 +46,7 @@ before(async () => {
           "@/lib/supabase/client": "export const createSupabaseBrowserClient=()=>window.fixture.client;export const getSupabaseConfig=()=>({});",
           "@/lib/auth/access": "export const ensureProfileExistsForUser=async()=>{};export const resolveAdminAccess=()=>window.fixture.access();",
           "@/components/public/usePublicSession": "export const resolvePostAuthPath=access=>access.activationStatus==='disabled'||access.activationStatus==='pending_activation'?'/activate-invite':access.platformRole?'/admin':'/feed';",
+          "@/lib/marketing-url": "export const getGymAdminLoginUrl=()=>'https://gym-admin.example.test/login';",
           "@/components/marketing/MarketingHome": "import React from 'react';export const MarketingHome=({authPanel})=><main id='member-login'>{authPanel}</main>;",
           "@/components/consent/RequiredConsentReview": "import React from 'react';export const RequiredConsentReview=({onComplete})=><section><h2>Policy review required</h2><button onClick={onComplete}>Finish fixture review</button></section>;",
           "@/lib/auth/social-auth": "export const PROVIDER_RETURN_ERROR='Social sign-in unavailable';export const hasProviderReturnError=()=>false;export const sanitizedAuthReturnUrl=url=>{const clean=new URL(url);clean.searchParams.delete('code');return clean.pathname+clean.search+clean.hash;};export const startSocialSignIn=(...args)=>window.fixture.oauth(...args);"
@@ -62,8 +66,9 @@ before(async () => {
   browser = await chromium.launch({ headless: true });
 });
 after(async () => { try { await browser?.close(); } finally { if (server?.listening) await new Promise(done => server.close(done)); } });
-async function fixture(t, query) {
+async function fixture(t, query, { socialProviders = null } = {}) {
   const context = await browser.newContext();const errors=[];
+  await context.addInitScript(value=>{window.fixtureSocialProviders=value;},socialProviders);
   t.after(async () => { await context.close();assert.deepEqual(errors,[]); });
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
   const page=await context.newPage();page.setDefaultTimeout(5000);page.on('pageerror',error=>errors.push(error.message));
@@ -106,8 +111,16 @@ test('activation gates and identity checks cannot be bypassed by return URLs',as
   await page.evaluate(()=>{window.fixture.mismatch=true;});await signIn(page);
   await expect(page.getByRole('alert')).toHaveText('Your session has expired. Sign in again.');assert.equal(await destination(page),undefined);
 });
-test('social callback keeps its approved URL and restores a single tab-scoped destination',async t=>{
+test('social buttons stay hidden until a provider is listed as verified',async t=>{
   const page=await fixture(t,'returnTo=%2Fprivacy');
+  await expect(page.locator('form')).toBeVisible();
+  await expect(page.getByRole('button',{name:/Continue with/})).toHaveCount(0);
+  const googleOnly=await fixture(t,'returnTo=%2Fprivacy',{socialProviders:'google'});
+  await expect(googleOnly.getByRole('button',{name:'Continue with Google',exact:true})).toBeVisible();
+  await expect(googleOnly.getByRole('button',{name:'Continue with Apple',exact:true})).toHaveCount(0);
+});
+test('social callback keeps its approved URL and restores a single tab-scoped destination',async t=>{
+  const page=await fixture(t,'returnTo=%2Fprivacy',{socialProviders:'google'});
   await page.getByRole('button',{name:'Continue with Google',exact:true}).click();
   const oauth=await page.evaluate(()=>window.fixture.calls.find(call=>call[0]==='oauth'));
   assert.equal(oauth[2],origin+'/#member-login');

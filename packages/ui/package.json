@@ -10,6 +10,7 @@
     "./theme": "./src/theme.ts",
     "./workspace-session": "./src/workspace-session.ts",
     "./app-urls": "./src/app-urls.ts",
+    "./social-sign-in": "./src/social-sign-in.ts",
     "./auth-captcha": "./src/auth-captcha.tsx"
   },
   "scripts": {

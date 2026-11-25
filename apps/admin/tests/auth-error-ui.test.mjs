@@ -32,9 +32,11 @@ before(async () => {
       createRoot(document.getElementById("root")).render(<AuthProvider><Probe/></AuthProvider>);
     ` },
     bundle: true, write: false, format: "iife", jsx: "automatic",
-    define: { "process.env.NODE_ENV": '"test"', "process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY": "window.fixtureSiteKey" },
+    define: { "process.env.NODE_ENV": '"test"', "process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY": "window.fixtureSiteKey",
+      "process.env.NEXT_PUBLIC_KRUXT_VERIFIED_SOCIAL_PROVIDERS": "window.fixtureSocialProviders" },
     plugins: [{ name: "local-auth-fixtures", setup(builder) {
       builder.onResolve({ filter: /^@kruxt\/ui\/auth-captcha$/ }, () => ({ path: resolve(app, "../../packages/ui/src/auth-captcha.tsx") }));
+      builder.onResolve({ filter: /^@kruxt\/ui\/social-sign-in$/ }, () => ({ path: resolve(app, "../../packages/ui/src/social-sign-in.ts") }));
       builder.onResolve({ filter: /^@hcaptcha\/react-hcaptcha$/ }, args => ({ path: args.path, namespace: "fixture" }));
       builder.onResolve({ filter: /^next\/|^@\/services$/ }, args => ({ path: args.path, namespace: "fixture" }));
       builder.onResolve({ filter: /^@\/services\/supabase-client$/ }, args => ({ path: args.path, namespace: "fixture" }));
@@ -96,7 +98,7 @@ after(async () => {
   if (server) await new Promise(done => server.close(done));
 });
 
-async function fixture(t, path = "/login", { configured = false } = {}) {
+async function fixture(t, path = "/login", { configured = false, socialProviders = null } = {}) {
   const page = await browser.newPage();
   t.after(() => page.close());
   const errors = [], external = [];
@@ -113,9 +115,10 @@ async function fixture(t, path = "/login", { configured = false } = {}) {
     assert.deepEqual(external, [], "auth fixtures never call hosted services");
   });
   // UUID-shaped fixture input only, never a hosted challenge/site key.
-  await page.addInitScript(configured => {
+  await page.addInitScript(({ configured, socialProviders }) => {
     window.fixtureSiteKey = configured ? "00000000-0000-0000-0000-000000000000" : undefined;
-  }, configured);
+    window.fixtureSocialProviders = socialProviders;
+  }, { configured, socialProviders });
   await page.goto(origin + path);
   await expect(page.getByRole("button", { name: path === "/login" ? "Sign In" : "Send Reset Link", exact: true })).toBeEnabled();
   return page;
@@ -232,9 +235,17 @@ test("configured context callers fail closed without a token and preserve exact 
   }]);
 });
 
+test("social buttons stay hidden until a provider is listed as verified", async t => {
+  const page = await fixture(t, "/login");
+  await expect(page.getByRole("button", { name: /Continue with/ })).toHaveCount(0);
+  const appleOnly = await fixture(t, "/login", { socialProviders: "apple" });
+  await expect(appleOnly.getByRole("button", { name: "Continue with Apple", exact: true })).toBeVisible();
+  await expect(appleOnly.getByRole("button", { name: "Continue with Google", exact: true })).toHaveCount(0);
+});
+
 for (const provider of ["google", "apple"]) {
   test(`configured ${provider} OAuth remains usable without CAPTCHA or password fields`, async t => {
-    const page = await fixture(t, "/login", { configured: true });
+    const page = await fixture(t, "/login", { configured: true, socialProviders: "google,apple" });
     await expect(page.getByTestId("synthetic-captcha")).toBeVisible();
     await page.evaluate(() => { window.fixture.error = { code: "synthetic_oauth_failure" }; });
     const button = page.getByRole("button", { name: `Continue with ${provider === "google" ? "Google" : "Apple"}` });

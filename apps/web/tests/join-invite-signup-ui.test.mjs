@@ -20,10 +20,17 @@ before(async () => {
       import {createRoot} from "react-dom/client";
       import {JoinGymClient} from "./src/components/join/JoinGymClient";
       import {AcceptInviteClient} from "./src/components/invite/AcceptInviteClient";
-      const user={id:"synthetic-user",email:"member@example.test",user_metadata:{}};
+      const user={id:"11111111-1111-4111-8111-111111111111",email:"member@example.test",user_metadata:{}};
       const session={user};
       const state=window.fixture={calls:[],hasSession:false,pause:false,error:false,activation:"active",missingUser:false,
         siteKey:new URL(location.href).searchParams.has('captcha')?'10000000-ffff-ffff-ffff-000000000001':undefined};
+      const landingCase=new URL(location.href).searchParams.get('membership');
+      const mid="55555555-5555-4555-8555-555555555555", gid="33333333-3333-4333-8333-333333333333";
+      state.membershipId=landingCase?mid:"membership-id";
+      state.membership=landingCase==="bookable"?{id:mid,gym_id:gid,user_id:user.id,membership_status:"active"}
+        :landingCase==="pending"?{id:mid,gym_id:gid,user_id:user.id,membership_status:"pending"}
+        :landingCase==="other-user"?{id:mid,gym_id:gid,user_id:"22222222-2222-4222-8222-222222222222",membership_status:"active"}
+        :{membership_status:"active"};
       state.emit=(value)=>state.listener("SIGNED_IN",value);
       state.client={
         auth:{
@@ -47,10 +54,12 @@ before(async () => {
           state.calls.push(["from",table]);
           const query={select:()=>query,eq:()=>query,
             single:async()=>({data:{activation_status:state.activation},error:null}),
-            maybeSingle:async()=>({data:{membership_status:"active"},error:null})};
+            maybeSingle:async()=>table==="profiles"?({data:{activation_status:state.activation},error:null})
+              :landingCase==="lookup-error"?({data:null,error:{message:"synthetic membership lookup failure"}})
+              :({data:state.membership,error:null})};
           return query;
         },
-        rpc:async(name,args)=>{state.calls.push(["rpc",name,args]);return {data:"membership-id",error:null};}
+        rpc:async(name,args)=>{state.calls.push(["rpc",name,args]);return {data:state.membershipId,error:null};}
       };
       createRoot(document.getElementById("root")).render(location.pathname==="/join"?<JoinGymClient/>:<AcceptInviteClient/>);
     ` },
@@ -66,6 +75,7 @@ before(async () => {
       builder.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: "navigation", namespace: "fixture" }));
       builder.onResolve({ filter: /^@\// }, args => {
         if (args.path === "@/lib/auth/auth-error") return { path: resolve(app, "src/lib/auth/auth-error.ts") };
+        if (args.path === "@/lib/invite/member-landing") return { path: resolve(app, "src/lib/invite/member-landing.ts") };
         return { path: args.path, namespace: "fixture" };
       });
       builder.onLoad({ filter: /.*/, namespace: "fixture" }, args => {
@@ -75,6 +85,7 @@ before(async () => {
           "@/lib/auth/access": 'export const ensureProfileForUser=async(client,args)=>{window.fixture.calls.push(["profile",args]);};',
           "@/lib/auth/required-consents": 'export const hasRequiredConsents=async()=>{window.fixture.calls.push(["consents"]);return true;};',
           "@/components/consent/RequiredConsentReview": "export const RequiredConsentReview=()=>null;",
+          "@/lib/marketing-url": 'export const getGymAdminLoginUrl=()=>"https://gym-admin.example.test/login";',
           "@/lib/supabase/functions": 'export const invokeSupabaseFunction=async(client,name,args)=>{window.fixture.calls.push(["function",name,args]);return {ok:true,gymId:"gym-id"};};'
         };
         assert.ok(Object.hasOwn(modules, args.path), "Unexpected fixture import: " + args.path);
@@ -108,7 +119,7 @@ after(async () => {
 
 const paths = { join: "/join?code=KRUXT-CONTEXT-123", invite: "/invite/accept?token=synthetic-invite-context" };
 
-async function fixture(t, flow, width = 1280, captcha = false) {
+async function fixture(t, flow, width = 1280, captcha = false, extra = "") {
   const context = await browser.newContext({ viewport: { width, height: 900 } });
   const errors = [];
   t.after(async () => { await context.close(); assert.deepEqual(errors, []); });
@@ -119,7 +130,7 @@ async function fixture(t, flow, width = 1280, captcha = false) {
   });
   const page = await context.newPage();
   page.on("pageerror", error => errors.push(error.message));
-  await page.goto(origin + paths[flow] + (captcha ? "&captcha=1" : ""));
+  await page.goto(origin + paths[flow] + (captcha ? "&captcha=1" : "") + extra);
   await page.getByRole("button", { name: "Sign up", exact: true }).click();
   if (flow === "join") {
     await page.getByLabel("Display name", { exact: true }).fill("Test Member");
@@ -176,7 +187,8 @@ for (const flow of ["join", "invite"]) {
     await expect(page.getByRole("status")).toContainText("Check your email for a confirmation link if one is needed");
     await expect(page.getByRole("alert")).toHaveCount(0);
     await expect(page.getByText("Signed in as", { exact: false })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /Open KRUXT|Open organization workspace/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Open KRUXT|See your gym's classes/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Open gym workspace" })).toHaveCount(0);
     await expect(page.getByLabel("Password", { exact: true })).toHaveValue("");
     assert.deepEqual((await calls(page)).map(call => call[0]), ["signUp"]);
     assert.equal(page.url(), origin + paths[flow]);
@@ -185,7 +197,7 @@ for (const flow of ["join", "invite"]) {
     await page.getByRole("button", { name: flow === "join" ? "Sign in" : "Sign in to continue", exact: true }).last().click();
     await expect(page.getByText("Signed in as", { exact: false })).toBeVisible();
     if (flow === "invite") await page.getByRole("button", { name: "Accept invite", exact: true }).click();
-    await expect(page.getByRole("button", { name: flow === "join" ? "Open KRUXT" : "Open organization workspace", exact: true })).toBeVisible();
+    await expect(flow === "join" ? page.getByRole("button", { name: "Open KRUXT", exact: true }) : page.getByRole("link", { name: "Open gym workspace", exact: true })).toBeVisible();
     const recorded = await calls(page);
     assert.deepEqual(recorded.filter(call => call[0] === "signIn"), [["signIn", { email: "member@example.test", password: "confirmed-password" }]]);
     if (flow === "join") {
@@ -218,7 +230,7 @@ for (const flow of ["join", "invite"]) {
     } else {
       assert.deepEqual((await calls(page)).map(call => call[0]), ["signUp"]);
       await page.getByRole("button", { name: "Accept invite", exact: true }).click();
-      await expect(page.getByRole("button", { name: "Open organization workspace", exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Open gym workspace", exact: true })).toHaveAttribute("href", "https://gym-admin.example.test/login");
     }
     assert.equal((await calls(page)).filter(call => call[0] === "signIn").length, 0);
   });
@@ -251,4 +263,25 @@ for (const missingUser of [false, true]) test(`join: bounded ${missingUser ? "mi
     ? "Sign in before redeeming a gym code."
     : "Your account must be active before joining a gym. Complete your activation or contact gym staff.");
   assert.equal((await calls(page)).filter(call => call[0] === "rpc").length, 0);
+});
+
+for (const [landingCase, label, destination] of [
+  ["bookable", "See your gym's classes", "/gyms/33333333-3333-4333-8333-333333333333/classes"],
+  ["pending", "Open KRUXT", "/feed"],
+  ["other-user", "Open KRUXT", "/feed"],
+  ["lookup-error", "Open KRUXT", "/feed"]
+]) test(`join: ${landingCase} membership lands on ${destination} after acceptance and checks`, async t => {
+  const page = await fixture(t, "join", 390, false, "&membership=" + landingCase);
+  await page.evaluate(() => { window.fixture.hasSession = true; });
+  await submit(page, "join").click();
+  const action = page.getByRole("button", { name: label, exact: true });
+  await expect(action).toBeVisible();
+  const recorded = await calls(page);
+  const redeemAt = recorded.findIndex(call => call[0] === "rpc" && call[1] === "redeem_gym_invite_code");
+  assert.ok(redeemAt >= 0, "invite was redeemed");
+  assert.ok(recorded.slice(redeemAt).some(call => call[0] === "consents"), "policies re-checked after acceptance");
+  assert.equal(recorded.slice(redeemAt).filter(call => call[0] === "from" && call[1] === "gym_memberships").length, 1, "one fresh membership read after acceptance");
+  await expect(page.getByText(/^Invite accepted\./)).toBeVisible();
+  await action.click();
+  assert.deepEqual((await calls(page)).filter(call => call[0] === "push").at(-1), ["push", destination]);
 });

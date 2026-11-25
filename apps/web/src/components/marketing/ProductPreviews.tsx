@@ -46,8 +46,9 @@ export function AthletePhonePreview() {
       </div>
       <div className="product-phone-nav">
         <strong>Plan</strong>
+        <span>Feed</span>
         <span>Log</span>
-        <span>Community</span>
+        <span>Gyms</span>
         <span>Profile</span>
       </div>
     </div>
@@ -127,7 +128,7 @@ export function GymDashboardPreview() {
       <aside>
         <span className="product-mini-logo">K</span>
         <strong>KRUXT Admin</strong>
-        {["Overview", "Members", "Staff", "Coaching", "Classes", "Check-ins", "Waivers", "Reports"].map((item) => (
+        {["Overview", "Members", "Staff", "Coaching", "Classes", "Check-ins", "Waivers", "Billing"].map((item) => (
           <span className={item === "Members" ? "is-active" : ""} key={item}>
             {item}
           </span>

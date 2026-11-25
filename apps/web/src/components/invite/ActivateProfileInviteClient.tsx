@@ -8,6 +8,13 @@ import type { User } from "@supabase/supabase-js";
 import { broadcastPublicSessionRefresh } from "@/components/public/usePublicSession";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getGymAdminLoginUrl } from "@/lib/marketing-url";
+import { hasRequiredConsents } from "@/lib/auth/required-consents";
+import {
+  loadMemberLanding,
+  MEMBER_LANDING_FALLBACK,
+  settleMemberLanding,
+  type MemberLanding
+} from "@/lib/invite/member-landing";
 
 type InviteRow = {
   id: string;
@@ -48,6 +55,33 @@ export function ActivateProfileInviteClient() {
   const [acceptedOwnerTerms, setAcceptedOwnerTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // null while the destination is still being checked: no navigation is offered until it settles.
+  const [landing, setLanding] = useState<MemberLanding | null>(null);
+
+  // Member invites: open the gym's classes only after activation, required
+  // policies and a fresh membership check for this invite's gym all pass.
+  // Other roles, failures and timeouts get the member app home.
+  useEffect(() => {
+    if (status !== "success") return;
+    if (!user || !invite || invite.gym_role !== "member") {
+      setLanding(MEMBER_LANDING_FALLBACK);
+      return;
+    }
+    setLanding(null);
+    let active = true;
+    void settleMemberLanding(
+      loadMemberLanding(supabase, {
+        userId: user.id,
+        gymId: invite.gym_id,
+        checkRequiredConsents: (userId) => hasRequiredConsents(supabase, userId)
+      })
+    ).then((next) => {
+      if (active) setLanding(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, [status, user, invite, supabase]);
 
   useEffect(() => {
     let active = true;
@@ -190,7 +224,11 @@ export function ActivateProfileInviteClient() {
               Use a strong password now. Multi-factor setup is prompted from the security area as KRUXT rolls it out.
             </p>
             <div className="stack-actions" style={{ marginTop: "1rem" }}>
-              <Link href="/feed" className="primary-cta">Open member app</Link>
+              {landing ? (
+                <Link href={landing.path} className="primary-cta">{landing.toGymClasses ? "See your gym's classes" : "Open member app"}</Link>
+              ) : (
+                <button type="button" className="primary-cta" disabled aria-busy="true">Checking your gym…</button>
+              )}
               <a href={getGymAdminLoginUrl()} className="secondary-cta">Open gym workspace</a>
             </div>
           </div>
