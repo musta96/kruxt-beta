@@ -9,10 +9,13 @@ import { AuthLandingScreen } from "./screens/AuthLandingScreen";
 import { FeedScreen } from "./screens/FeedScreen";
 import { GymsScreen } from "./screens/GymsScreen";
 import { LogScreen } from "./screens/LogScreen";
+import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { WorkModeScreen } from "./screens/WorkModeScreen";
+import { resolveNativeRootSurface } from "./runtime-gating";
 import { NativeSessionProvider, useNativeSession } from "./session";
 import { palette } from "./theme";
+import { Banner, Button, Heading, ScreenScroll } from "./ui";
 
 const Tabs = createBottomTabNavigator();
 
@@ -47,9 +50,9 @@ function LoadingScreen() {
 
 function emojiForRoute(routeName: string): string {
   if (routeName === "Feed") return "🔥";
-  if (routeName === "Gyms") return "G";
+  if (routeName === "Gyms") return "🏋️";
   if (routeName === "Log") return "✍️";
-  if (routeName === "Work") return "W";
+  if (routeName === "Work") return "🗂️";
   return "👤";
 }
 
@@ -95,10 +98,11 @@ function AuthenticatedTabs() {
           )
         })}
       >
+        {/* Same order as the member web app: Feed, Log, Gyms, then workspace and Profile. */}
         <Tabs.Screen name="Feed" component={FeedScreen} />
-        <Tabs.Screen name="Gyms" component={GymsScreen} />
         <Tabs.Screen name="Log" component={LogScreen} />
-        {hasWorkAccess ? <Tabs.Screen name="Work" component={WorkModeScreen} /> : null}
+        <Tabs.Screen name="Gyms" component={GymsScreen} />
+        {hasWorkAccess ? <Tabs.Screen name="Work" component={WorkModeScreen} options={{ title: "Workspace" }} /> : null}
         <Tabs.Screen name="Profile" component={ProfileScreen} />
       </Tabs.Navigator>
     </NavigationContainer>
@@ -106,9 +110,19 @@ function AuthenticatedTabs() {
 }
 
 function NativeRoot() {
-  const { state } = useNativeSession();
+  const { state, refresh, signOut } = useNativeSession();
   const url = ExpoLinking.useURL();
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+
+  async function leaveSession() {
+    setRecoveryError(null);
+    try {
+      await signOut();
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : "Unable to sign out.");
+    }
+  }
 
   useEffect(() => {
     const token = readInviteToken(url);
@@ -117,16 +131,48 @@ function NativeRoot() {
     }
   }, [url]);
 
-  if (state.status === "loading") {
-    return <LoadingScreen />;
-  }
+  const surface = resolveNativeRootSurface({
+    sessionStatus: state.status,
+    hasAuthenticatedUser: Boolean(state.access.user),
+    hasInviteToken: Boolean(inviteToken),
+    onboardingStatus: state.onboarding.status
+  });
 
-  if (!state.access.user) {
-    return <AuthLandingScreen />;
+  if (surface === "loading") return <LoadingScreen />;
+  if (surface === "auth") return <AuthLandingScreen />;
+  if (surface === "invite" && inviteToken) {
+    return (
+      <AcceptInviteScreen
+        token={inviteToken}
+        onDone={() => {
+          setInviteToken(null);
+          void refresh();
+        }}
+      />
+    );
   }
-
-  if (inviteToken) {
-    return <AcceptInviteScreen token={inviteToken} onDone={() => setInviteToken(null)} />;
+  if (surface === "onboarding") return <OnboardingScreen />;
+  if (surface === "session-error" || surface === "onboarding-error") {
+    return (
+      <ScreenScroll>
+        <Heading
+          eyebrow="Connection required"
+          title="We could not verify your account"
+          subtitle="KRUXT keeps onboarding closed until your server status can be confirmed."
+        />
+        <Banner
+          message={
+            recoveryError ??
+            state.errorMessage ??
+            state.onboarding.errorMessage ??
+            "Unable to verify onboarding status."
+          }
+          tone="danger"
+        />
+        <Button onPress={() => void refresh()}>Retry</Button>
+        <Button tone="secondary" onPress={() => void leaveSession()}>Sign out</Button>
+      </ScreenScroll>
+    );
   }
 
   return <AuthenticatedTabs />;

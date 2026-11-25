@@ -491,3 +491,12 @@ export async function loadPlanSnapshot(client: SupabaseClient): Promise<PlanSnap
     futureWeeksLocked: true
   };
 }
+
+export async function loadTrainingPlanForWorkout(client: SupabaseClient, planId: string): Promise<MemberTrainingPlan> {
+  const userId = await requireUser(client);
+  const { data, error } = await client.from("gym_member_workout_plans")
+    .select("id,gym_id,coach_user_id,title,goal,status,starts_at,ends_at,plan_json,published_at,version_number,source,updated_at,gyms(name)")
+    .eq("id", planId).eq("member_user_id", userId).eq("status", "active").maybeSingle();
+  if (error || !data) throw new Error("This training plan is unavailable or no longer active. Return to your plan to choose a session.");
+  return mapPlan(data as WorkoutPlanRow, new Map());
+}

@@ -1,0 +1,303 @@
+{
+  "reviewedOn": "2026-10-22",
+  "method": "Public official product/help/pricing/policy desk research using web search and page extraction; no paid walkthroughs or independent review corpus.",
+  "limitations": [
+    "Not exhaustive globally",
+    "Not-mentioned is not absence",
+    "Vendor assertions are not independently measured quality",
+    "No SEO/traffic/market-share datasets",
+    "Prices are region/channel/tier snapshots"
+  ],
+  "profiles": [
+    {
+      "slug": "hevy",
+      "name": "Hevy",
+      "category": "Strength/social",
+      "sources": [
+        "https://www.hevyapp.com/features/social-features/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "strong",
+      "name": "Strong",
+      "category": "Strength logging",
+      "sources": [
+        "https://www.strong.app/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "jefit",
+      "name": "JEFIT",
+      "category": "Strength/plans",
+      "sources": [
+        "https://www.jefit.com/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "fitbod",
+      "name": "Fitbod",
+      "category": "Adaptive training",
+      "sources": [
+        "https://fitbod.me/faqs/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "freeletics",
+      "name": "Freeletics",
+      "category": "Guided training/habits",
+      "sources": [
+        "https://www.freeletics.com/en/",
+        "https://help.freeletics.com/hc/en-us/articles/10286298927122-Perfect-weeks-and-Perfect-week-streaks-explained"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "boostcamp",
+      "name": "Boostcamp",
+      "category": "Programs/logging",
+      "sources": [
+        "https://www.boostcamp.app/features",
+        "https://www.boostcamp.app/use-cases"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "ladder",
+      "name": "Ladder",
+      "category": "Coach-led teams",
+      "sources": [
+        "https://www.joinladder.com/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "playbook",
+      "name": "Playbook",
+      "category": "Creator monetization",
+      "sources": [
+        "https://www.playbookapp.io/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "sugarwod",
+      "name": "SugarWOD",
+      "category": "Gym performance/community",
+      "sources": [
+        "https://www.sugarwod.com/athlete-features/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "strava",
+      "name": "Strava",
+      "category": "Social activity/network",
+      "sources": [
+        "https://support.strava.com/en-us/collections/19657598-clubs-challenges-and-community",
+        "https://support.strava.com/en-us/articles/15401859-how-do-i-add-videos-and-photos-to-my-activity"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "zwift",
+      "name": "Zwift",
+      "category": "Game-like sport/competition",
+      "sources": [
+        "https://www.zwift.com/uk/racing/racing-faq"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "myzone",
+      "name": "Myzone",
+      "category": "Effort recognition/club engagement",
+      "sources": [
+        "https://www.myzone.org/features/heart-rate-training-and-meps"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "wodify",
+      "name": "Wodify",
+      "category": "Gym operations/performance",
+      "sources": [
+        "https://www.wodify.com/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "pushpress",
+      "name": "PushPress",
+      "category": "Gym operations/programming",
+      "sources": [
+        "https://www.pushpress.com/products/train",
+        "https://www.pushpress.com/pricing"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "mindbody",
+      "name": "Mindbody",
+      "category": "Operations/consumer discovery",
+      "sources": [
+        "https://www.mindbodyonline.com/business/pricing"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "glofox",
+      "name": "ABC Glofox",
+      "category": "Gym operations",
+      "sources": [
+        "https://www.glofox.com/business-types/gym-management-software/",
+        "https://www.glofox.com/pricing/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "virtuagym",
+      "name": "Virtuagym",
+      "category": "Integrated gym/coaching/community",
+      "sources": [
+        "https://business.virtuagym.com/gym-software/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "teamup",
+      "name": "TeamUp",
+      "category": "Studio operations",
+      "sources": [
+        "https://goteamup.com/features/run-your-business",
+        "https://goteamup.com/pricing"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "bsport",
+      "name": "bsport",
+      "category": "Boutique studio operations",
+      "sources": [
+        "https://pro.bsport.io/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "sportclubby",
+      "name": "Sportclubby",
+      "category": "Italian/local booking/community",
+      "sources": [
+        "https://www.sportclubby.com/it/download-app",
+        "https://www.sportclubby.com/it/palinsesto-e-prenotazioni"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "technogym",
+      "name": "Technogym / Mywellness",
+      "category": "Connected club ecosystem",
+      "sources": [
+        "https://corporate.technogym.com/en/about-us/ecosystem"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "trainerize",
+      "name": "ABC Trainerize",
+      "category": "Coaching/business/community",
+      "sources": [
+        "https://www.trainerize.com/pricing/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "everfit",
+      "name": "Everfit",
+      "category": "Coaching/automation/community",
+      "sources": [
+        "https://everfit.io/",
+        "https://help.everfit.io/en/articles/3661707-how-to-automate-your-training-business-with-autoflows"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "truecoach",
+      "name": "TrueCoach",
+      "category": "Coach-client delivery",
+      "sources": [
+        "https://truecoach.co/features/client-management-communication-tools/",
+        "https://help.truecoach.co/en/articles/3483326-billing-frequency"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "trainheroic",
+      "name": "TrainHeroic",
+      "category": "Coach teams/marketplace",
+      "sources": [
+        "https://support.trainheroic.com/hc/en-us/articles/18156885545997-For-Coaches-Selling-Marketplace-Teams-vs-Programs",
+        "https://support.trainheroic.com/hc/en-us/articles/18171022296461-As-an-athlete-how-do-I-switch-teams"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "tiktok",
+      "name": "TikTok",
+      "category": "Short-form discovery substitute",
+      "sources": [
+        "https://newsroom.tiktok.com/introducing-a-way-to-refresh-your-for-you-feed-on-tiktok-us?lang=en"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "instagram",
+      "name": "Instagram",
+      "category": "Social identity/creator distribution substitute",
+      "sources": [
+        "https://about.fb.com/news/2023/06/how-ai-ranks-content-on-facebook-and-instagram/",
+        "https://about.fb.com/news/2024/11/introducing-recommendations-reset-instagram/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "apple-fitness-plus",
+      "name": "Apple Fitness+",
+      "category": "Guided content/ecosystem substitute",
+      "sources": [
+        "https://www.apple.com/apple-fitness-plus/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "peloton",
+      "name": "Peloton",
+      "category": "Guided training/community substitute",
+      "sources": [
+        "https://www.onepeloton.com/app"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "nike-run-club",
+      "name": "Nike Run Club",
+      "category": "Sport-specific guided habit substitute",
+      "sources": [
+        "https://www.nike.com/nrc-app"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    },
+    {
+      "slug": "classpass",
+      "name": "ClassPass",
+      "category": "Cross-venue discovery/booking substitute",
+      "sources": [
+        "https://classpass.com/"
+      ],
+      "verification": "Public-source review; implementation, regional availability and practical quality need task walkthrough"
+    }
+  ]
+}

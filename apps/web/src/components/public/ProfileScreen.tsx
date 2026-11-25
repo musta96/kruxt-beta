@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MemberShell } from "@/components/public/MemberShell";
 import {
   broadcastPublicSessionRefresh,
-  resolvePostAuthPath,
+  resolveBackoffice,
   usePublicSession
 } from "@/components/public/usePublicSession";
 import {
@@ -57,8 +57,7 @@ export function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const backofficePath = state.access ? resolvePostAuthPath(state.access) : null;
-  const showBackofficeLink = backofficePath === "/admin" || backofficePath === "/org";
+  const backoffice = resolveBackoffice(state.access);
   const avatarInitial = useMemo(() => displayLabel.trim().charAt(0).toUpperCase() || "K", [displayLabel]);
   const openInvoices = (profile?.invoices ?? []).filter((invoice) => invoice.status !== "paid");
   const amountDue = openInvoices.reduce((sum, invoice) => sum + invoice.amountDueCents, 0);
@@ -492,10 +491,10 @@ export function ProfileScreen() {
             <p className="eyebrow">SETTINGS</p>
             <h2 className="section-title">Member profile</h2>
           </div>
-          {showBackofficeLink && (
-            <Link href={backofficePath} className="secondary-cta">
-              Open {backofficePath === "/admin" ? "platform console" : "organization workspace"}
-            </Link>
+          {backoffice && (
+            <a href={backoffice.url} className="secondary-cta">
+              Open {backoffice.label.toLowerCase()}
+            </a>
           )}
         </div>
 
@@ -511,7 +510,7 @@ export function ProfileScreen() {
               className="input"
               value={form.displayName}
               onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))}
-              placeholder="Edoardo Mustarelli"
+              placeholder="Mario Rossi"
             />
           </div>
 

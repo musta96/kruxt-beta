@@ -1,5 +1,7 @@
-import { InvitesConsole } from "@/components/console/InvitesConsole";
+import { redirect } from "next/navigation";
+import { appUrl } from "@kruxt/ui/app-urls";
 
-export default function AdminInvitesPage() {
-  return <InvitesConsole scope="founder" />;
+// Gym and operator work lives in the platform console; this old web route only forwards there.
+export default function Page() {
+  redirect(appUrl("platform", "/"));
 }

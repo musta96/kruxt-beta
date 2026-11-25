@@ -1,0 +1,38 @@
+{
+  "formatVersion": 1,
+  "status": "draft",
+  "operationalReviews": {
+    "controller_contacts": "owner_supplied_pending_operational_review",
+    "age_territories": "pending",
+    "purpose_roles": "pending",
+    "suppliers_transfers": "pending",
+    "retention_rights": "pending",
+    "consent_withdrawal": "pending"
+  },
+  "documents": [
+    {
+      "policyType": "terms",
+      "version": "0.2.0-draft",
+      "source": "drafts/terms-of-service.md",
+      "effectiveAt": null,
+      "ownerApprovedSha256": null,
+      "legalReviewedSha256": null
+    },
+    {
+      "policyType": "privacy",
+      "version": "0.2.0-draft",
+      "source": "drafts/privacy-notice.md",
+      "effectiveAt": null,
+      "ownerApprovedSha256": null,
+      "legalReviewedSha256": null
+    },
+    {
+      "policyType": "health_data",
+      "version": "0.2.0-draft",
+      "source": "drafts/health-data-processing-notice.md",
+      "effectiveAt": null,
+      "ownerApprovedSha256": null,
+      "legalReviewedSha256": null
+    }
+  ]
+}

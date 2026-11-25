@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { usePlatformAuth } from "@/contexts/platform-auth-context";
-import { ensureOperatorGymSession } from "@/services/operator-session-service";
+import { openWorkspace, resolveWorkspaceOrigin } from "@kruxt/ui/workspace-session";
 
 type TenantStatus = "active" | "private" | "onboarding";
 type CapabilityCategory = "billing" | "operations" | "growth" | "compliance" | "limits";
@@ -85,13 +85,6 @@ interface ImpactConfirmation {
   nextBool: boolean;
 }
 
-const DEFAULT_ADMIN_APP_URL =
-  process.env.NODE_ENV === "production" ? "https://kruxt-admin.vercel.app" : "http://localhost:3000";
-const adminAppUrl =
-  process.env.NEXT_PUBLIC_KRUXT_GYM_ADMIN_URL ??
-  process.env.NEXT_PUBLIC_KRUXT_ADMIN_URL ??
-  process.env.NEXT_PUBLIC_ADMIN_APP_URL ??
-  DEFAULT_ADMIN_APP_URL;
 const DEFAULT_UAT_GYM_ID = process.env.NEXT_PUBLIC_KRUXT_UAT_GYM_ID ?? "61036acd-2f86-4745-866e-cd2f5539371f";
 
 const statusStyles: Record<TenantStatus, string> = {
@@ -155,17 +148,12 @@ function valueChipStyles(enabled: boolean): string {
     : "border-kruxt-danger/30 bg-kruxt-danger/10 text-kruxt-danger";
 }
 
-function buildAdminUrl(gymId: string, path = "/"): string {
-  const url = new URL(path, adminAppUrl);
+function buildAdminPath(gymId: string, path: string, sessionId: string): string {
+  const url = new URL(path, "https://workspace.invalid");
   url.searchParams.set("gymId", gymId);
   url.searchParams.set("source", "platform");
-  return url.toString();
-}
-
-function buildAdminUrlWithSession(gymId: string, path: string, sessionId: string): string {
-  const url = new URL(buildAdminUrl(gymId, path));
   url.searchParams.set("supportSessionId", sessionId);
-  return url.toString();
+  return url.pathname + url.search;
 }
 
 export default function TenantsPage() {
@@ -415,14 +403,43 @@ export default function TenantsPage() {
     setError(null);
 
     try {
-      const session = await ensureOperatorGymSession({
-        supabase,
-        user,
-        gymId: tenant.id,
-        mode: mode === "invite" ? "manage" : mode,
-        targetPath,
+      await openWorkspace({
+        win: window, client: supabase, workspace: "admin", expectedUser: user.id,
+        projectUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+        origin: resolveWorkspaceOrigin("admin", window.location.origin, [
+          process.env.NEXT_PUBLIC_KRUXT_GYM_ADMIN_URL,
+          process.env.NEXT_PUBLIC_KRUXT_ADMIN_URL,
+          process.env.NEXT_PUBLIC_ADMIN_APP_URL,
+        ]),
+        prepare: async () => {
+          // Switching never grants access. Only an already-approved grant can open a session.
+          const now = new Date().toISOString();
+          const { data: grants, error: grantError } = await supabase.from("gym_support_access_grants")
+            .select("id,permission_scope,starts_at,ends_at")
+            .eq("gym_id", tenant.id).eq("operator_user_id", user.id).eq("status", "approved")
+            .lte("starts_at", now).or(`ends_at.is.null,ends_at.gt.${now}`)
+            .order("created_at", { ascending: false });
+          if (grantError) throw grantError;
+          const requiredScope = mode === "preview" ? "workspace.preview" : "workspace.manage";
+          const grant = grants?.find(row => Array.isArray(row.permission_scope) && row.permission_scope.includes(requiredScope));
+          if (!grant) throw new Error("Approved gym support access is required before opening this workspace.");
+          const { data: existing, error: sessionError } = await supabase.from("gym_support_access_sessions")
+            .select("id").eq("grant_id", grant.id).eq("gym_id", tenant.id)
+            .eq("operator_user_id", user.id).eq("session_status", "active").limit(1);
+          if (sessionError) throw sessionError;
+          let sessionId = existing?.[0]?.id as string | undefined;
+          if (!sessionId) {
+            const { data: created, error: createError } = await supabase.from("gym_support_access_sessions")
+              .insert({ grant_id: grant.id, gym_id: tenant.id, operator_user_id: user.id,
+                session_status: "active", justification: `Open ${mode} from KRUXT Platform.`,
+                metadata: { source: "platform_tenants", mode, targetPath } })
+              .select("id").single();
+            if (createError || !created) throw createError ?? new Error("Unable to open gym support session.");
+            sessionId = created.id;
+          }
+          return buildAdminPath(tenant.id, targetPath, sessionId!);
+        },
       });
-      window.location.href = buildAdminUrlWithSession(tenant.id, targetPath, session.sessionId);
     } catch (openError) {
       setError(openError instanceof Error ? openError.message : "Unable to open gym workspace.");
     } finally {

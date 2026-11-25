@@ -1,4 +1,5 @@
 "use client";
+import { appOrigin } from "@kruxt/ui/app-urls";
 
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
@@ -97,21 +98,7 @@ function formatDateTime(value?: string | null): string {
 
 function inviteUrl(code: string): string {
   if (typeof window === "undefined") return `/join?code=${encodeURIComponent(code)}`;
-  const configuredOrigin =
-    process.env.NEXT_PUBLIC_KRUXT_WEB_URL ||
-    process.env.NEXT_PUBLIC_KRUXT_CONSUMER_WEB_URL ||
-    process.env.NEXT_PUBLIC_KRUXT_APP_URL;
-
-  if (configuredOrigin) {
-    return `${configuredOrigin.replace(/\/$/, "")}/join?code=${encodeURIComponent(code)}`;
-  }
-
-  const localOrigin = new URL(window.location.origin);
-  if (localOrigin.port === "3000" || localOrigin.port === "3100") {
-    localOrigin.port = "3200";
-  }
-
-  return `${localOrigin.toString().replace(/\/$/, "")}/join?code=${encodeURIComponent(code)}`;
+  return `${appOrigin("member")}/join?code=${encodeURIComponent(code)}`;
 }
 
 function ProfileSearchResults({

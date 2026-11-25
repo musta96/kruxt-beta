@@ -1,809 +1,407 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { PlatformOperatorRole } from "@kruxt/types";
-import { cn } from "@/lib/utils";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { usePlatformAuth } from "@/contexts/platform-auth-context";
+import { OperatorMfa } from "@/components/operator-mfa";
+import Link from "next/link";
+import {
+  loadOperatorPermissionSnapshot,
+  saveOperatorPermissionChanges,
+  type OperatorAccount,
+  type OperatorPermissionSnapshot,
+  type PermissionChange,
+} from "@/services/operator-permissions";
 
-type MatrixRole = "founder" | "ops_admin" | "support_admin" | "read_only";
-type AccessLevel = "full" | "scoped" | "none";
-type OperatorStatus = "active" | "suspended";
-
-interface OperatorAccount {
-  userId: string;
-  email: string | null;
-  displayName: string;
-  username: string | null;
-  role: PlatformOperatorRole;
-  isActive: boolean;
-  mfaRequired: boolean;
-  lastLoginAt: string | null;
-  createdAt: string;
-  overrideCount: number;
-}
-
-interface PermissionCatalogRow {
-  permission_key: string;
-  is_sensitive: boolean;
-  metadata: Record<string, unknown>;
-}
-
-interface RolePermissionRow {
-  role: MatrixRole;
-  permission_key: string;
-  is_allowed: boolean;
-  metadata: Record<string, unknown>;
-}
-
-interface OverrideRow {
-  user_id: string;
-  permission_key: string;
-  is_allowed: boolean;
-  reason: string | null;
-}
-
-interface Capability {
-  key: string;
-  group: string;
-  label: string;
-  conditions?: Partial<Record<MatrixRole, string>>;
-}
-
-interface MatrixCell {
-  level: AccessLevel;
-  condition?: string;
-}
-
-interface DraftOverride {
-  permissionKey: string;
-  value: boolean | null;
-}
-
-const ROLE_COLUMNS: Array<{ role: MatrixRole; label: string; shortLabel: string }> = [
-  { role: "founder", label: "Founder", shortLabel: "FOUNDER" },
-  { role: "ops_admin", label: "Admin", shortLabel: "ADMIN" },
-  { role: "support_admin", label: "Support", shortLabel: "SUPPORT" },
-  { role: "read_only", label: "Read-only", shortLabel: "READ-ONLY" }
+const ROLES: PlatformOperatorRole[] = [
+  "founder", "ops_admin", "support_admin", "compliance_admin", "analyst", "read_only",
 ];
+const control = "min-h-10 rounded-md border border-border bg-kruxt-panel px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+const button = control + " hover:bg-muted";
+const primary = button + " border-kruxt-platform bg-kruxt-platform text-white hover:bg-kruxt-platform/80";
+const overrideLabel = (value: boolean | null) => value === null ? "Inherit" : value ? "Allow" : "Deny";
+const defaultLabel = (value: boolean | undefined) => value === undefined ? "Not configured" : value ? "Allow" : "Deny";
 
-const CAPABILITIES: Capability[] = [
-  { key: "platform.tenants.view", group: "Tenants", label: "View tenants", conditions: { support_admin: "PII masked" } },
-  { key: "platform.tenants.onboard", group: "Tenants", label: "Onboard gym" },
-  { key: "platform.tenants.edit_identity_plan", group: "Tenants", label: "Edit tenant identity / plan" },
-  { key: "platform.tenants.suspend", group: "Tenants", label: "Suspend tenant" },
-  { key: "platform.tenants.offboard", group: "Tenants", label: "Offboard tenant (export+delete)", conditions: { ops_admin: "Solo, two-step typed-confirm guard" } },
-  { key: "platform.tenants.impersonate", group: "Tenants", label: "Impersonate / Open Admin", conditions: { support_admin: "Time-boxed 60m, logged" } },
-  { key: "platform.tenants.create_staff_invite", group: "Tenants", label: "Create gym-owner/staff profile + invite", conditions: { support_admin: "Create+invite only; no password or operator access" } },
-
-  { key: "platform.operators.view", group: "Operators", label: "View operators" },
-  { key: "platform.operators.invite_edit", group: "Operators", label: "Invite / edit operators" },
-  { key: "platform.operators.roles_matrix_edit", group: "Operators", label: "Edit roles & permission matrix" },
-  { key: "platform.operators.revoke", group: "Operators", label: "Revoke operator" },
-
-  { key: "platform.support.grants.approve", group: "Governance / Compliance", label: "Approve support-access grants", conditions: { support_admin: "Self-request only; cannot self-approve" } },
-  { key: "platform.data_releases.approve", group: "Governance / Compliance", label: "Approve data releases" },
-  { key: "platform.audit.view", group: "Governance / Compliance", label: "View Audit Log", conditions: { support_admin: "View" } },
-  { key: "platform.audit.verify_export", group: "Governance / Compliance", label: "Verify integrity / export Audit Log", conditions: { support_admin: "View-only; no export" } },
-  { key: "platform.dsar.view", group: "Governance / Compliance", label: "Handle DSAR (view)", conditions: { support_admin: "PII masked until verified" } },
-  { key: "platform.dsar.fulfill", group: "Governance / Compliance", label: "DSAR fulfill", conditions: { ops_admin: "Export + erase", support_admin: "Export only; no erase" } },
-  { key: "platform.retention.manage", group: "Governance / Compliance", label: "Edit retention / anonymization" },
-  { key: "platform.pii.unmask", group: "Governance / Compliance", label: "Unmask member PII", conditions: { ops_admin: "Logged", support_admin: "Logged + ticket/verification required" } },
-
-  { key: "platform.flags.view", group: "Feature flags & entitlements", label: "View flags" },
-  { key: "platform.flags.tenant_override", group: "Feature flags & entitlements", label: "Toggle per-tenant override/entitlement" },
-  { key: "platform.flags.global_toggle", group: "Feature flags & entitlements", label: "Toggle global flag", conditions: { ops_admin: "Typed-confirm + blast-radius warning" } },
-  { key: "platform.flags.rollout", group: "Feature flags & entitlements", label: "Staged rollout %" },
-  { key: "platform.entitlements.templates.manage", group: "Feature flags & entitlements", label: "Manage plan/entitlement templates" },
-
-  { key: "platform.revenue.view", group: "Revenue / Billing", label: "View partner/platform revenue", conditions: { support_admin: "No dollar amounts; tier/plan only" } },
-  { key: "platform.revenue.settle", group: "Revenue / Billing", label: "Recognize / settle partner revenue" },
-  { key: "platform.tenant_billing.retry", group: "Revenue / Billing", label: "Tenant billing: RETRY payment", conditions: { support_admin: "Retry only" } },
-  { key: "platform.tenant_billing.refund_credit", group: "Revenue / Billing", label: "Tenant billing: REFUND / credit" },
-
-  { key: "platform.marketplace.apps.review", group: "Marketplace / Add-ons", label: "Review / approve apps" },
-  { key: "platform.marketplace.pricing.manage", group: "Marketplace / Add-ons", label: "Create add-on / set pricing" },
-
-  { key: "platform.webhooks.api_keys.manage", group: "System", label: "Webhooks / API keys", conditions: { ops_admin: "View + rotate; no create/delete" } },
-  { key: "platform.system_health.view", group: "System", label: "System health / incidents", conditions: { read_only: "View" } },
-
-  { key: "platform.settings.identity_security.edit", group: "Platform Settings", label: "Edit platform identity / security" },
-  { key: "platform.settings.legal_registry.edit", group: "Platform Settings", label: "Edit Legal & Compliance registry" },
-  { key: "platform.settings.danger_zone", group: "Platform Settings", label: "Danger Zone (maintenance / purge)" }
-];
-
-const roleStyles: Record<MatrixRole, string> = {
-  founder: "border-kruxt-platform/40 bg-kruxt-platform/15 text-kruxt-platform",
-  ops_admin: "border-kruxt-accent/40 bg-kruxt-accent/15 text-kruxt-accent",
-  support_admin: "border-kruxt-warning/40 bg-kruxt-warning/15 text-kruxt-warning",
-  read_only: "border-border bg-muted text-muted-foreground"
-};
-
-const statusStyles: Record<OperatorStatus, string> = {
-  active: "bg-kruxt-success",
-  suspended: "bg-kruxt-danger"
-};
-
-function operatorStatus(operator: OperatorAccount): OperatorStatus {
-  return operator.isActive ? "active" : "suspended";
+function safeError(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
-function roleLabel(role: PlatformOperatorRole): string {
-  if (role === "founder") return "Founder";
-  if (role === "ops_admin") return "Admin";
-  if (role === "support_admin") return "Support";
-  if (role === "read_only") return "Read-only";
-  if (role === "compliance_admin") return "Compliance";
-  return "Analyst";
-}
-
-function matrixRoleFor(role: PlatformOperatorRole): MatrixRole {
-  if (role === "founder") return "founder";
-  if (role === "support_admin") return "support_admin";
-  if (role === "read_only" || role === "analyst") return "read_only";
-  return "ops_admin";
-}
-
-function initials(name: string, email: string | null): string {
-  const source = name.trim() || email?.split("@")[0] || "?";
-  const parts = source.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return source.slice(0, 2).toUpperCase();
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return "Never";
-  return new Date(value).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
-function groupCapabilities(capabilities: Capability[]): Array<[string, Capability[]]> {
-  const groups = new Map<string, Capability[]>();
-  for (const capability of capabilities) {
-    groups.set(capability.group, [...(groups.get(capability.group) ?? []), capability]);
-  }
-  return Array.from(groups.entries());
-}
-
-function isScoped(metadata: Record<string, unknown>, condition?: string): boolean {
-  return Boolean(condition || metadata.scope || metadata.piiPolicy);
-}
-
-function buildMatrix(
-  rolePermissions: RolePermissionRow[],
-  catalog: Map<string, PermissionCatalogRow>
-): Map<string, Map<MatrixRole, MatrixCell>> {
-  const matrix = new Map<string, Map<MatrixRole, MatrixCell>>();
-  for (const capability of CAPABILITIES) {
-    const roleMap = new Map<MatrixRole, MatrixCell>();
-    for (const { role } of ROLE_COLUMNS) {
-      const catalogRow = catalog.get(capability.key);
-      const permission = rolePermissions.find((row) => row.role === role && row.permission_key === capability.key);
-      const metadata = permission?.metadata ?? catalogRow?.metadata ?? {};
-      const condition = capability.conditions?.[role] ?? String(metadata.scope ?? "");
-      const allowed = Boolean(permission?.is_allowed);
-      roleMap.set(role, {
-        level: allowed ? (isScoped(metadata, condition) ? "scoped" : "full") : "none",
-        condition: condition || undefined
-      });
-    }
-    matrix.set(capability.key, roleMap);
-  }
-  return matrix;
-}
-
-function accessSymbol(level: AccessLevel): string {
-  if (level === "full") return "●";
-  if (level === "scoped") return "◐";
-  return "○";
-}
-
-function accessLabel(level: AccessLevel): string {
-  if (level === "full") return "Full";
-  if (level === "scoped") return "Scoped";
-  return "None";
-}
-
-function accessClass(level: AccessLevel): string {
-  if (level === "full") return "border-kruxt-success/40 bg-kruxt-success/10 text-kruxt-success";
-  if (level === "scoped") return "border-kruxt-warning/40 bg-kruxt-warning/10 text-kruxt-warning";
-  return "border-border bg-kruxt-panel text-muted-foreground";
-}
-
-function overrideKey(userId: string, permissionKey: string): string {
-  return `${userId}:${permissionKey}`;
+// Native dialog follows the navigation shell's focus restoration and scroll lock pattern.
+function PermissionDialog({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const element = dialog.current!;
+    const trigger = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    element.showModal();
+    document.body.style.overflow = "hidden";
+    return () => {
+      element.close();
+      document.body.style.overflow = overflow;
+      if (trigger?.isConnected) trigger.focus();
+    };
+  }, []);
+  return (
+    <dialog ref={dialog} aria-labelledby="operator-title"
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      className="fixed inset-0 m-auto max-h-[100dvh] w-full max-w-3xl overflow-y-auto border border-border bg-kruxt-surface p-0 text-foreground backdrop:bg-black/60 sm:max-h-[90dvh] sm:rounded-lg">
+      {children}
+    </dialog>
+  );
 }
 
 export default function OperatorsPage() {
-  const { supabase, platformRole } = usePlatformAuth();
-  const [operators, setOperators] = useState<OperatorAccount[]>([]);
-  const [catalog, setCatalog] = useState<Map<string, PermissionCatalogRow>>(new Map());
-  const [rolePermissions, setRolePermissions] = useState<RolePermissionRow[]>([]);
-  const [overrides, setOverrides] = useState<OverrideRow[]>([]);
-  const [selectedOperatorId, setSelectedOperatorId] = useState<string | null>(null);
-  const [draftOverrides, setDraftOverrides] = useState<Record<string, DraftOverride>>({});
-  const [changeReason, setChangeReason] = useState("");
+  const { supabase, user, session, platformRole, loading } = usePlatformAuth();
+  const identity = useRef({ token: session?.access_token, revision: 0 });
+  if (identity.current.token !== session?.access_token) {
+    identity.current = { token: session?.access_token, revision: identity.current.revision + 1 };
+  }
+  if (loading || !user || !platformRole) return <p role="status">Checking operator access...</p>;
+  // A changed viewer, credential or role gets a fresh cache and invalidates in-flight UI work.
+  return <OperatorWorkspace key={JSON.stringify([user.id, identity.current.revision, platformRole])}
+    client={supabase} viewerId={user.id} viewerRole={platformRole} />;
+}
+
+function OperatorWorkspace({ client, viewerId, viewerRole }: {
+  client: SupabaseClient; viewerId: string; viewerRole: PlatformOperatorRole;
+}) {
+  const [snapshot, setSnapshot] = useState<OperatorPermissionSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [catalogRole, setCatalogRole] = useState<PlatformOperatorRole>("founder");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Record<string, PermissionChange>>({});
+  const [reason, setReason] = useState("");
+  const [mode, setMode] = useState<"edit" | "review" | "discard">("edit");
+  const [confirmed, setConfirmed] = useState(false);
+  const [pendingTarget, setPendingTarget] = useState<string | null>(null);
+  const [permissionQuery, setPermissionQuery] = useState("");
+  const mounted = useRef(false);
+  const busy = useRef(false);
+  const revision = useRef(0);
+  const editorFocus = useRef<HTMLButtonElement>(null);
+  const changes = Object.values(draft);
+  const dirty = changes.length > 0 || reason.trim().length > 0;
+  const selected = snapshot?.operators.find((operator) => operator.userId === selectedId);
+  const viewer = snapshot?.operators.find((operator) => operator.userId === viewerId);
+  const canEdit = viewerRole === "founder" && viewer?.role === "founder" && viewer.isActive && selected?.role !== "founder";
+  const catalog = useMemo(() => (snapshot?.catalog ?? []).filter((row) => row.is_active), [snapshot]);
+  const roleDefaults = useMemo(() => new Map((snapshot?.rolePermissions ?? []).map((row) =>
+    [JSON.stringify([row.role, row.permission_key]), row.is_allowed])), [snapshot]);
+  const overrides = useMemo(() => new Map((snapshot?.overrides ?? []).map((row) =>
+    [JSON.stringify([row.user_id, row.permission_key]), row.is_allowed])), [snapshot]);
+  const baseline = (role: PlatformOperatorRole, key: string) => roleDefaults.get(JSON.stringify([role, key]));
+  const persisted = (userId: string, key: string) => overrides.get(JSON.stringify([userId, key])) ?? null;
+  const visibleOperators = (snapshot?.operators ?? []).filter((operator) =>
+    (roleFilter === "all" || operator.role === roleFilter) &&
+    [operator.displayName, operator.email, operator.username, operator.userId].some((value) =>
+      value?.toLowerCase().includes(query.trim().toLowerCase())));
+  const visiblePermissions = catalog.filter((row) =>
+    [row.label, row.permission_key, row.category].some((value) => value.toLowerCase().includes(permissionQuery.trim().toLowerCase())));
 
-  const canEditMatrix = platformRole === "founder";
-  const groupedCapabilities = useMemo(() => groupCapabilities(CAPABILITIES), []);
-  const catalogMap = catalog;
-  const matrix = useMemo(() => buildMatrix(rolePermissions, catalogMap), [catalogMap, rolePermissions]);
-  const selectedOperator = operators.find((operator) => operator.userId === selectedOperatorId) ?? null;
-
-  const overrideMap = useMemo(() => {
-    const map = new Map<string, OverrideRow>();
-    for (const override of overrides) {
-      map.set(overrideKey(override.user_id, override.permission_key), override);
-    }
-    return map;
-  }, [overrides]);
-
-  const effectiveDraftCount = Object.keys(draftOverrides).length;
-  const sensitivePermissionCount = Array.from(catalog.values()).filter((row) => row.is_sensitive).length;
-  const activeCount = operators.filter((operator) => operator.isActive).length;
-  const mfaGaps = operators.filter((operator) => operator.isActive && !operator.mfaRequired && matrixRoleFor(operator.role) !== "read_only").length;
-
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function load() {
+  async function reload() {
+    const request = ++revision.current;
     setLoading(true);
     setError(null);
+    setSnapshot(null);
     try {
-      const [
-        operatorResponse,
-        catalogResponse,
-        rolePermissionResponse,
-        overrideResponse
-      ] = await Promise.all([
-        supabase.rpc("platform_list_operator_accounts"),
-        supabase
-          .from("platform_permission_catalog")
-          .select("permission_key,is_sensitive,metadata")
-          .in("permission_key", CAPABILITIES.map((capability) => capability.key)),
-        supabase
-          .from("platform_role_permissions")
-          .select("role,permission_key,is_allowed,metadata")
-          .in("role", ROLE_COLUMNS.map((column) => column.role))
-          .in("permission_key", CAPABILITIES.map((capability) => capability.key)),
-        supabase
-          .from("platform_operator_permission_overrides")
-          .select("user_id,permission_key,is_allowed,reason")
-          .in("permission_key", CAPABILITIES.map((capability) => capability.key))
-      ]);
-
-      if (operatorResponse.error) throw operatorResponse.error;
-      if (catalogResponse.error) throw catalogResponse.error;
-      if (rolePermissionResponse.error) throw rolePermissionResponse.error;
-      if (overrideResponse.error) throw overrideResponse.error;
-
-      setOperators(
-        ((operatorResponse.data ?? []) as Array<{
-          user_id: string;
-          email: string | null;
-          display_name: string | null;
-          username: string | null;
-          role: PlatformOperatorRole;
-          is_active: boolean;
-          mfa_required: boolean;
-          last_login_at: string | null;
-          created_at: string;
-          override_count: number;
-        }>).map((row) => ({
-          userId: row.user_id,
-          email: row.email,
-          displayName: row.display_name ?? row.email ?? row.user_id.slice(0, 8),
-          username: row.username,
-          role: row.role,
-          isActive: row.is_active,
-          mfaRequired: row.mfa_required,
-          lastLoginAt: row.last_login_at,
-          createdAt: row.created_at,
-          overrideCount: row.override_count ?? 0
-        }))
-      );
-
-      setCatalog(
-        new Map(
-          ((catalogResponse.data ?? []) as PermissionCatalogRow[]).map((row) => [row.permission_key, row])
-        )
-      );
-      setRolePermissions((rolePermissionResponse.data ?? []) as RolePermissionRow[]);
-      setOverrides((overrideResponse.data ?? []) as OverrideRow[]);
+      const next = await loadOperatorPermissionSnapshot(client, viewerId);
+      if (!mounted.current || request !== revision.current) return;
+      setSnapshot(next);
+      return true;
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load operators.");
+      if (mounted.current && request === revision.current) {
+        setError(safeError(loadError, "Operator permissions could not be loaded. Retry."));
+      }
     } finally {
-      setLoading(false);
+      if (mounted.current && request === revision.current) setLoading(false);
     }
   }
 
-  function openDrawer(operator: OperatorAccount) {
-    setSelectedOperatorId(operator.userId);
-    setDraftOverrides({});
-    setChangeReason("");
-    setSuccess(null);
+  useEffect(() => {
+    mounted.current = true;
+    void reload();
+    return () => { mounted.current = false; revision.current += 1; };
+    // The parent remounts this workspace whenever viewer identity or credentials change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, viewerId]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", protect);
+    return () => window.removeEventListener("beforeunload", protect);
+  }, [dirty]);
+
+  useEffect(() => {
+    if (selected && !loading) editorFocus.current?.focus();
+  }, [mode, selectedId, loading, selected]);
+
+  function resetEditor(target: string | null) {
+    setDraft({});
+    setReason("");
+    setMode("edit");
+    setConfirmed(false);
+    setPermissionQuery("");
+    setSelectedId(target);
     setError(null);
   }
 
-  function closeDrawer() {
-    setSelectedOperatorId(null);
-    setDraftOverrides({});
-    setChangeReason("");
-  }
-
-  function readOverrideValue(operator: OperatorAccount, permissionKey: string): boolean | null {
-    const draft = draftOverrides[overrideKey(operator.userId, permissionKey)];
-    if (draft) return draft.value;
-    const persisted = overrideMap.get(overrideKey(operator.userId, permissionKey));
-    return persisted ? persisted.is_allowed : null;
-  }
-
-  function setDraftOverride(operator: OperatorAccount, permissionKey: string, value: boolean | null) {
-    const key = overrideKey(operator.userId, permissionKey);
-    const persisted = overrideMap.get(key);
-    const persistedValue = persisted ? persisted.is_allowed : null;
-
-    setDraftOverrides((current) => {
-      const next = { ...current };
-      if (persistedValue === value) {
-        delete next[key];
-      } else {
-        next[key] = { permissionKey, value };
-      }
-      return next;
-    });
-    setSuccess(null);
-  }
-
-  async function saveOverrides() {
-    if (!selectedOperator) return;
-    const changes = Object.values(draftOverrides);
-    if (changes.length === 0) return;
-    if (!changeReason.trim()) {
-      setError("Add a reason before saving permission changes.");
+  function requestTarget(target: string | null) {
+    if (busy.current) return;
+    if (dirty) {
+      setPendingTarget(target);
+      setMode("discard");
       return;
     }
+    resetEditor(target);
+  }
 
+  function changeOverride(operator: OperatorAccount, key: string, value: boolean | null) {
+    if (busy.current || !canEdit || mode !== "edit") return;
+    const previousValue = persisted(operator.userId, key);
+    setDraft((current) => {
+      const next = { ...current };
+      if (previousValue === value) delete next[key];
+      else next[key] = { permissionKey: key, value, previousValue };
+      return next;
+    });
+    setNotice(null);
+    setConfirmed(false);
+  }
+
+  async function save() {
+    if (busy.current || !canEdit || !selected || mode !== "review" || !confirmed || !reason.trim() || !changes.length) return;
+    busy.current = true;
     setSaving(true);
     setError(null);
-    setSuccess(null);
+    setNotice(null);
+    const request = revision.current;
+    let result;
     try {
-      for (const change of changes) {
-        if (change.value === null) {
-          const { error: clearError } = await supabase.rpc("platform_clear_operator_permission_override", {
-            p_user_id: selectedOperator.userId,
-            p_permission_key: change.permissionKey,
-            p_reason: changeReason.trim()
-          });
-          if (clearError) throw clearError;
-        } else {
-          const { error: setErrorResponse } = await supabase.rpc("platform_set_operator_permission_override", {
-            p_user_id: selectedOperator.userId,
-            p_permission_key: change.permissionKey,
-            p_is_allowed: change.value,
-            p_reason: changeReason.trim()
-          });
-          if (setErrorResponse) throw setErrorResponse;
-        }
-      }
-
-      setSuccess(`${changes.length} permission ${changes.length === 1 ? "change" : "changes"} saved and audited.`);
-      setDraftOverrides({});
-      setChangeReason("");
-      await load();
+      result = await saveOperatorPermissionChanges(client, {
+        viewerId, targetUserId: selected.userId, reason: reason.trim(),
+        changes: changes.map((change) => ({ ...change })),
+      });
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to save permission changes.");
-    } finally {
-      setSaving(false);
+      if (mounted.current && request === revision.current) {
+        setError(safeError(saveError, "Changes could not be submitted. Verify your founder session and required MFA, then reload and review."));
+        setMode("edit");
+        setConfirmed(false);
+      }
+      if (mounted.current) setSaving(false);
+      busy.current = false;
+      return;
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <Header />
-        <div className="rounded-card border border-border bg-kruxt-surface p-8 text-sm text-muted-foreground">
-          Loading operator permissions...
-        </div>
-      </div>
-    );
+    if (!mounted.current || request !== revision.current) { busy.current = false; return; }
+    // RPCs commit independently. A returned outcome always consumes this draft.
+    setDraft({});
+    setReason("");
+    setConfirmed(false);
+    setMode("edit");
+    setNotice(`${result.confirmedKeys.length} confirmed; ${result.unconfirmedKeys.length} unconfirmed. ` +
+      (result.outcome === "complete"
+        ? "Reloading authoritative permissions."
+        : "Unconfirmed changes may or may not have applied. Verify your founder session and required MFA, then reload and review before retrying."));
+    // Reload owns its error: a failed read must not be reported as a failed mutation.
+    const reloaded = await reload();
+    if (mounted.current) {
+      setSaving(false);
+      setNotice((current) => {
+        if (!current) return null;
+        return reloaded
+          ? current.replace("Reloading authoritative permissions.", "Authoritative permissions reloaded.")
+          : current.replace("Reloading authoritative permissions.", "") + " Authoritative reload failed. Current access is unavailable; reload before continuing.";
+      });
+    }
+    busy.current = false;
   }
 
   return (
-    <div className="space-y-6">
-      <Header />
-
-      {error && (
-        <div className="rounded-card border border-kruxt-danger/30 bg-kruxt-danger/10 px-4 py-3 text-sm text-kruxt-danger">
-          {error}
-        </div>
+    <div className="min-w-0 space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Operators</h1>
+        <button type="button" className={button} disabled={loading || saving || dirty} onClick={() => { setNotice(null); void reload(); }}>
+          {loading ? "Loading..." : "Reload permissions"}
+        </button>
+      </header>
+      <p className="max-w-prose text-sm text-muted-foreground">
+        Some access controls still depend on built-in roles. Catalog changes apply only to controls that check the matching permission key.
+      </p>
+      {notice && <p role="status" className="border-y border-border py-3 text-sm">{notice}</p>}
+      {error && <p role="alert" className="border-y border-kruxt-danger/40 py-3 text-sm text-kruxt-danger">{error} Reload permissions to retry.</p>}
+      {viewerRole === "founder" && viewer?.role === "founder" && viewer.isActive && (
+        <section aria-labelledby="founder-verification-heading" className="space-y-3 border-t border-border pt-4">
+          <h2 id="founder-verification-heading" className="text-sm font-semibold">Founder verification</h2>
+          <p className="text-sm text-muted-foreground">Verify MFA before editing. Verification refreshes your session and clears unsaved drafts.</p>
+          <OperatorMfa client={client} viewerId={viewerId} />
+        </section>
       )}
-      {success && (
-        <div className="rounded-card border border-kruxt-success/30 bg-kruxt-success/10 px-4 py-3 text-sm text-kruxt-success">
-          {success}
+      <section aria-labelledby="operators-heading" className="border-y border-border">
+        <div className="flex flex-wrap items-end gap-3 py-4">
+          <h2 id="operators-heading" className="sr-only">Operator accounts</h2>
+          <label className="min-w-0 flex-1 text-sm">Find operator
+            <input type="search" value={query} onChange={(event) => setQuery(event.target.value)}
+              placeholder="Name, email or account ID" className={control + " mt-1 w-full"} />
+          </label>
+          <label className="text-sm">Built-in role
+            <select aria-label="Built-in role" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className={control + " mt-1 block w-full"}>
+              <option value="all">All roles</option>
+              {ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+            </select>
+          </label>
         </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <Stat label="Total Operators" value={operators.length} />
-        <Stat label="Active" value={activeCount} tone="success" />
-        <Stat label="Permission Overrides" value={overrides.length} tone="platform" />
-        <Stat label="MFA Gaps" value={mfaGaps} tone={mfaGaps > 0 ? "danger" : "success"} />
-      </div>
-
-      <section className="rounded-card border border-border bg-kruxt-surface p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-kruxt-headline text-sm font-semibold text-foreground">Role Matrix v2</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Legend: ● full · ◐ scoped · ○ none. Built-in roles are read-only; custom cells are per-operator overrides.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-wider">
-            <span className="rounded-badge border border-border bg-kruxt-panel px-2 py-1 text-muted-foreground">
-              {sensitivePermissionCount} MFA-sensitive cells
-            </span>
-            <span className="rounded-badge border border-kruxt-warning/30 bg-kruxt-warning/10 px-2 py-1 text-kruxt-warning">
-              PII masked until verified
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[860px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th className="w-[36%] px-3 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Capability</th>
-                {ROLE_COLUMNS.map((column) => (
-                  <th key={column.role} className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {column.shortLabel}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {groupedCapabilities.map(([group, capabilities]) => (
-                <Fragment key={group}>
-                  <tr key={group} className="border-b border-border/50 bg-kruxt-panel/60">
-                    <td colSpan={ROLE_COLUMNS.length + 1} className="px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-kruxt-platform">
-                      {group}
-                    </td>
-                  </tr>
-                  {capabilities.map((capability) => (
-                    <tr key={capability.key} className="border-b border-border/40 last:border-0 hover:bg-kruxt-panel/40">
-                      <td className="px-3 py-2.5">
-                        <div className="font-medium text-foreground">{capability.label}</div>
-                        <div className="font-kruxt-mono text-[10px] text-muted-foreground">{capability.key}</div>
-                      </td>
-                      {ROLE_COLUMNS.map((column) => {
-                        const cell = matrix.get(capability.key)?.get(column.role) ?? { level: "none" as const };
-                        return (
-                          <td key={`${capability.key}:${column.role}`} className="px-3 py-2.5 text-center">
-                            <span
-                              title={cell.condition ?? accessLabel(cell.level)}
-                              className={cn("inline-flex min-w-10 justify-center rounded-md border px-2 py-1 font-kruxt-mono text-sm", accessClass(cell.level))}
-                            >
-                              {accessSymbol(cell.level)}
-                            </span>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {loading ? <p role="status" className="py-8 text-sm text-muted-foreground">Loading operator accounts and permission catalog...</p>
+          : !snapshot ? <p className="py-6 text-sm">No verified snapshot available. Reload permissions to continue.</p>
+          : !visibleOperators.length ? <p className="py-6 text-sm">No operators match the current filters.</p>
+          : <ul className="divide-y divide-border">
+            {visibleOperators.map((operator) => (
+              <li key={operator.userId}>
+                <button type="button" onClick={() => requestTarget(operator.userId)}
+                  className="grid min-h-20 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3 text-left hover:bg-kruxt-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+                  <span className="min-w-0">
+                    <span className="block break-words text-sm font-semibold">{operator.displayName}</span>
+                    <span className="block break-all text-xs text-muted-foreground">{operator.email ?? operator.username ?? operator.userId}</span>
+                    <span className="mt-1 block break-all text-xs text-muted-foreground">{operator.role}</span>
+                  </span>
+                  <span className="text-right text-xs">
+                    <span className={operator.isActive ? "text-kruxt-success" : "text-kruxt-danger"}>{operator.isActive ? "Active" : "Inactive"}</span>
+                    <span className="mt-1 block text-muted-foreground">{operator.overrideCount} overrides</span>
+                    <span className="mt-1 block text-kruxt-platform">View permissions</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>}
       </section>
-
-      <section className="rounded-card border border-border bg-kruxt-surface">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="font-kruxt-headline text-sm font-semibold text-foreground">Operators</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Operator</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Role</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">MFA</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Last Login</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Overrides</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {operators.map((operator) => {
-                const role = matrixRoleFor(operator.role);
-                const status = operatorStatus(operator);
-                return (
-                  <tr key={operator.userId} className="border-b border-border/50 last:border-0 transition-colors hover:bg-kruxt-panel/50">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-kruxt-panel text-xs font-bold text-foreground">
-                          {initials(operator.displayName, operator.email)}
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">{operator.displayName}</p>
-                          <p className="text-xs text-muted-foreground">{operator.email ?? operator.username ?? operator.userId.slice(0, 8)}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex rounded-badge border px-2 py-0.5 text-[10px] font-bold uppercase", roleStyles[role])}>
-                        {roleLabel(operator.role)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className={cn("h-2 w-2 rounded-full", statusStyles[status])} />
-                        <span className="capitalize text-foreground">{status}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={cn(
-                        "inline-flex rounded-badge px-2 py-0.5 text-[10px] font-bold uppercase",
-                        operator.mfaRequired ? "bg-kruxt-success/15 text-kruxt-success" : "bg-kruxt-danger/15 text-kruxt-danger"
-                      )}>
-                        {operator.mfaRequired ? "Required" : "Gap"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{formatDateTime(operator.lastLoginAt)}</td>
-                    <td className="px-4 py-3 text-right font-kruxt-mono text-foreground">
-                      {operator.overrideCount || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => openDrawer(operator)}
-                        className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-kruxt-panel"
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      <section aria-labelledby="availability-heading" className="space-y-2 text-sm">
+        <h2 id="availability-heading" className="font-semibold">Availability</h2>
+        <p className="text-muted-foreground">Operator invitations are unavailable here: no invitation RPC is connected.</p>
+        <Link href="/operator-role-profiles" className="inline-block underline underline-offset-4">Custom role profiles and resolved access</Link>
       </section>
+      {snapshot && <details className="border-y border-border py-4">
+        <summary className="cursor-pointer text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Built-in role defaults</summary>
+        <label className="mt-4 block text-sm">Inspect built-in role
+          <select aria-label="Inspect built-in role" value={catalogRole} onChange={(event) => setCatalogRole(event.target.value as PlatformOperatorRole)} className={control + " ml-0 mt-1 block sm:ml-3 sm:inline-block"}>
+            {ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+          </select>
+        </label>
+        <p className="mt-3 text-xs text-muted-foreground">Read-only catalog defaults. Not configured is distinct from an explicit deny.</p>
+        {!catalog.length && <p className="py-4 text-sm">No active permissions are configured.</p>}
+        <ul className="mt-3 divide-y divide-border">
+          {catalog.map((row) => <li key={row.permission_key} className="flex items-start justify-between gap-3 py-3 text-sm">
+            <span className="min-w-0"><span className="block font-medium">{row.label}</span>
+              <span className="block text-xs text-muted-foreground">{row.category}</span>
+              <code className="block break-all text-xs text-muted-foreground">{row.permission_key}</code></span>
+            <span className="shrink-0">{defaultLabel(baseline(catalogRole, row.permission_key))}</span>
+          </li>)}
+        </ul>
+      </details>}
 
-      {selectedOperator && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60">
-          <aside className="h-full w-full max-w-3xl overflow-y-auto border-l border-border bg-kruxt-bg shadow-2xl">
-            <div className="sticky top-0 z-10 border-b border-border bg-kruxt-bg/95 px-6 py-4 backdrop-blur">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-kruxt-platform">Operator Permission Matrix</p>
-                  <h2 className="mt-1 font-kruxt-headline text-xl font-bold text-foreground">{selectedOperator.displayName}</h2>
-                  <p className="text-sm text-muted-foreground">{selectedOperator.email ?? selectedOperator.userId}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeDrawer}
-                  className="rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-kruxt-panel hover:text-foreground"
-                >
-                  Close
+      {selectedId && selected && <PermissionDialog onClose={() => requestTarget(null)}>
+        <header className="flex items-start justify-between gap-3 border-b border-border p-4 sm:p-6">
+          <div className="min-w-0">
+            <h2 id="operator-title" className="break-words text-lg font-semibold">{selected.displayName}</h2>
+            <p className="break-all text-sm text-muted-foreground">{selected.email ?? selected.userId}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{selected.role} / {selected.isActive ? "Active" : "Inactive"}</p>
+          </div>
+          <button ref={editorFocus} type="button" className={button} disabled={saving} onClick={() => requestTarget(null)}>Close</button>
+        </header>
+        <div className="space-y-4 p-4 sm:p-6">
+          {error && <p role="alert" className="text-sm text-kruxt-danger">{error}</p>}
+          {notice && <p role="status" className="text-sm">{notice}</p>}
+          {mode === "discard" ? (
+            <section aria-labelledby="discard-title" className="space-y-4">
+              <h3 id="discard-title" className="font-semibold">Discard unsaved changes?</h3>
+              <p className="text-sm text-muted-foreground">Your permission draft and reason have not been submitted.</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={primary} onClick={() => setMode("edit")}>Keep editing</button>
+                <button type="button" className={button} onClick={() => resetEditor(pendingTarget)}>Discard changes</button>
+              </div>
+            </section>
+          ) : mode === "review" ? (
+            <section aria-labelledby="review-title" className="space-y-4">
+              <h3 id="review-title" className="font-semibold">Review permission changes</h3>
+              <p className="break-words text-sm"><strong>Reason:</strong> {reason}</p>
+              <ul className="divide-y divide-border">
+                {changes.map((change) => <li key={change.permissionKey} className="py-3 text-sm">
+                  <span className="block font-medium">{catalog.find((row) => row.permission_key === change.permissionKey)?.label ?? change.permissionKey}</span>
+                  <code className="block break-all text-xs text-muted-foreground">{change.permissionKey}</code>
+                  <span className="mt-1 block">{overrideLabel(change.previousValue)} to {overrideLabel(change.value)}</span>
+                </li>)}
+              </ul>
+              <p className="text-sm text-muted-foreground">Changes are submitted independently and can be partially confirmed. Required MFA must be verified by the server.</p>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" checked={confirmed} disabled={saving} onChange={(event) => setConfirmed(event.target.checked)} className="mt-1 h-4 w-4 accent-kruxt-platform" />
+                <span>I confirm these {changes.length} changes for {selected.displayName}.</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={button} disabled={saving} onClick={() => { setMode("edit"); setConfirmed(false); }}>Back to editing</button>
+                <button type="button" className={primary} disabled={saving || !confirmed || !canEdit} onClick={() => void save()}>
+                  {saving ? "Submitting and reloading..." : "Confirm permission changes"}
                 </button>
               </div>
-            </div>
-
-            <div className="space-y-5 px-6 py-5">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <DrawerMetric label="Base role" value={roleLabel(selectedOperator.role)} />
-                <DrawerMetric label="Custom overrides" value={String(selectedOperator.overrideCount)} />
-                <DrawerMetric label="MFA rule" value={selectedOperator.mfaRequired ? "Required" : "Gap"} danger={!selectedOperator.mfaRequired} />
-              </div>
-
-              {selectedOperator.role === "founder" && (
-                <div className="rounded-card border border-kruxt-platform/30 bg-kruxt-platform/10 px-4 py-3 text-sm text-kruxt-platform">
-                  Founder permissions are intentionally non-editable and always full.
-                </div>
-              )}
-
-              {!canEditMatrix && (
-                <div className="rounded-card border border-kruxt-warning/30 bg-kruxt-warning/10 px-4 py-3 text-sm text-kruxt-warning">
-                  Your role can view this matrix but cannot save permission changes.
-                </div>
-              )}
-
-              <div className="rounded-card border border-border bg-kruxt-surface p-4">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 className="font-kruxt-headline text-sm font-semibold text-foreground">Custom Overrides</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Built-in role chips are read-only. Toggle Custom to override this operator. Save writes one Audit Log entry per changed cell.
-                    </p>
-                  </div>
-                  <span className="rounded-badge bg-kruxt-platform/15 px-2 py-1 text-[10px] font-bold uppercase text-kruxt-platform">
-                    {effectiveDraftCount} pending
-                  </span>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left">
-                        <th className="w-[38%] px-3 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Capability</th>
-                        <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Base</th>
-                        <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Custom</th>
-                        <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Condition</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {groupedCapabilities.map(([group, capabilities]) => (
-                        <Fragment key={`${group}:drawer-fragment`}>
-                          <tr key={`${group}:drawer`} className="border-b border-border/50 bg-kruxt-panel/60">
-                            <td colSpan={4} className="px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-kruxt-platform">
-                              {group}
-                            </td>
-                          </tr>
-                          {capabilities.map((capability) => {
-                            const baseRole = matrixRoleFor(selectedOperator.role);
-                            const base = matrix.get(capability.key)?.get(baseRole) ?? { level: "none" as const };
-                            const customValue = readOverrideValue(selectedOperator, capability.key);
-                            const persistedOverride = overrideMap.get(overrideKey(selectedOperator.userId, capability.key));
-                            const disabled = selectedOperator.role === "founder" || !canEditMatrix || saving;
-                            return (
-                              <tr key={`${selectedOperator.userId}:${capability.key}`} className="border-b border-border/40 last:border-0">
-                                <td className="px-3 py-2.5">
-                                  <div className="font-medium text-foreground">{capability.label}</div>
-                                  <div className="font-kruxt-mono text-[10px] text-muted-foreground">{capability.key}</div>
-                                </td>
-                                <td className="px-3 py-2.5 text-center">
-                                  <span
-                                    title={base.condition ?? accessLabel(base.level)}
-                                    className={cn("inline-flex min-w-10 justify-center rounded-md border px-2 py-1 font-kruxt-mono text-sm", accessClass(base.level))}
-                                  >
-                                    {accessSymbol(base.level)}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-2.5">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <button
-                                      type="button"
-                                      disabled={disabled}
-                                      onClick={() => setDraftOverride(selectedOperator, capability.key, true)}
-                                      className={cn(
-                                        "rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors disabled:opacity-40",
-                                        customValue === true ? "border-kruxt-success/40 bg-kruxt-success/15 text-kruxt-success" : "border-border text-muted-foreground hover:bg-kruxt-panel"
-                                      )}
-                                    >
-                                      Allow
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={disabled}
-                                      onClick={() => setDraftOverride(selectedOperator, capability.key, false)}
-                                      className={cn(
-                                        "rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors disabled:opacity-40",
-                                        customValue === false ? "border-kruxt-danger/40 bg-kruxt-danger/15 text-kruxt-danger" : "border-border text-muted-foreground hover:bg-kruxt-panel"
-                                      )}
-                                    >
-                                      Deny
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={disabled || !persistedOverride}
-                                      onClick={() => setDraftOverride(selectedOperator, capability.key, null)}
-                                      className="rounded-md border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-kruxt-panel disabled:opacity-30"
-                                    >
-                                      Base
-                                    </button>
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                                  {base.condition ?? (catalog.get(capability.key)?.is_sensitive ? "MFA required for write/danger/money access" : "—")}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="rounded-card border border-border bg-kruxt-surface p-4">
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Audit reason</label>
-                <textarea
-                  value={changeReason}
-                  onChange={(event) => setChangeReason(event.target.value)}
-                  rows={3}
-                  placeholder="Required before saving. Example: temporary support escalation for verified ticket KRX-123."
-                  className="w-full rounded-lg border border-border bg-kruxt-panel px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-kruxt-platform focus:outline-none focus:ring-1 focus:ring-kruxt-platform/40"
-                />
-                <div className="mt-3 flex flex-wrap justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDraftOverrides({})}
-                    disabled={saving || effectiveDraftCount === 0}
-                    className="rounded-md border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-kruxt-panel disabled:opacity-40"
-                  >
-                    Clear pending
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void saveOverrides()}
-                    disabled={saving || effectiveDraftCount === 0 || selectedOperator.role === "founder" || !canEditMatrix}
-                    className="rounded-button bg-kruxt-platform px-4 py-2 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-40"
-                  >
-                    {saving ? "Saving..." : `Save ${effectiveDraftCount || ""} changes`}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </aside>
+            </section>
+          ) : (
+            <>
+              <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                <div><dt className="text-muted-foreground">MFA policy</dt><dd>{selected.mfaRequired ? "Required" : "Not required"} (not enrollment status)</dd></div>
+                <div><dt className="text-muted-foreground">Last login</dt><dd>{selected.lastLoginAt ? new Date(selected.lastLoginAt).toLocaleString() : "No login recorded"}</dd></div>
+              </dl>
+              {selected.role === "founder" ? <p className="text-sm text-muted-foreground">Founder overrides are immutable here. Catalog defaults are shown without assuming full access.</p>
+                : !canEdit && <p className="text-sm text-muted-foreground">Only an active founder can edit operator overrides.</p>}
+              {!selected.isActive && <p className="text-sm text-kruxt-warning">Inactive account: effective access is denied, including draft allows.</p>}
+              <label className="block text-sm">Find permission
+                <input type="search" value={permissionQuery} onChange={(event) => setPermissionQuery(event.target.value)}
+                  className={control + " mt-1 w-full"} placeholder="Label, category or permission key" />
+              </label>
+              {!visiblePermissions.length && <p className="text-sm text-muted-foreground">No active permissions match.</p>}
+              <ul className="divide-y divide-border">
+                {visiblePermissions.map((row) => {
+                  const value = draft[row.permission_key]?.value !== undefined ? draft[row.permission_key].value : persisted(selected.userId, row.permission_key);
+                  const roleValue = baseline(selected.role, row.permission_key);
+                  const effective = selected.isActive && (value ?? roleValue ?? false);
+                  return <li key={row.permission_key} className="grid min-w-0 gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                    <div className="min-w-0">
+                      <div className="text-xs text-muted-foreground">{row.category}{row.is_sensitive ? " / Sensitive" : ""}</div>
+                      <h3 className="break-words text-sm font-semibold">{row.label}</h3>
+                      <code className="block break-all text-xs text-muted-foreground">{row.permission_key}</code>
+                      {row.description && <p className="mt-1 break-words text-xs text-muted-foreground">{row.description}</p>}
+                      <p className="mt-2 text-xs">Role default: {defaultLabel(roleValue)}</p>
+                      <p className="mt-1 text-xs">{["platform.tenants.view", "platform.flags.view", "platform.audit.view", "platform.system_health.view"].includes(row.permission_key) ? "Built-in + override" : "Effective"}{draft[row.permission_key] ? " preview" : ""}: <strong className={effective ? "text-kruxt-success" : "text-kruxt-danger"}>{effective ? "Allow" : "Deny"}</strong>
+                        {!selected.isActive ? " (inactive)" : value === null ? " (inherited)" : " (override)"}</p>
+                      {["platform.tenants.view", "platform.flags.view", "platform.audit.view", "platform.system_health.view"].includes(row.permission_key) && <p className="mt-1 text-xs text-muted-foreground">Profile contributions are listed under resolved access.</p>}
+                    </div>
+                    <label className="text-xs">Override for {row.label}
+                      <select aria-label={`Override for ${row.label}`} value={value === null ? "inherit" : value ? "allow" : "deny"}
+                        disabled={!canEdit || saving} className={control + " mt-1 w-full"}
+                        onChange={(event) => changeOverride(selected, row.permission_key, event.target.value === "inherit" ? null : event.target.value === "allow")}>
+                        <option value="inherit">Inherit</option><option value="allow">Allow</option><option value="deny">Deny</option>
+                      </select>
+                      {draft[row.permission_key] && <span className="mt-1 block text-kruxt-warning">Unsaved change</span>}
+                    </label>
+                  </li>;
+                })}
+              </ul>
+              {canEdit && <div className="space-y-3 border-t border-border pt-4">
+                <label className="block text-sm">Reason for changes
+                  <textarea value={reason} maxLength={2000} disabled={saving} onChange={(event) => setReason(event.target.value)}
+                    className={control + " mt-1 min-h-24 w-full resize-y"} />
+                </label>
+                <button type="button" className={primary} disabled={saving || !changes.length || changes.length > 100 || !reason.trim()}
+                  onClick={() => { setMode("review"); setConfirmed(false); }}>Review {changes.length} changes</button>
+                {changes.length > 100 && <p role="alert" className="text-sm text-kruxt-warning">Review at most 100 changes per submission.</p>}
+              </div>}
+            </>
+          )}
         </div>
-      )}
-    </div>
-  );
-}
-
-function Header() {
-  return (
-    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-      <div>
-        <h1 className="font-kruxt-headline text-2xl font-bold tracking-tight">Operators</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          KRUXT internal operator accounts, built-in roles, and audited custom permission overrides.
-        </p>
-      </div>
-      <button
-        type="button"
-        disabled
-        title="Operator invites require the account invitation workflow."
-        className="rounded-button border border-border px-4 py-2 text-sm font-semibold text-muted-foreground opacity-60"
-      >
-        Invite Operator
-      </button>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone = "default"
-}: {
-  label: string;
-  value: number;
-  tone?: "default" | "success" | "platform" | "danger";
-}) {
-  return (
-    <div className="rounded-card border border-border bg-kruxt-surface p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className={cn(
-        "mt-1 font-kruxt-mono text-2xl font-bold",
-        tone === "success" && "text-kruxt-success",
-        tone === "platform" && "text-kruxt-platform",
-        tone === "danger" && "text-kruxt-danger",
-        tone === "default" && "text-foreground"
-      )}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function DrawerMetric({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
-  return (
-    <div className="rounded-card border border-border bg-kruxt-surface p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className={cn("mt-1 font-kruxt-mono text-lg font-bold", danger ? "text-kruxt-danger" : "text-foreground")}>{value}</p>
+      </PermissionDialog>}
     </div>
   );
 }

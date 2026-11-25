@@ -25,7 +25,7 @@ export function createEmptyDraft(): WorkoutDraft {
     metadata: {
       title: "Workout Session",
       workoutType: "strength",
-      visibility: "public",
+      visibility: "private",
       startedAt: new Date().toISOString(),
     },
     exercises: [createEmptyExercise()],

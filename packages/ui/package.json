@@ -7,7 +7,11 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./theme": "./src/theme.ts"
+    "./theme": "./src/theme.ts",
+    "./workspace-session": "./src/workspace-session.ts",
+    "./app-urls": "./src/app-urls.ts",
+    "./social-sign-in": "./src/social-sign-in.ts",
+    "./auth-captcha": "./src/auth-captcha.tsx"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -16,6 +20,7 @@
     "test": "echo 'Add UI package tests'"
   },
   "dependencies": {
+    "@hcaptcha/react-hcaptcha": "2.2.0",
     "react": "^18.3.1",
     "react-native": "~0.76.0"
   },

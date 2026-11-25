@@ -554,6 +554,10 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
       setFormError("Start date/time is invalid.");
       return;
     }
+    if (startsAtDate <= new Date()) {
+      setFormError("Start date/time must be in the future.");
+      return;
+    }
 
     if (draft.recurrence === "weekly" && draft.weekdays.length === 0) {
       setFormError("Select at least one weekday for recurring classes.");
@@ -564,6 +568,7 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
       draft.recurrence === "weekly"
         ? buildRecurringStarts(startsAtDate, draft.weekdays, draft.recurrenceEndDate || draft.startDate)
         : [startsAtDate];
+    const bookingOpensAt = new Date().toISOString();
 
     await runAction("create_class", async () => {
       let lastResult: Awaited<ReturnType<typeof services.createClass>> | null = null;
@@ -583,6 +588,8 @@ function ClassManagementTab({ snapshot, services, gymId, pending, runAction }: T
           status: "scheduled",
           startsAt: startAt.toISOString(),
           endsAt: endAt.toISOString(),
+          bookingOpensAt,
+          bookingClosesAt: startAt.toISOString(),
           description: descriptionLines.join("\n")
         });
 

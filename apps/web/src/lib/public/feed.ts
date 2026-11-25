@@ -64,6 +64,7 @@ export interface PublicFeedProofMedia {
 
 export interface PublicFeedItem {
   id: string;
+  actorUserId: string;
   workoutId: string | null;
   actorLabel: string;
   actorUsername: string | null;
@@ -95,11 +96,12 @@ export interface PublicFeedComment {
   isOwn: boolean;
 }
 
-async function requireUser(client: SupabaseClient): Promise<string> {
+async function requireUser(client: SupabaseClient, expectedUserId?: string): Promise<string> {
   const { data, error } = await client.auth.getUser();
   if (error || !data.user) {
     throw new Error("Authentication required.");
   }
+  if (expectedUserId && data.user.id !== expectedUserId) throw new Error("Your account changed. Refresh to continue.");
 
   return data.user.id;
 }
@@ -112,19 +114,45 @@ function isMissingWorkoutProofMediaRelation(error: { message?: string | null } |
 export async function loadPublicFeed(
   client: SupabaseClient,
   viewerUserId: string,
-  limit = 20
+  limit = 20,
+  mode: "following" | "gym" | "recent" = "following"
 ): Promise<PublicFeedItem[]> {
-  const { data: eventsData, error: eventsError } = await client
-    .from("feed_events")
-    .select("id,user_id,workout_id,event_type,caption,created_at")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const viewer = await requireUser(client);
+  if (viewer !== viewerUserId) throw new Error("The feed session changed. Refresh to continue.");
+  const { data: blocks, error: blockError } = await client.from("user_blocks")
+    .select("blocker_user_id,blocked_user_id")
+    .or(`blocker_user_id.eq.${viewer},blocked_user_id.eq.${viewer}`);
+  if (blockError) throw new Error("Safety preferences could not be checked. Retry the feed.");
+  const excluded = new Set<string>();
+  for (const block of blocks ?? []) excluded.add(block.blocker_user_id === viewer ? block.blocked_user_id : block.blocker_user_id);
+
+  let query = client.from("feed_events").select("id,user_id,workout_id,event_type,caption,created_at");
+  if (mode === "following") {
+    const { data, error } = await client.from("social_connections").select("followed_user_id")
+      .eq("follower_user_id", viewer).eq("status", "accepted");
+    if (error) throw new Error("Following could not be loaded. Retry the feed.");
+    const actors = [viewer, ...(data ?? []).map((row) => row.followed_user_id)].filter((id) => !excluded.has(id));
+    query = query.in("user_id", actors);
+  } else if (mode === "gym") {
+    const { data, error } = await client.from("gym_memberships").select("gym_id")
+      .eq("user_id", viewer).in("membership_status", ["active", "trial"]);
+    if (error) throw new Error("Gym membership could not be checked.");
+    const gymIds = (data ?? []).map((row) => row.gym_id);
+    if (!gymIds.length) return [];
+    const workouts = await client.from("workouts").select("id").in("gym_id", gymIds)
+      .order("started_at", { ascending: false }).limit(100);
+    if (workouts.error) throw new Error("Gym activity could not be loaded.");
+    const ids = (workouts.data ?? []).map((row) => row.id);
+    if (!ids.length) return [];
+    query = query.in("workout_id", ids);
+  }
+  const { data: eventsData, error: eventsError } = await query.order("created_at", { ascending: false }).limit(Math.min(50, Math.max(1, limit)));
 
   if (eventsError) {
     throw new Error(eventsError.message || "Unable to load feed.");
   }
 
-  const events = (eventsData as FeedEventRow[] | null) ?? [];
+  const events = ((eventsData as FeedEventRow[] | null) ?? []).filter((event) => !excluded.has(event.user_id));
   if (events.length === 0) {
     return [];
   }
@@ -195,7 +223,7 @@ export async function loadPublicFeed(
     ((((gymsResponse.data ?? []) as GymRow[]) ?? []).map((gym) => [gym.id, gym]))
   );
 
-  const interactions = ((interactionsResponse.data ?? []) as InteractionRow[]) ?? [];
+  const interactions = (((interactionsResponse.data ?? []) as InteractionRow[]) ?? []).filter((entry) => !excluded.has(entry.actor_user_id));
   const proofMediaRows = proofMediaResponse.error
     ? []
     : (((proofMediaResponse.data ?? []) as WorkoutProofMediaRow[]) ?? []);
@@ -267,7 +295,8 @@ export async function loadPublicFeed(
     proofMediaByWorkoutId.set(media.workout_id, next);
   }
 
-  return events.map((event) => {
+  // Never render a caption/actor for a workout hidden by RLS (including blocks).
+  return events.filter((event) => event.workout_id && workoutMap.has(event.workout_id)).map((event) => {
     const actor = profileMap.get(event.user_id);
     const workout = event.workout_id ? workoutMap.get(event.workout_id) : null;
     const gym = workout?.gym_id ? gymMap.get(workout.gym_id) : null;
@@ -275,6 +304,7 @@ export async function loadPublicFeed(
 
     return {
       id: event.id,
+      actorUserId: event.user_id,
       workoutId: event.workout_id,
       actorLabel: actor?.display_name || actor?.username || "KRUXT Athlete",
       actorUsername: actor?.username ?? null,
@@ -297,11 +327,47 @@ export async function loadPublicFeed(
   });
 }
 
+export async function requestFeedFollow(client: SupabaseClient, targetId: string, expectedUserId?: string): Promise<"accepted" | "pending"> {
+  const viewer = await requireUser(client, expectedUserId);
+  if (targetId === viewer) throw new Error("You cannot follow yourself.");
+  const existing = await client.from("social_connections").select("id,status")
+    .eq("follower_user_id", viewer).eq("followed_user_id", targetId).maybeSingle();
+  if (existing.error) throw new Error("Follow status unavailable.");
+  if (existing.data?.status === "accepted") return "accepted";
+  if (existing.data?.status === "pending") return "pending";
+  if (existing.data) throw new Error("This connection is unavailable.");
+  await requireUser(client, viewer);
+  const { error } = await client.from("social_connections").insert({ follower_user_id: viewer, followed_user_id: targetId, status: "pending" });
+  if (error) throw new Error("Follow request could not be sent.");
+  return "pending";
+}
+
+export async function blockFeedActor(client: SupabaseClient, targetId: string, expectedUserId?: string): Promise<void> {
+  const viewer = await requireUser(client, expectedUserId);
+  if (targetId === viewer) throw new Error("You cannot block yourself.");
+  const { error } = await client.from("user_blocks").upsert({ blocker_user_id: viewer, blocked_user_id: targetId }, { onConflict: "blocker_user_id,blocked_user_id" });
+  if (error) throw new Error("Block was not confirmed. Retry.");
+}
+
+export async function reportFeedWorkout(client: SupabaseClient, workoutId: string, reason: string, expectedUserId?: string): Promise<void> {
+  const viewer = await requireUser(client, expectedUserId);
+  const allowed = ["Harassment", "Unsafe content", "Spam", "Privacy concern", "Other"];
+  if (!allowed.includes(reason)) throw new Error("Choose a report reason.");
+  const { error } = await client.from("user_reports").insert({ reporter_user_id: viewer, target_type: "workout", target_id: workoutId, reason });
+  if (error) throw new Error("Report was not confirmed. Retry.");
+}
+
 export async function loadWorkoutComments(
   client: SupabaseClient,
   workoutId: string,
   viewerUserId: string
 ): Promise<PublicFeedComment[]> {
+  const viewer = await requireUser(client);
+  if (viewer !== viewerUserId) throw new Error("Your session changed. Refresh to continue.");
+  const safety = await client.from("user_blocks").select("blocker_user_id,blocked_user_id")
+    .or(`blocker_user_id.eq.${viewer},blocked_user_id.eq.${viewer}`);
+  if (safety.error) throw new Error("Safety preferences could not be checked. Retry comments.");
+  const excluded = new Set<string>((safety.data ?? []).map((row) => row.blocker_user_id === viewer ? row.blocked_user_id : row.blocker_user_id));
   const { data, error } = await client
     .from("social_interactions")
     .select("id,workout_id,parent_interaction_id,interaction_type,reaction_type,comment_text,actor_user_id,created_at")
@@ -314,7 +380,7 @@ export async function loadWorkoutComments(
     throw new Error(error.message || "Unable to load comments.");
   }
 
-  const comments = ((data ?? []) as InteractionRow[]) ?? [];
+  const comments = (((data ?? []) as InteractionRow[]) ?? []).filter((entry) => !excluded.has(entry.actor_user_id));
   if (comments.length === 0) {
     return [];
   }

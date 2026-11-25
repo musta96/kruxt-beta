@@ -4,6 +4,35 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .platform-login {
+    --radius: 8px;
+    color-scheme: dark;
+    letter-spacing: 0;
+    caret-color: hsl(var(--kruxt-accent));
+  }
+  .platform-login ::selection {
+    background: hsl(var(--kruxt-accent));
+    color: hsl(var(--kruxt-bg));
+  }
+  .platform-login :focus-visible {
+    outline: 2px solid hsl(var(--kruxt-accent));
+    outline-offset: 3px;
+  }
+  .platform-login-input {
+    @apply min-h-11 w-full rounded-md border border-border bg-kruxt-surface px-3 py-2 text-base text-foreground;
+  }
+  .platform-login-primary {
+    @apply min-h-11 rounded-md bg-kruxt-accent px-4 py-3 text-sm font-semibold text-kruxt-bg transition-colors hover:bg-kruxt-accent/90 disabled:cursor-wait disabled:opacity-60;
+  }
+  .platform-login-secondary {
+    @apply min-h-11 rounded-md border border-border bg-kruxt-surface px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-kruxt-panel disabled:cursor-wait disabled:opacity-60;
+  }
+  .platform-login fieldset:disabled button {
+    @apply cursor-wait opacity-60;
+  }
+}
+
 /* ────────────────────────────────────────────
    KRUXT Platform — Dark theme (always-on)
    Purple-shifted accent to distinguish from

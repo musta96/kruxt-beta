@@ -1,4 +1,5 @@
 "use client";
+import { appUrl } from "@kruxt/ui/app-urls";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -134,9 +135,9 @@ export function GuildScreen() {
                   <h2 className="section-title">Upcoming classes</h2>
                 </div>
                 {overview.isStaff ? (
-                  <Link href="/org/classes" className="secondary-cta">
+                  <a href={appUrl("admin", "/classes")} className="secondary-cta">
                     Open org classes
-                  </Link>
+                  </a>
                 ) : null}
               </div>
               <div className="rank-list">

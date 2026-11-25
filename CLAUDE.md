@@ -70,7 +70,11 @@ Never scaffold root-level app files. Mobile code goes under `apps/mobile/`, admi
 
 ## Navigation
 
-**Mobile** -- 5 bottom tabs: Proof Feed, Log, Guild Hall, Rank Ladder, Profile
+**Member web** (`apps/web`, MemberShell) -- primary: Plan, Feed, Log, Gyms, Profile; secondary: Session library, My community, Challenges & progress, Connections, Privacy, Help; plus a "Gym workspace" / "Platform console" link for staff and operators.
+
+**Mobile** (shipped entry `index.js` -> `App.tsx` -> `src/native/NativeApp.tsx`) -- tabs in the same order as web: Feed, Log, Gyms, Workspace (staff/operators only), Profile. No Plan tab yet. The expo-router tree in `src/app/(tabs)` (Proof Feed, Guild Hall, Rank Ladder) is dormant legacy code, not shipped.
+
+**Cross-app links** -- always use `@kruxt/ui/app-urls` (`appUrl`, `appOrigin`). Web `/org/*` and `/admin/*` only redirect to the gym admin and platform apps.
 
 **Admin** -- Sidebar: Overview, Members, Classes, Check-ins, Waivers, Billing, Integrations, Compliance, Support, Settings
 

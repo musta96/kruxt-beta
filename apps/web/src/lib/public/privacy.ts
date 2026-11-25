@@ -36,6 +36,7 @@ type ConsentGapRow = {
 };
 
 export interface PrivacySnapshot {
+  consentStatusUnavailable: boolean;
   hasRequiredConsents: boolean;
   missingRequiredConsents: RequiredConsentGap[];
   openRequests: PrivacyRequest[];
@@ -45,14 +46,45 @@ export interface PrivacySnapshot {
 }
 
 const OPEN_STATUSES: PrivacyRequestStatus[] = ["submitted", "triaged", "in_progress", "in_review"];
+const REQUEST_TYPES = new Set(["access", "export", "delete", "rectify", "restrict_processing"]);
+const ERROR_COPY = {
+  load: "Unable to load privacy requests.",
+  submit: "Unable to submit privacy request.",
+  auth: "Authentication required.",
+  type: "Choose a valid privacy request type.",
+  reason: "Privacy request reason must be no more than 2000 characters."
+};
+const knownErrors = new WeakMap<Error, string>();
+
+function privacyError(kind: keyof typeof ERROR_COPY): Error {
+  const error = new Error(ERROR_COPY[kind]);
+  knownErrors.set(error, ERROR_COPY[kind]);
+  return error;
+}
+
+export function privacyErrorMessage(error: unknown, operation: "load" | "submit"): string {
+  return (error instanceof Error && knownErrors.get(error)) || ERROR_COPY[operation];
+}
 
 async function requireUser(client: SupabaseClient): Promise<string> {
-  const { data, error } = await client.auth.getUser();
-  if (error || !data.user) {
-    throw new Error("Authentication required.");
+  try {
+    const { data, error } = await client.auth.getUser();
+    if (error || !data?.user?.id) throw privacyError("auth");
+    return data.user.id;
+  } catch {
+    throw privacyError("auth");
   }
+}
 
-  return data.user.id;
+function safeResponseLocation(row: PrivacyRequestRow): string | null {
+  const expiry = Date.parse(row.response_expires_at ?? "");
+  if (!Number.isFinite(expiry) || expiry <= Date.now() || !row.response_location) return null;
+  try {
+    const url = new URL(row.response_location);
+    return url.protocol === "https:" && !url.username && !url.password ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 function mapPrivacyRequest(row: PrivacyRequestRow): PrivacyRequest {
@@ -67,7 +99,7 @@ function mapPrivacyRequest(row: PrivacyRequestRow): PrivacyRequest {
     triagedAt: row.triaged_at,
     inProgressAt: row.in_progress_at,
     resolvedAt: row.resolved_at,
-    responseLocation: row.response_location,
+    responseLocation: safeResponseLocation(row),
     responseExpiresAt: row.response_expires_at,
     responseContentType: row.response_content_type,
     responseBytes: row.response_bytes,
@@ -111,28 +143,38 @@ async function listRequests(
   }
 
   const { data, error } = await query;
-  if (error) throw new Error(error.message || "Unable to load privacy requests.");
+  if (error) throw privacyError("load");
 
   return (((data ?? []) as PrivacyRequestRow[]) ?? []).map(mapPrivacyRequest);
 }
 
-export async function loadPrivacySnapshot(client: SupabaseClient): Promise<PrivacySnapshot> {
+async function consentResponse(client: SupabaseClient, name: string, userId: string) {
+  try {
+    return await client.rpc(name, { p_user_id: userId });
+  } catch {
+    return { data: null, error: true };
+  }
+}
+
+async function loadSnapshot(client: SupabaseClient): Promise<PrivacySnapshot> {
   const userId = await requireUser(client);
   const [hasConsentsResponse, consentGapsResponse, openRequests, recentRequests, downloadableExports] =
     await Promise.all([
-      client.rpc("user_has_required_consents", { p_user_id: userId }),
-      client.rpc("list_missing_required_consents", { p_user_id: userId }),
+      consentResponse(client, "user_has_required_consents", userId),
+      consentResponse(client, "list_missing_required_consents", userId),
       listRequests(client, userId, { openOnly: true, limit: 30 }),
       listRequests(client, userId, { limit: 80 }),
       listRequests(client, userId, { exportsOnly: true, limit: 12 })
     ]);
 
-  if (hasConsentsResponse.error) {
-    throw new Error(hasConsentsResponse.error.message || "Unable to validate required consents.");
-  }
-  if (consentGapsResponse.error) {
-    throw new Error(consentGapsResponse.error.message || "Unable to load consent gaps.");
-  }
+  const gaps = consentGapsResponse.data;
+  const validGaps = Array.isArray(gaps) && gaps.every(gap => gap &&
+    ["terms", "privacy", "health_data_processing"].includes(gap.consent_type) &&
+    typeof gap.reason === "string" &&
+    (gap.required_policy_version_id === null || typeof gap.required_policy_version_id === "string") &&
+    (gap.required_policy_version === null || typeof gap.required_policy_version === "string"));
+  const consentStatusUnavailable = Boolean(hasConsentsResponse.error || consentGapsResponse.error ||
+    typeof hasConsentsResponse.data !== "boolean" || !validGaps);
 
   const now = Date.now();
   const overdueOpenCount = openRequests.filter((request) => {
@@ -142,54 +184,44 @@ export async function loadPrivacySnapshot(client: SupabaseClient): Promise<Priva
   }).length;
 
   return {
-    hasRequiredConsents: Boolean(hasConsentsResponse.data),
-    missingRequiredConsents: (((consentGapsResponse.data ?? []) as ConsentGapRow[]) ?? []).map(mapConsentGap),
+    consentStatusUnavailable,
+    hasRequiredConsents: !consentStatusUnavailable && hasConsentsResponse.data === true,
+    missingRequiredConsents: consentStatusUnavailable ? [] : ((consentGapsResponse.data ?? []) as ConsentGapRow[]).map(mapConsentGap),
     openRequests,
     recentRequests,
-    downloadableExports,
+    downloadableExports: downloadableExports.filter((request) => request.responseLocation !== null),
     overdueOpenCount
   };
+}
+
+export async function loadPrivacySnapshot(client: SupabaseClient): Promise<PrivacySnapshot> {
+  try {
+    return await loadSnapshot(client);
+  } catch (error) {
+    throw knownErrors.has(error as Error) ? error : privacyError("load");
+  }
 }
 
 export async function submitPrivacyRequest(
   client: SupabaseClient,
   input: { requestType: PrivacyRequestType; reason?: string }
-): Promise<PrivacySnapshot> {
-  const userId = await requireUser(client);
-  const { error } = await client.rpc("submit_privacy_request", {
-    p_request_type: input.requestType,
-    p_reason: input.reason?.trim() || null
-  });
-
-  if (error) throw new Error(error.message || "Unable to submit privacy request.");
-
-  const [hasConsentsResponse, consentGapsResponse, openRequests, recentRequests, downloadableExports] =
-    await Promise.all([
-      client.rpc("user_has_required_consents", { p_user_id: userId }),
-      client.rpc("list_missing_required_consents", { p_user_id: userId }),
-      listRequests(client, userId, { openOnly: true, limit: 30 }),
-      listRequests(client, userId, { limit: 80 }),
-      listRequests(client, userId, { exportsOnly: true, limit: 12 })
-    ]);
-
-  if (hasConsentsResponse.error) {
-    throw new Error(hasConsentsResponse.error.message || "Unable to validate required consents.");
+): Promise<string> {
+  try {
+    await requireUser(client);
+    if (!input || !REQUEST_TYPES.has(input.requestType)) throw privacyError("type");
+    if (input.reason !== undefined && (typeof input.reason !== "string" || input.reason.length > 2000)) {
+      throw privacyError("reason");
+    }
+    const { data, error } = await client.rpc("submit_privacy_request", {
+      p_request_type: input.requestType,
+      p_reason: input.reason?.trim() || null
+    });
+    if (error || typeof data !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data) ||
+        data === "00000000-0000-0000-0000-000000000000") {
+      throw privacyError("submit");
+    }
+    return data;
+  } catch (error) {
+    throw knownErrors.has(error as Error) ? error : privacyError("submit");
   }
-  if (consentGapsResponse.error) {
-    throw new Error(consentGapsResponse.error.message || "Unable to load consent gaps.");
-  }
-
-  const now = Date.now();
-  return {
-    hasRequiredConsents: Boolean(hasConsentsResponse.data),
-    missingRequiredConsents: (((consentGapsResponse.data ?? []) as ConsentGapRow[]) ?? []).map(mapConsentGap),
-    openRequests,
-    recentRequests,
-    downloadableExports,
-    overdueOpenCount: openRequests.filter((request) => {
-      if (request.slaBreachedAt) return true;
-      const dueAt = Date.parse(request.dueAt);
-      return Number.isFinite(dueAt) && dueAt < now;
-    }).length
-  };
 }

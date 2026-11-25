@@ -7,7 +7,6 @@ import type {
   WorkoutVisibility
 } from "@kruxt/types";
 import { translateLegalText } from "@kruxt/types";
-import * as VideoThumbnails from "expo-video-thumbnails";
 
 import { KruxtAppError, throwIfError } from "./errors";
 
@@ -125,9 +124,9 @@ function mapWorkout(row: WorkoutRow): LoggedWorkoutSnapshot {
     isPr: row.is_pr,
     source: row.source,
     createdAt: row.created_at,
-    proofMediaUrl: row.proof_media_url,
-    proofMediaType: row.proof_media_type,
-    proofMediaThumbnailUrl: row.proof_media_thumbnail_url
+    proofMediaUrl: null,
+    proofMediaType: null,
+    proofMediaThumbnailUrl: null
   };
 }
 
@@ -151,7 +150,7 @@ function toWorkoutPayload(input: LogWorkoutAtomicInput["workout"]): Record<strin
     started_at: input.startedAt ?? null,
     ended_at: input.endedAt ?? null,
     rpe: input.rpe ?? null,
-    visibility: input.visibility ?? "public",
+    visibility: input.visibility ?? "private",
     source: input.source ?? "manual",
     external_activity_id: input.externalActivityId ?? null
   };
@@ -249,7 +248,7 @@ export class WorkoutService {
       this.supabase
         .from("workouts")
         .select(
-          "id,user_id,gym_id,title,workout_type,notes,started_at,ended_at,rpe,visibility,total_sets,total_volume_kg,is_pr,source,created_at,proof_media_url,proof_media_type,proof_media_thumbnail_url"
+          "id,user_id,gym_id,title,workout_type,notes,started_at,ended_at,rpe,visibility,total_sets,total_volume_kg,is_pr,source,created_at"
         )
         .eq("id", workoutId)
         .maybeSingle(),
@@ -293,146 +292,14 @@ export class WorkoutService {
     };
   }
 
-  /**
-   * Uploads a proof photo/video to the `workout-proof` storage bucket and
-   * attaches its public URL to the workout row. Called after a workout is
-   * logged so the Proof Feed can render it full-bleed.
-   *
-   * Object path: `<userId>/<workoutId>.<ext>` (matches storage RLS policy).
-   */
+  // Quarantine the legacy public bucket until private storage and lineage are verified.
   async attachProofMedia(
-    workoutId: string,
-    media: { uri: string; mimeType?: string | null }
+    _workoutId: string,
+    _media: { uri: string; mimeType?: string | null }
   ): Promise<{ url: string; type: "image" | "video" }> {
-    const userId = await this.requireCurrentUserId();
-
-    const mimeType = media.mimeType ?? "image/jpeg";
-    const mediaType: "image" | "video" = mimeType.startsWith("video") ? "video" : "image";
-    const extension = extensionFromMimeType(mimeType);
-    const path = `${userId}/${workoutId}.${extension}`;
-
-    // Read the local file URI into bytes (works in Expo / React Native).
-    let bytes: Uint8Array;
-    try {
-      const response = await fetch(media.uri);
-      const buffer = await response.arrayBuffer();
-      bytes = new Uint8Array(buffer);
-    } catch (readError) {
-      throw new KruxtAppError(
-        "WORKOUT_PROOF_READ_FAILED",
-        "Unable to read the selected proof media file.",
-        readError
-      );
-    }
-
-    const storage = this.supabase.storage.from(PROOF_BUCKET);
-    const { error: uploadError } = await storage.upload(path, bytes, {
-      contentType: mimeType,
-      upsert: true,
-      cacheControl: "3600"
-    });
-
-    if (uploadError) {
-      throw new KruxtAppError(
-        "WORKOUT_PROOF_UPLOAD_FAILED",
-        `Proof upload failed. Confirm bucket "${PROOF_BUCKET}" exists and allows authenticated uploads.`,
-        uploadError
-      );
-    }
-
-    const {
-      data: { publicUrl }
-    } = storage.getPublicUrl(path);
-
-    if (!publicUrl) {
-      throw new KruxtAppError(
-        "WORKOUT_PROOF_URL_FAILED",
-        "Proof upload succeeded but URL generation failed."
-      );
-    }
-
-    // For videos, generate a poster frame so the feed never flashes black
-    // before playback. Best-effort — a thumbnail failure must not fail the
-    // proof upload, so the feed falls back to no poster.
-    const update: {
-      proof_media_url: string;
-      proof_media_type: "image" | "video";
-      proof_media_thumbnail_url?: string | null;
-    } = { proof_media_url: publicUrl, proof_media_type: mediaType };
-
-    if (mediaType === "video") {
-      update.proof_media_thumbnail_url = await this.uploadVideoThumbnail(
-        userId,
-        workoutId,
-        media.uri
-      );
-    }
-
-    const { error: updateError } = await this.supabase
-      .from("workouts")
-      .update(update)
-      .eq("id", workoutId)
-      .eq("user_id", userId);
-
-    throwIfError(updateError, "WORKOUT_PROOF_ATTACH_FAILED", "Unable to attach proof media to the workout.");
-
-    return { url: publicUrl, type: mediaType };
+    throw new KruxtAppError(
+      "WORKOUT_PROOF_UNAVAILABLE",
+      "Media attachments are temporarily unavailable. Your saved workout is unchanged."
+    );
   }
-
-  /**
-   * Generate a poster frame from the local video and upload it alongside the
-   * proof. Returns the public URL, or null if anything fails — callers must
-   * treat a missing thumbnail as non-fatal.
-   */
-  private async uploadVideoThumbnail(
-    userId: string,
-    workoutId: string,
-    videoUri: string
-  ): Promise<string | null> {
-    try {
-      const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
-        time: 0,
-        quality: 0.7
-      });
-
-      const response = await fetch(thumbUri);
-      const buffer = await response.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-
-      const path = `${userId}/${workoutId}_thumb.jpg`;
-      const storage = this.supabase.storage.from(PROOF_BUCKET);
-      const { error: uploadError } = await storage.upload(path, bytes, {
-        contentType: "image/jpeg",
-        upsert: true,
-        cacheControl: "3600"
-      });
-
-      if (uploadError) {
-        return null;
-      }
-
-      const {
-        data: { publicUrl }
-      } = storage.getPublicUrl(path);
-
-      return publicUrl ?? null;
-    } catch {
-      return null;
-    }
-  }
-}
-
-const PROOF_BUCKET = "workout-proof";
-
-function extensionFromMimeType(mimeType: string): string {
-  const map: Record<string, string> = {
-    "image/jpeg": "jpg",
-    "image/jpg": "jpg",
-    "image/png": "png",
-    "image/webp": "webp",
-    "image/heic": "heic",
-    "video/mp4": "mp4",
-    "video/quicktime": "mov"
-  };
-  return map[mimeType.toLowerCase()] ?? "bin";
 }

@@ -333,11 +333,15 @@ export async function joinChallenge(client: SupabaseClient, challengeId: string)
 }
 
 export async function leaveChallenge(client: SupabaseClient, challengeId: string): Promise<void> {
-  const { error } = await client.rpc("leave_challenge", {
+  const { data, error } = await client.rpc("leave_challenge", {
     p_challenge_id: challengeId
   });
 
   if (error) {
     throw new Error(error.message || "Unable to leave challenge.");
+  }
+
+  if (data !== true) {
+    throw new Error("Challenge entry was not removed. It may already be completed or no longer joined.");
   }
 }

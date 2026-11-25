@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
+import { useAuthCaptcha } from "@kruxt/ui/auth-captcha";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { invokeSupabaseFunction } from "@/lib/supabase/functions";
+import { authenticationErrorMessage } from "@/lib/auth/auth-error";
+import { getGymAdminLoginUrl } from "@/lib/marketing-url";
 
 type AuthMode = "signin" | "signup";
 
 export function AcceptInviteClient() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
@@ -20,6 +22,9 @@ export function AcceptInviteClient() {
   const [sessionUserEmail, setSessionUserEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [confirmationPending, setConfirmationPending] = useState(false);
+  const authOperationActive = useRef(false);
+  const captcha = useAuthCaptcha(process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY);
   const [resolvedGymId, setResolvedGymId] = useState<string | null>(null);
 
   const [email, setEmail] = useState("");
@@ -28,17 +33,16 @@ export function AcceptInviteClient() {
   useEffect(() => {
     let active = true;
     const run = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!active) return;
-      setSessionUserEmail(data.user?.email ?? null);
+      const { data } = await supabase.auth.getSession();
+      if (!active || authOperationActive.current) return;
+      setSessionUserEmail(data.session?.user.email ?? null);
       setCheckingSession(false);
     };
 
     void run();
-    const listener = supabase.auth.onAuthStateChange(async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!active) return;
-      setSessionUserEmail(data.user?.email ?? null);
+    const listener = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active || authOperationActive.current) return;
+      setSessionUserEmail(session?.user.email ?? null);
     });
 
     return () => {
@@ -68,8 +72,8 @@ export function AcceptInviteClient() {
 
       setResolvedGymId(typeof data.gymId === "string" ? data.gymId : null);
       setSuccess("Invite accepted successfully.");
-    } catch (acceptError) {
-      setError(acceptError instanceof Error ? acceptError.message : "Unable to accept invite.");
+    } catch {
+      setError("Unable to accept invite. Try again or contact gym staff.");
     } finally {
       setLoading(false);
     }
@@ -77,37 +81,59 @@ export function AcceptInviteClient() {
 
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (authOperationActive.current) return;
+    authOperationActive.current = true;
     setLoading(true);
     setError(null);
     setSuccess(null);
+    setConfirmationPending(false);
 
     const normalizedEmail = email.trim().toLowerCase();
+    let requestStarted = false;
     try {
+      const captchaToken = captcha.takeToken();
+      requestStarted = true;
       if (mode === "signin") {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
-          password
+          password,
+          ...(captchaToken ? { options: { captchaToken } } : {})
         });
         if (signInError) throw signInError;
       } else {
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: normalizedEmail,
-          password
+          password,
+          ...(captchaToken ? { options: { captchaToken } } : {})
         });
         if (signUpError) throw signUpError;
 
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password
-        });
-        if (signInError) throw signInError;
+        setPassword("");
+        if (!signUpData.session) {
+          setSessionUserEmail(null);
+          setConfirmationPending(true);
+          setMode("signin");
+          return;
+        }
+        setSessionUserEmail(signUpData.session.user.email ?? normalizedEmail);
+        return;
       }
       setSessionUserEmail(normalizedEmail);
     } catch (authError) {
-      setError(authError instanceof Error ? authError.message : "Unable to authenticate.");
+      setError(authenticationErrorMessage(authError));
     } finally {
+      if (requestStarted) captcha.reset();
+      authOperationActive.current = false;
       setLoading(false);
     }
+  }
+
+  function changeMode(nextMode: AuthMode) {
+    captcha.reset();
+    setMode(nextMode);
+    setError(null);
+    setSuccess(null);
+    setConfirmationPending(false);
   }
 
   if (checkingSession) {
@@ -160,14 +186,16 @@ export function AcceptInviteClient() {
               <button
                 type="button"
                 className={`btn ${mode === "signin" ? "btn-primary" : ""}`}
-                onClick={() => setMode("signin")}
+                onClick={() => changeMode("signin")}
+                disabled={loading}
               >
                 Sign in
               </button>
               <button
                 type="button"
                 className={`btn ${mode === "signup" ? "btn-primary" : ""}`}
-                onClick={() => setMode("signup")}
+                onClick={() => changeMode("signup")}
+                disabled={loading}
               >
                 Sign up
               </button>
@@ -182,6 +210,7 @@ export function AcceptInviteClient() {
                   type="email"
                   required
                   value={email}
+                  disabled={loading}
                   onChange={(event) => setEmail(event.target.value)}
                 />
               </div>
@@ -194,9 +223,11 @@ export function AcceptInviteClient() {
                   required
                   minLength={mode === "signup" ? 8 : 1}
                   value={password}
+                  disabled={loading}
                   onChange={(event) => setPassword(event.target.value)}
                 />
               </div>
+              {captcha.widget}
               <button type="submit" className="btn btn-primary" disabled={loading}>
                 {loading ? "Please wait..." : mode === "signin" ? "Sign in to continue" : "Create account"}
               </button>
@@ -204,8 +235,12 @@ export function AcceptInviteClient() {
           </>
         )}
 
-        {error && (
-          <div className="panel" style={{ marginTop: 12, color: "#ff9baa" }}>
+        {confirmationPending && (
+          <p role="status">Check your email for a confirmation link if one is needed, then sign in here to continue with your invitation. If you already have an account, sign in or reset your password.</p>
+        )}
+
+        {error && !(captcha.verified && error.startsWith("Security verification")) && (
+          <div className="panel" style={{ marginTop: 12, color: "#ff9baa" }} role="alert">
             {error}
           </div>
         )}
@@ -214,9 +249,9 @@ export function AcceptInviteClient() {
           <div className="panel" style={{ marginTop: 12, color: "#7ef5df" }}>
             <p style={{ marginTop: 0 }}>{success}</p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button className="btn btn-primary" onClick={() => router.push("/org")}>
-                Open organization workspace
-              </button>
+              <a className="btn btn-primary" href={getGymAdminLoginUrl()}>
+                Open gym workspace
+              </a>
               {resolvedGymId && (
                 <span className="subheading">Gym: {resolvedGymId.slice(0, 8)}...</span>
               )}

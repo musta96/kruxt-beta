@@ -1,6 +1,6 @@
 import { parseJson, jsonResponse } from "../_shared/http.ts";
 import { serviceClient } from "../_shared/supabase.ts";
-import { requireAuth, isAuthResult } from "../_shared/auth.ts";
+import { requireWorkerAuth } from "../_shared/worker-auth.ts";
 import { safeErrorResponse } from "../_shared/errors.ts";
 import { z } from "npm:zod@3";
 
@@ -19,8 +19,8 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  const auth = await requireAuth(request);
-  if (!isAuthResult(auth)) return auth;
+  const denied = await requireWorkerAuth(request);
+  if (denied) return denied;
 
   try {
     const raw = await parseJson<unknown>(request);
@@ -38,7 +38,7 @@ Deno.serve(async (request) => {
     const { data, error } = await supabase
       .from("audit_logs")
       .insert({
-        actor_user_id: body.actorUserId ?? auth.userId,
+        actor_user_id: body.actorUserId ?? null,
         actor_role: body.actorRole ?? "service",
         action: body.action,
         target_table: body.targetTable ?? null,

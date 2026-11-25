@@ -6,10 +6,11 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import { useAuth } from "./auth-context";
-import { createAdminSupabaseClient } from "@/services";
+import { createAdminSupabaseClient, StaffAccessService } from "@/services";
 
 const SELECTED_GYM_STORAGE_KEY = "kruxt:selected-gym-id";
 const SUPPORT_SESSION_STORAGE_KEY = "kruxt:platform-support-session-id";
@@ -26,6 +27,7 @@ type GymLookupRow = {
 
 type MembershipLookupRow = {
   gym_id: string;
+  role: string;
 };
 
 type SupportSessionLookupRow = {
@@ -87,6 +89,8 @@ interface GymContextValue {
   loading: boolean;
   /** True if the auth'd user has no active gym membership */
   noGymFound: boolean;
+  error: string | null;
+  accessDenied: boolean;
   /** Active KRUXT platform support/access session, if this admin view was opened from platform */
   supportSessionId: string | null;
   /** Switch to a different gym tenant */
@@ -100,7 +104,7 @@ interface GymContextValue {
 const GymContext = createContext<GymContextValue | null>(null);
 
 /**
- * Discovers the current user's first active gym membership and exposes the
+ * Discovers the current user's accessible staff gym and exposes the
  * gym ID + display name to the dashboard. While the user has no gym yet,
  * `noGymFound` flips true and the dashboard layout shows an onboarding panel.
  */
@@ -110,13 +114,25 @@ export function GymProvider({ children }: { children: ReactNode }) {
   const [gymName, setGymName] = useState("");
   const [loading, setLoading] = useState(true);
   const [noGymFound, setNoGymFound] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const identity = user ? user.id + ":" + (platformRole ?? "staff") : "";
+  const [resolvedIdentity, setResolvedIdentity] = useState<string | null>(null);
+  const request = useRef(0);
   const [supportSessionId, setSupportSessionId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    const version = ++request.current;
+    setError(null);
+    setAccessDenied(false);
+    setGymId("");
+    setGymName("");
     if (!user) {
       setGymId("");
       setGymName("");
       setNoGymFound(false);
+      setSupportSessionId(null);
+      setResolvedIdentity("");
       setLoading(false);
       return;
     }
@@ -124,6 +140,14 @@ export function GymProvider({ children }: { children: ReactNode }) {
     setNoGymFound(false);
     try {
       const supabase = createAdminSupabaseClient();
+      const access = new StaffAccessService(supabase);
+      async function selectGym(selected: GymLookupRow) {
+        await access.requireGymStaff(selected.id, user!.id);
+        if (version !== request.current) return;
+        setGymId(selected.id);
+        setGymName(selected.name);
+        persistRequestedGymId(selected.id);
+      }
       const storedSupportSessionId = readSupportSessionId();
       let requestedGymId = readRequestedGymId();
       setSupportSessionId(storedSupportSessionId);
@@ -158,9 +182,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
           const selected = selectedGym as GymLookupRow | null;
           if (selected) {
-            setGymId(selected.id);
-            setGymName(selected.name);
-            persistRequestedGymId(selected.id);
+            await selectGym(selected);
             return;
           }
           clearStoredGymId();
@@ -176,9 +198,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
         const explicitUatGym = uatGym as GymLookupRow | null;
         if (explicitUatGym) {
-          setGymId(explicitUatGym.id);
-          setGymName(explicitUatGym.name);
-          persistRequestedGymId(explicitUatGym.id);
+          await selectGym(explicitUatGym);
           return;
         }
 
@@ -194,35 +214,37 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
         const fallback = fallbackGym as GymLookupRow | null;
         if (!fallback) {
+          if (version !== request.current) return;
           setNoGymFound(true);
           setGymId("");
           setGymName("");
           return;
         }
 
-        setGymId(fallback.id);
-        setGymName(fallback.name);
-        persistRequestedGymId(fallback.id);
+        await selectGym(fallback);
         return;
       }
 
       // 1) Find active/trial gym memberships for this user.
       const { data: membershipsData, error: membershipError } = await supabase
         .from("gym_memberships")
-        .select("gym_id")
+        .select("gym_id,role")
         .eq("user_id", user.id)
         .in("membership_status", ["active", "trial"]);
 
       if (membershipError) throw membershipError;
 
       const memberships = ((membershipsData ?? []) as MembershipLookupRow[]) ?? [];
+      const staffMemberships = memberships.filter((item) => ["leader", "officer", "coach"].includes(item.role));
       const membership =
         (requestedGymId
-          ? memberships.find((item) => item.gym_id === requestedGymId)
-          : undefined) ?? memberships[0];
+          ? staffMemberships.find((item) => item.gym_id === requestedGymId)
+          : undefined) ?? staffMemberships[0];
 
       if (!membership) {
-        setNoGymFound(true);
+        if (version !== request.current) return;
+        setAccessDenied(memberships.length > 0);
+        setNoGymFound(memberships.length === 0);
         setGymId("");
         setGymName("");
         return;
@@ -237,30 +259,35 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
       if (gymError) throw gymError;
 
-      setGymId(membership.gym_id);
-      setGymName(gym?.name ?? "Your gym");
-      persistRequestedGymId(membership.gym_id);
+      if (!gym) throw new Error("Gym unavailable");
+      await selectGym({ id: membership.gym_id, name: gym.name });
     } catch (e) {
+      if (version !== request.current) return;
       console.error("[GymProvider] failed to load gym:", e);
-      setNoGymFound(true);
+      const denied = (e as { code?: string })?.code === "ADMIN_STAFF_ACCESS_DENIED";
+      setAccessDenied(denied);
+      setError(denied ? null : "We couldn't check your gym access. Please try again.");
+      setNoGymFound(false);
       setGymId("");
       setGymName("");
     } finally {
-      setLoading(false);
+      if (version === request.current) {
+        setResolvedIdentity(identity);
+        setLoading(false);
+      }
     }
-  }, [platformRole, user]);
+  }, [identity, platformRole, user]);
 
   useEffect(() => {
     if (!authLoading) {
-      refresh();
+      void refresh();
     }
+    return () => { request.current += 1; };
   }, [authLoading, refresh]);
 
-  function setGym(id: string, name: string) {
-    setGymId(id);
-    setGymName(name);
-    setNoGymFound(false);
+  function setGym(id: string, _name: string) {
     persistRequestedGymId(id);
+    void refresh();
   }
 
   function clearSupportSession() {
@@ -273,8 +300,10 @@ export function GymProvider({ children }: { children: ReactNode }) {
       value={{
         gymId,
         gymName,
-        loading,
+        loading: loading || authLoading || resolvedIdentity !== identity,
         noGymFound,
+        error,
+        accessDenied,
         supportSessionId,
         setGym,
         clearSupportSession,

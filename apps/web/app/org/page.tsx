@@ -1,5 +1,7 @@
-import { OrgHome } from "@/components/console/OrgHome";
+import { redirect } from "next/navigation";
+import { appUrl } from "@kruxt/ui/app-urls";
 
-export default function OrgPage() {
-  return <OrgHome />;
+// Gym and operator work lives in the gym admin app; this old web route only forwards there.
+export default function Page() {
+  redirect(appUrl("admin", "/"));
 }

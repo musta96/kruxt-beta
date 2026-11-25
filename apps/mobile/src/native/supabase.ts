@@ -65,5 +65,5 @@ export function createNativeSupabaseClient(): SupabaseClient {
 }
 
 export function getPublicWebAppUrl(): string {
-  return getEnv("EXPO_PUBLIC_APP_WEB_URL") ?? "https://kruxt-foundation-kit.vercel.app";
+  return getEnv("EXPO_PUBLIC_APP_WEB_URL") ?? "https://kruxt-beta.vercel.app";
 }

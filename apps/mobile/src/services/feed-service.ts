@@ -24,9 +24,6 @@ type WorkoutRow = {
   total_sets: number;
   total_volume_kg: number;
   is_pr: boolean;
-  proof_media_url: string | null;
-  proof_media_type: "image" | "video" | null;
-  proof_media_thumbnail_url: string | null;
 };
 
 type ProfileRow = {
@@ -204,7 +201,7 @@ export class FeedService {
     ] = await Promise.all([
       this.supabase
         .from("workouts")
-        .select("id,user_id,gym_id,title,workout_type,started_at,visibility,total_sets,total_volume_kg,is_pr,proof_media_url,proof_media_type,proof_media_thumbnail_url")
+        .select("id,user_id,gym_id,title,workout_type,started_at,visibility,total_sets,total_volume_kg,is_pr")
         .in("id", workoutIds),
       this.supabase
         .from("profiles")
@@ -344,9 +341,10 @@ export class FeedService {
           totalSets: workout.total_sets,
           totalVolumeKg: workout.total_volume_kg,
           isPr: workout.is_pr,
-          proofMediaUrl: workout.proof_media_url,
-          proofMediaType: workout.proof_media_type,
-          proofMediaThumbnailUrl: workout.proof_media_thumbnail_url
+          // Legacy raw proof URLs are not trusted for feed rendering.
+          proofMediaUrl: null,
+          proofMediaType: null,
+          proofMediaThumbnailUrl: null
         },
         engagement: {
           reactionCount: engagement.reactionCount,

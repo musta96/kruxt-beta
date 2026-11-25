@@ -1,5 +1,7 @@
-import React, { useState, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -10,42 +12,119 @@ import { useRouter } from "expo-router";
 import { darkTheme, Button, Card } from "@kruxt/ui";
 import { useSupabase } from "../../contexts/supabase-context";
 import { useAuth } from "../../contexts/auth-context";
+import { GymService, PolicyService, ProfileService } from "../../services";
 
 const theme = darkTheme;
+
+interface ReviewSummary {
+  displayName: string;
+  consentStatus: string;
+  gymStatus: string;
+}
 
 export default function ReviewScreen() {
   const router = useRouter();
   const supabase = useSupabase();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
+  const [summary, setSummary] = useState<ReviewSummary | null>(null);
+  const [loadingSummary, setLoadingSummary] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const loadSummary = useCallback(async () => {
+    if (authLoading) return;
+    if (!user) {
+      setLoadingSummary(false);
+      setLoadError("You need to be signed in to review onboarding.");
+      return;
+    }
+
+    setLoadingSummary(true);
+    setLoadError(null);
+    setSummary(null);
+    try {
+      const profiles = new ProfileService(supabase);
+      const policies = new PolicyService(supabase);
+      const gyms = new GymService(supabase);
+      const [profile, consentGaps, memberships] = await Promise.all([
+        profiles.getProfileById(user.id),
+        policies.listRequiredConsentGaps(user.id),
+        gyms.listMyMemberships(user.id),
+      ]);
+
+      if (!profile || profile.displayName.trim().length < 2) {
+        throw new Error("Your profile is incomplete. Go back and save a display name.");
+      }
+      if (consentGaps.length > 0) {
+        throw new Error("Required policy consent is missing or out of date. Go back and review it.");
+      }
+
+      const pendingMembership = memberships.find(
+        (membership) => membership.membershipStatus === "pending",
+      );
+      const gymId = profile.homeGymId ?? pendingMembership?.gymId;
+      const gym = gymId ? await gyms.getGymById(gymId) : null;
+      const gymStatus = profile.homeGymId
+        ? gym?.name ?? "Home gym selected"
+        : pendingMembership
+          ? `${gym?.name ?? "Selected gym"} - request pending`
+          : "Skipped for now";
+
+      setSummary({
+        displayName: profile.displayName,
+        consentStatus: "All required current policies accepted",
+        gymStatus,
+      });
+    } catch (loadFailure: unknown) {
+      setLoadError(
+        loadFailure instanceof Error
+          ? loadFailure.message
+          : "Unable to validate your onboarding details.",
+      );
+    } finally {
+      setLoadingSummary(false);
+    }
+  }, [authLoading, supabase, user]);
+
+  useEffect(() => {
+    void loadSummary();
+  }, [loadSummary]);
+
   const handleComplete = useCallback(async () => {
-    if (!user) return;
+    if (loading) return;
+    if (!user) {
+      setError("You need to be signed in to complete onboarding.");
+      return;
+    }
 
     setLoading(true);
     setError(null);
-
     try {
-      // Mark onboarding as complete in user metadata
+      const profile = await new ProfileService(supabase).getProfileById(user.id);
+      if (!profile || profile.displayName.trim().length < 2) {
+        throw new Error("Your profile is incomplete. Go back and save a display name.");
+      }
+
+      await new PolicyService(supabase).assertRequiredConsents(user.id);
+
       const { error: updateError } = await supabase.auth.updateUser({
         data: { onboarded: true },
       });
+      if (updateError) throw updateError;
 
-      if (updateError) {
-        setError(updateError.message);
-        setLoading(false);
-        return;
-      }
-
-      // Navigation will be handled by the root layout auth redirect
       router.replace("/(tabs)");
-    } catch (err) {
-      setError("An unexpected error occurred. Please try again.");
+    } catch (completeFailure: unknown) {
+      setError(
+        completeFailure instanceof Error
+          ? completeFailure.message
+          : "Unable to complete onboarding. Please try again.",
+      );
+    } finally {
       setLoading(false);
     }
-  }, [user, supabase, router]);
+  }, [loading, router, supabase, user]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -54,48 +133,56 @@ export default function ReviewScreen() {
           Review & Confirm
         </Text>
         <Text style={styles.subtitle}>
-          Everything look good? You can always update these in your profile
-          settings later.
+          Confirm the information saved to your account before finishing setup.
         </Text>
 
-        {error && (
+        {(error || loadError) && (
           <View style={styles.errorBanner} accessibilityRole="alert">
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorText}>{error ?? loadError}</Text>
+            {loadError && user && !authLoading ? (
+              <Pressable
+                onPress={() => void loadSummary()}
+                accessibilityLabel="Retry onboarding review"
+                accessibilityRole="button"
+              >
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            ) : null}
           </View>
         )}
 
-        {/* Summary cards -- values would come from onboarding state in production */}
-        <Card theme={theme} style={styles.card}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Profile</Text>
-            <Text style={styles.cardValue}>
-              {user?.email ?? "Your profile"}
-            </Text>
+        {loadingSummary || authLoading ? (
+          <View style={styles.loadingContainer} accessibilityLabel="Loading onboarding review">
+            <ActivityIndicator color="#35D0FF" />
           </View>
-        </Card>
+        ) : null}
 
-        <Card theme={theme} style={styles.card}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Fitness Level</Text>
-            <Text style={styles.cardValue}>Set during profile step</Text>
-          </View>
-        </Card>
+        {summary ? (
+          <>
+            <Card theme={theme} style={styles.card}>
+              <View style={styles.cardRow}>
+                <Text style={styles.cardLabel}>Profile</Text>
+                <Text style={styles.cardValue}>{summary.displayName}</Text>
+              </View>
+            </Card>
 
-        <Card theme={theme} style={styles.card}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Consents</Text>
-            <Text style={[styles.cardValue, styles.consentStatus]}>
-              All required accepted
-            </Text>
-          </View>
-        </Card>
+            <Card theme={theme} style={styles.card}>
+              <View style={styles.cardRow}>
+                <Text style={styles.cardLabel}>Consents</Text>
+                <Text style={[styles.cardValue, styles.consentStatus]}>
+                  {summary.consentStatus}
+                </Text>
+              </View>
+            </Card>
 
-        <Card theme={theme} style={styles.card}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Gym</Text>
-            <Text style={styles.cardValue}>Selected during gym step</Text>
-          </View>
-        </Card>
+            <Card theme={theme} style={styles.card}>
+              <View style={styles.cardRow}>
+                <Text style={styles.cardLabel}>Gym</Text>
+                <Text style={styles.cardValue}>{summary.gymStatus}</Text>
+              </View>
+            </Card>
+          </>
+        ) : null}
 
         <View style={styles.actions}>
           <Button
@@ -105,8 +192,8 @@ export default function ReviewScreen() {
             label="Complete Setup"
             onPress={handleComplete}
             loading={loading}
-            disabled={loading}
-            accessibilityLabel="Complete onboarding setup"
+            disabled={!user || authLoading || loadingSummary || Boolean(loadError) || !summary || loading}
+            accessibilityLabel="Validate and complete onboarding setup"
             style={styles.completeButton}
           />
           <Button
@@ -115,7 +202,7 @@ export default function ReviewScreen() {
             size="md"
             label="Go Back & Edit"
             onPress={() => router.back()}
-            disabled={loading}
+            disabled={loading || authLoading}
             accessibilityLabel="Go back to edit"
           />
         </View>
@@ -149,17 +236,30 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   errorBanner: {
-    backgroundColor: "rgba(255, 107, 107, 0.15)",
-    borderRadius: 12,
+    backgroundColor: "rgba(255, 107, 107, 0.12)",
+    borderRadius: 8,
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "rgba(255, 107, 107, 0.3)",
+    borderColor: "rgba(255, 107, 107, 0.4)",
   },
   errorText: {
     fontFamily: "Sora",
     fontSize: 13,
     color: "#FF6B6B",
+    lineHeight: 18,
+  },
+  retryText: {
+    fontFamily: "Sora",
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#35D0FF",
+    marginTop: 10,
+  },
+  loadingContainer: {
+    minHeight: 160,
+    alignItems: "center",
+    justifyContent: "center",
   },
   card: {
     marginBottom: 12,

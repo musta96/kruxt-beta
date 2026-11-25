@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { isNavigationActive } from "./navigation-shell";
 
 interface NavItem {
   label: string;
@@ -122,21 +123,22 @@ const iconMap: Record<string, JSX.Element> = {
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  mobile?: boolean;
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, mobile = false }: SidebarProps) {
   const pathname = usePathname();
 
   function isActive(href: string): boolean {
-    if (href === "/") return pathname === "/" || pathname === "";
-    return pathname.startsWith(href);
+    return isNavigationActive(pathname, href);
   }
 
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-border bg-kruxt-surface transition-all duration-200",
-        collapsed ? "w-16" : "w-60"
+        "flex-col border-r border-border bg-kruxt-surface transition-all duration-200 [&_a:focus-visible]:outline [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-kruxt-accent [&_button:focus-visible]:outline [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-kruxt-accent",
+        mobile ? "flex h-full w-full" : "fixed inset-y-0 left-0 z-30 hidden lg:flex",
+        !mobile && (collapsed ? "w-16" : "w-60")
       )}
     >
       {/* Logo area */}
@@ -154,13 +156,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <button
           onClick={onToggle}
           className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-kruxt-panel hover:text-foreground",
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-kruxt-panel hover:text-foreground",
             collapsed ? "mx-auto" : "ml-auto"
           )}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={mobile ? "Close navigation" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={mobile ? "Close navigation" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            {collapsed ? (
+            {mobile ? (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M6 18L18 6" />
+            ) : collapsed ? (
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
             ) : (
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
@@ -170,7 +175,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-4">
+      <nav aria-label="Main navigation" className="min-h-0 flex-1 overflow-y-auto px-2 py-4">
         {navigation.map((group) => (
           <div key={group.title} className="mb-6">
             {!collapsed && (
@@ -185,8 +190,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      aria-label={item.label}
                       className={cn(
-                        "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                        "group flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                         active
                           ? "bg-kruxt-accent/10 text-kruxt-accent"
                           : "text-muted-foreground hover:bg-kruxt-panel hover:text-foreground",
@@ -195,6 +202,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       title={collapsed ? item.label : undefined}
                     >
                       <span
+                        aria-hidden="true"
                         className={cn(
                           "flex-shrink-0",
                           active ? "text-kruxt-accent" : "text-muted-foreground group-hover:text-foreground"
